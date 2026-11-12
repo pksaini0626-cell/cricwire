@@ -1,0 +1,39 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="#0B0F20"/> <!-- Dark navy background -->
+
+  <!-- Speed lines (white and navy) -->
+  <g opacity="0.8" stroke-linecap="round" stroke-linejoin="round" stroke-width="40">
+    <line x1="320" y1="512" x2="200" y2="300" stroke="#FFFFFF"/>
+    <line x1="340" y1="540" x2="160" y2="360" stroke="#1A2B4C"/>
+    <line x1="360" y1="570" x2="120" y2="420" stroke="#FFFFFF"/>
+    <line x1="380" y1="600" x2="80"  y2="480" stroke="#1A2B4C"/>
+  </g>
+
+  <!-- Cricket ball -->
+  <g transform="translate(512,512)">
+    <circle cx="0" cy="0" r="200" fill="url(#ballGradient)"/>
+    <!-- Seam details -->
+    <g stroke="#FFFFFF" stroke-width="12" opacity="0.9">
+      <line x1="-140" y1="0" x2="140" y2="0"/>
+      <line x1="-100" y1="-100" x2="100" y2="100"/>
+      <line x1="-100" y1="100" x2="100" y2="-100"/>
+    </g>
+  </g>
+
+  <!-- Gradient definition for the ball -->
+  <defs>
+    <radialGradient id="ballGradient" cx="0.5" cy="0.5" r="0.5" fx="0.5" fy="0.5">
+      <stop offset="0%" stop-color="#FF5722"/><!-- vibrant orange -->
+      <stop offset="100%" stop-color="#D32F2F"/><!-- deep red -->
+    </radialGradient>
+  </defs>
+
+  <!-- Minimal stumps (outline) -->
+  <g stroke="#1A2B4C" stroke-width="30" fill="none" opacity="0.9">
+    <line x1="560" y1="760" x2="560" y2="500"/>
+    <line x1="620" y1="760" x2="620" y2="500"/>
+    <line x1="680" y1="760" x2="680" y2="500"/>
+    <line x1="540" y1="500" x2="700" y2="500"/><!-- top crossbar -->
+  </g>
+</svg>
