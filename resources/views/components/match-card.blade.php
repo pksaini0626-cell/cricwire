@@ -26,17 +26,6 @@
     $teamBScores = $match['team_b_scores'] ?? '';
     $teamBOver = $match['team_b_over'] ?? '';
 
-    // Gaming Market Rates & Sessions
-    $favTeam = $match['fav_team'] ?? null;
-    $rateMin = $match['min_rate'] ?? $match['rate_min'] ?? null;
-    $rateMax = $match['max_rate'] ?? $match['rate_max'] ?? null;
-    $sessionOvr = $match['s_ovr'] ?? null;
-    $sessionMin = $match['s_min'] ?? null;
-    $sessionMax = $match['s_max'] ?? null;
-
-    $hasRates = !empty($favTeam) && (!empty($rateMin) || !empty($rateMax));
-    $hasSession = !empty($sessionOvr) && ($sessionMin != '0' || $sessionMax != '0');
-
     // Requirement & Dates
     $needRunBall = $match['need_run_ball'] ?? '';
     $toss = $match['toss'] ?? '';
@@ -96,7 +85,7 @@
     x-show="!isSkipped"
     class="relative group"
 >
-    <a href="{{ $detailUrl }}" wire:navigate class="block rounded-2xl gaming-card {{ $isLive ? 'gaming-card-active' : 'hover:border-white/20' }} p-3.5 transition-all duration-300 relative overflow-hidden shadow-lg" :class="{ 'ring-1 ring-amber-400/50 bg-slate-900/90': isPinned }">
+    <a href="{{ $detailUrl }}" wire:navigate class="block rounded-2xl gaming-card {{ $isLive ? 'gaming-card-active' : 'hover:border-white/20' }} p-3.5 pb-4 transition-all duration-300 relative overflow-hidden shadow-lg" :class="{ 'ring-1 ring-amber-400/50 bg-slate-900/90': isPinned }">
         <!-- Top Header: Tournament Badge + LIVE Chip + Action Icons -->
         <div class="flex items-center justify-between text-[11px] pb-2.5 mb-2.5 border-b border-white/5">
             <div class="flex items-center space-x-1.5 overflow-hidden pr-2">
@@ -235,33 +224,6 @@
             </div>
         @endif
     </div>
-
-    <!-- Gaming Odds & Session Strip -->
-    @if(config('app.show_market_rates', true) && \App\Helpers\SystemSetting::isMarketRatesEnabled())
-        @if($hasRates || $hasSession)
-            <div class="mt-2.5 pt-2 grid grid-cols-2 gap-2 text-[11px]">
-                <!-- Fav Team Rate Box with electric-green border -->
-                <div class="flex items-center justify-between bg-slate-950/80 px-2.5 py-1.5 rounded-xl border border-emerald-500/30 glow-emerald">
-                    <span class="text-slate-400 font-medium text-[10px]">
-                        Fav: <strong class="text-white font-bold">{{ $favTeam }}</strong>
-                    </span>
-                    <span class="font-mono font-black text-neon-green text-xs">
-                        {{ $rateMin }} - {{ $rateMax }}
-                    </span>
-                </div>
-
-                <!-- Session Lambi Box with amber accents -->
-                <div class="flex items-center justify-between bg-slate-950/80 px-2.5 py-1.5 rounded-xl border border-amber-500/30 glow-gold">
-                    <span class="text-slate-400 font-medium text-[10px]">
-                        Sess: <strong class="text-amber-400 font-bold">{{ $sessionOvr }}ov</strong>
-                    </span>
-                    <span class="font-mono font-black text-neon-gold text-xs">
-                        {{ $sessionMin }} / {{ $sessionMax }}
-                    </span>
-                </div>
-            </div>
-        @endif
-    @endif
     </a>
 </div>
 

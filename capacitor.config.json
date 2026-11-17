@@ -1,0 +1,9 @@
+{
+  "appId": "com.cricwire.app",
+  "appName": "Cricwire",
+  "webDir": "public",
+  "server": {
+    "url": "https://cricwire.in",
+    "cleartext": false
+  }
+}

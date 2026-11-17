@@ -90,22 +90,17 @@ class MatchDetail extends Component
 
     public function render(RapidApiCricketService $service)
     {
-        $rawDetail = $service->getMatchDetail($this->matchId);
+        // 1. Core Data: Fetch /info and /live line (with fallback to home matches)
+        $infoData = $service->getMatchInfo($this->matchId);
+        $liveLineData = $service->getMatchLiveLine($this->matchId);
 
-        \Illuminate\Support\Facades\Log::info("Match Detail API Payload for ID: {$this->matchId}", [
-            'raw' => $rawDetail
-        ]);
-
-        // Fetch scorecard and commentary data for detailed match sections
-        $rawScorecard = $service->getMatchScorecard($this->matchId);
-        $rawCommentary = $service->getMatchCommentary($this->matchId);
-
-        // Fetch home matches cache to extract any live-line data (score, rates, batsman, bowler)
+        // Fetch home matches list for fallback / live-line synchronization
         $homeData = $service->getHomeMatches();
         $liveMatchInfo = null;
 
-        $matchesList = $homeData['data'] ?? $homeData['matches'] ?? [];
+        $matchesList = is_array($homeData) ? $homeData : [];
         foreach ($matchesList as $m) {
+            if (!is_array($m)) continue;
             $id = $m['match_id'] ?? $m['id'] ?? null;
             if ((string) $id === (string) $this->matchId) {
                 $liveMatchInfo = $m;
@@ -113,31 +108,65 @@ class MatchDetail extends Component
             }
         }
 
-        $detailData = $rawDetail['data'] ?? $rawDetail;
-        $match = is_array($detailData) ? $detailData : [];
-        $scorecardData = $rawScorecard['data']['scorecard'] ?? $rawScorecard['scorecard'] ?? [];
-        $commentaryData = $rawCommentary['data'] ?? $rawCommentary ?? [];
+        // Consolidated match metadata
+        $match = array_merge($liveMatchInfo ?? [], $infoData, $liveLineData);
 
-        // Determine if match is upcoming, live, or finished
-        $result = $match['result'] ?? $liveMatchInfo['result'] ?? '';
-        $rawStatus = $match['match_status'] ?? $liveMatchInfo['match_status'] ?? 'Live';
-        $isLive = is_string($rawStatus) ? strtolower($rawStatus) === 'live' : ($rawStatus == 2 || $rawStatus == 1);
-        $isFinished = !empty($result) || (is_string($rawStatus) && strtolower($rawStatus) === 'finished');
+        // 2. Normalize Live Batters and Current Bowler strictly according to API schema
+        // The API returns $liveLine['batsman'] (array of 2 on-crease batters)
+        $rawBatters = $liveLineData['batsman'] ?? $match['batsman'] ?? [];
+        $liveBatters = [];
+        if (is_array($rawBatters)) {
+            foreach ($rawBatters as $b) {
+                if (!is_array($b)) continue;
+                $bName = trim((string) ($b['name'] ?? ''));
+                if ($bName !== '' && $bName !== '-') {
+                    $liveBatters[] = $b;
+                }
+            }
+        }
+
+        // The API spells bowler as 'bolwer' (b-o-l-w-e-r)
+        $rawBolwer = $liveLineData['bolwer'] ?? $match['bolwer'] ?? $liveLineData['bowler'] ?? $match['bowler'] ?? [];
+        $liveBowler = is_array($rawBolwer) ? $rawBolwer : [];
+
+        // 3. Tab-Specific On-Demand Fetching (Preserving RapidAPI Quota)
+        $scorecardData = [];
+        $playingXI = [];
+        $impactPlayers = [];
+        $trackerData = [];
+        $commentaryData = [];
+
+        if ($this->tab === 'scorecard') {
+            $rawScorecard = $service->getMatchScorecard($this->matchId);
+            $scorecardData = $rawScorecard['scorecard'] ?? $rawScorecard['data']['scorecard'] ?? (is_array($rawScorecard) ? $rawScorecard : []);
+        } elseif ($this->tab === 'squad') {
+            $playingXI = $service->getMatchPlayingXI($this->matchId);
+            $impactPlayers = $service->getMatchImpactPlayers($this->matchId);
+        } elseif ($this->tab === 'commentary' || $this->tab === 'live-line') {
+            $commentaryData = $service->getMatchCommentary($this->matchId);
+        }
+
+        if ($this->tab === 'info') {
+            $trackerData = $service->getMatchTracker($this->matchId);
+        }
+
+        // 4. Status determination
+        $result = $match['result'] ?? '';
+        $rawStatus = $match['match_status'] ?? 'Live';
+        $isLive = is_string($rawStatus) 
+            ? in_array(strtolower($rawStatus), ['live', 'in progress', 'innings break', '1', '2'])
+            : ($rawStatus == 2 || $rawStatus == 1);
+        $isFinished = !empty($result) || (is_string($rawStatus) && in_array(strtolower($rawStatus), ['finished', 'completed', '3'])) || ($rawStatus == 3);
         $isUpcoming = !$isLive && !$isFinished;
 
-        // Squad extraction: check team_a_squad, squads, teams, etc.
-        $teamASquad = $match['team_a_squad'] ?? $match['squad_a'] ?? $match['squads']['team_a'] ?? $match['teams']['team_a']['squad'] ?? $match['team_a_playing_xi'] ?? [];
-        $teamBSquad = $match['team_b_squad'] ?? $match['squad_b'] ?? $match['squads']['team_b'] ?? $match['teams']['team_b']['squad'] ?? $match['team_b_playing_xi'] ?? [];
+        // Squad fallback from playingXI or match
+        $teamASquad = $playingXI['team_a']['player'] ?? $match['team_a_playing_xi'] ?? $match['team_a_squad'] ?? [];
+        $teamBSquad = $playingXI['team_b']['player'] ?? $match['team_b_playing_xi'] ?? $match['team_b_squad'] ?? [];
 
-        \Illuminate\Support\Facades\Log::info("Squads data for match {$this->matchId}:", [
-            'team_a' => $match['team_a_squad'] ?? $match['squad_a'] ?? [],
-            'team_b' => $match['team_b_squad'] ?? $match['squad_b'] ?? []
-        ]);
-
-        // Calculate ISO Target Timestamp for upcoming countdown
-        $dateTimeRaw = $match['date_time'] ?? $liveMatchInfo['date_time'] ?? null;
-        $matchDate = $match['match_date'] ?? $liveMatchInfo['match_date'] ?? null;
-        $matchTime = $match['match_time'] ?? $liveMatchInfo['match_time'] ?? '';
+        // 5. Calculate ISO Target Timestamp for upcoming countdown
+        $dateTimeRaw = $match['date_time'] ?? null;
+        $matchDate = $match['match_date'] ?? null;
+        $matchTime = $match['match_time'] ?? '';
         $matchStartTime = null;
 
         if (!empty($dateTimeRaw)) {
@@ -151,38 +180,41 @@ class MatchDetail extends Component
             } catch (\Throwable $e) {}
         }
 
-        // Check or auto-seed the 3 pre-configured polls for this match
-        $teamAName = $match['team_a'] ?? $liveMatchInfo['team_a'] ?? 'Team A';
-        $teamBName = $match['team_b'] ?? $liveMatchInfo['team_b'] ?? 'Team B';
-
+        // 6. Check or auto-seed the 3 pre-configured polls for this match
+        $teamAName = $match['team_a'] ?? 'Team A';
+        $teamBName = $match['team_b'] ?? 'Team B';
         $polls = $this->getOrCreateMatchPolls($teamAName, $teamBName);
 
-        // Fetch Featured Articles
+        // Fetch Featured Articles & Sidebar Ads
         $featuredArticles = NewsArticle::where('is_published', true)
             ->where('is_featured', true)
             ->latest()
             ->take(3)
             ->get();
 
-        // Active sidebar banner (checks match_sidebar with fallback to desktop_right/sidebar)
         $sidebarBanner = \App\Models\AdBanner::activeSlot('match_sidebar')->first()
             ?? \App\Models\AdBanner::activeSlot('desktop_right')->first()
             ?? \App\Models\AdBanner::activeSlot('sidebar')->first();
 
-        // Social links configured by admin
         $socialLinks = \App\Support\LiveEngineConfig::getActiveSocialLinks();
 
-        // Innings Session Summary Table (with Lowest/Highest Rate & Pass/Fail)
-        $sessionSummary = SessionController::getMatchSessionTable($this->matchId, $service, array_merge($liveMatchInfo ?? [], $match));
+        // 7. Innings Session Summary Table (with Lowest/Highest Rate & Pass/Fail)
+        $sessionSummary = SessionController::getMatchSessionTable($this->matchId, $service, $match);
 
         return view('livewire.pages.match-detail', [
             'match' => $match,
             'matchId' => $this->matchId,
             'tab' => $this->tab,
-            'liveInfo' => $liveMatchInfo ?? [],
+            'liveInfo' => $match,
+            'liveLine' => $liveLineData,
+            'liveBatters' => $liveBatters,
+            'liveBowler' => $liveBowler,
             'sessionSummary' => $sessionSummary,
             'scorecardData' => $scorecardData,
             'commentaryData' => $commentaryData,
+            'playingXI' => $playingXI,
+            'impactPlayers' => $impactPlayers,
+            'trackerData' => $trackerData,
             'seriesSlug' => $this->seriesSlug,
             'matchSlug' => $this->matchSlug,
             'teamASquad' => $teamASquad,
@@ -244,7 +276,6 @@ class MatchDetail extends Component
                 );
                 $results[] = $poll;
             } catch (\Throwable $e) {
-                // Fallback virtual poll object
                 $results[] = (object) [
                     'id' => $index,
                     'question' => $qData['question'],

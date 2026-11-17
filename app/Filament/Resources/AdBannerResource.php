@@ -10,6 +10,7 @@ use Filament\Forms\Get;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class AdBannerResource extends Resource
 {
@@ -30,6 +31,10 @@ class AdBannerResource extends Resource
                             ->required(),
 
                         Forms\Components\Select::make('placement')
+                            ->label('Placement Slots')
+                            ->multiple()
+                            ->searchable()
+                            ->preload()
                             ->options([
                                 'news_top' => 'News Feed Top (728x90 Desktop / 320x50 Mobile)',
                                 'news_in_feed' => 'News In-Feed Slot (300x250 or 320x100)',
@@ -37,6 +42,7 @@ class AdBannerResource extends Resource
                                 'schedule_sidebar' => 'Schedule Page Sidebar Ad (300x250 / 300x600)',
                                 'match_sidebar' => 'Match Detail Sidebar Ad (300x250 / 300x600)',
                                 'upcoming_match' => 'Upcoming Match Screen (In-Feed)',
+                                'home_top' => 'Home Page Top Banner',
                                 'header' => 'Header Banner',
                                 'pinned_match_below' => 'Below Pinned Match',
                                 'match_detail_odds' => 'Match Detail Odds Widget',
@@ -45,7 +51,8 @@ class AdBannerResource extends Resource
                                 'desktop_left' => 'Desktop Left Sidebar Ad',
                                 'sticky_footer' => 'Sticky Footer Banner',
                             ])
-                            ->required(),
+                            ->required()
+                            ->helperText('Select one or more slots where this banner will appear.'),
 
                         Forms\Components\Select::make('type')
                             ->options([
@@ -61,6 +68,7 @@ class AdBannerResource extends Resource
                             ->label('Upload Banner Image')
                             ->disk('public')
                             ->directory('ad-banners')
+                            ->visibility('public')
                             ->image()
                             ->maxSize(512) // Maximum 500 KB (512 KB)
                             ->helperText('Strict maximum size: 500 KB. Ideal dimensions: 728x90 (Desktop Top), 320x50 (Mobile Top), or 300x250 (In-feed).')
@@ -104,6 +112,8 @@ class AdBannerResource extends Resource
                 Tables\Columns\ImageColumn::make('image_path')
                     ->label('Banner')
                     ->disk('public')
+                    ->visibility('public')
+                    ->state(fn (AdBanner $record): ?string => $record->resolved_image_url)
                     ->defaultImageUrl(fn (AdBanner $record): ?string => $record->resolved_image_url),
 
                 Tables\Columns\TextColumn::make('name')
@@ -113,8 +123,9 @@ class AdBannerResource extends Resource
 
                 Tables\Columns\TextColumn::make('placement')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        'news_top' => 'warning',
+                    ->separator(',')
+                    ->color(fn ($state): string => match ($state) {
+                        'news_top', 'home_top' => 'warning',
                         'news_in_feed' => 'info',
                         'header' => 'success',
                         default => 'gray',
@@ -139,12 +150,31 @@ class AdBannerResource extends Resource
                     ->options([
                         'news_top' => 'News Feed Top',
                         'news_in_feed' => 'News In-Feed Slot',
+                        'news_sidebar' => 'News Detail Sidebar Ad',
+                        'schedule_sidebar' => 'Schedule Page Sidebar Ad',
+                        'match_sidebar' => 'Match Detail Sidebar Ad',
+                        'upcoming_match' => 'Upcoming Match Screen',
+                        'home_top' => 'Home Page Top Banner',
                         'header' => 'Header Banner',
                         'pinned_match_below' => 'Below Pinned Match',
                         'match_detail_odds' => 'Match Detail Odds Widget',
                         'sidebar' => 'Sidebar Banner',
+                        'desktop_right' => 'Desktop Right Sidebar Ad',
+                        'desktop_left' => 'Desktop Left Sidebar Ad',
                         'sticky_footer' => 'Sticky Footer Banner',
-                    ]),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        if (empty($data['value'])) {
+                            return $query;
+                        }
+
+                        $val = $data['value'];
+                        return $query->where(function (Builder $q) use ($val) {
+                            $q->where('placement', $val)
+                              ->orWhere('placement', 'LIKE', '%"' . $val . '"%')
+                              ->orWhere('placement', 'LIKE', '%' . $val . '%');
+                        });
+                    }),
                 Tables\Filters\TernaryFilter::make('is_active'),
             ])
             ->actions([

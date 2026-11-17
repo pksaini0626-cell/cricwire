@@ -19,37 +19,18 @@ class HomeLiveScores extends Component
 
     public function render(RapidApiCricketService $cricketService)
     {
-        $raw = $cricketService->getHomeMatches();
+        // 1. Fetch matches: Try dedicated endpoints, fall back to /home partitioning
+        $homeData = $cricketService->getHomeMatches();
 
-        // The API returns matches either under 'data' or directly as arrays / keyed buckets
-        $matches = [];
-        if (isset($raw['data']) && is_array($raw['data'])) {
-            $matches = $raw['data'];
-        } elseif (isset($raw['matches']) && is_array($raw['matches'])) {
-            $matches = $raw['matches'];
-        } elseif (is_array($raw) && !empty($raw) && isset($raw[0])) {
-            $matches = $raw;
-        }
+        // Check if $homeData is an array of matches (e.g. from $json['data'])
+        $allMatches = is_array($homeData) ? $homeData : [];
 
         $liveMatches = [];
         $upcomingMatches = [];
         $finishedMatches = [];
 
-        // Check if API has pre-partitioned keys like $raw['live_matches'], $raw['upcoming_matches'], etc.
-        if (!empty($raw['live_matches']) && is_array($raw['live_matches'])) {
-            $liveMatches = $raw['live_matches'];
-        }
-        if (!empty($raw['upcoming_matches']) && is_array($raw['upcoming_matches'])) {
-            $upcomingMatches = $raw['upcoming_matches'];
-        }
-        if (!empty($raw['finished_matches']) && is_array($raw['finished_matches'])) {
-            $finishedMatches = $raw['finished_matches'];
-        } elseif (!empty($raw['recent_matches']) && is_array($raw['recent_matches'])) {
-            $finishedMatches = $raw['recent_matches'];
-        }
-
-        // Categorize match list if items are in unified 'data' array
-        foreach ($matches as $match) {
+        // Partition matches strictly according to verified API match_status values
+        foreach ($allMatches as $match) {
             if (!is_array($match)) {
                 continue;
             }
@@ -57,17 +38,33 @@ class HomeLiveScores extends Component
             $status = strtolower(trim((string) ($match['match_status'] ?? $match['status'] ?? '')));
             $result = trim((string) ($match['result'] ?? ''));
 
-            if ($status === 'live' || $status === 'in progress' || $status === 'innings break') {
+            if ($status === 'live' || $status === 'in progress' || $status === 'innings break' || $status === '1' || $status === '2') {
                 $liveMatches[] = $match;
-            } elseif ($status === 'finished' || $status === 'completed' || $status === 'result' || !empty($result)) {
+            } elseif ($status === 'finished' || $status === 'completed' || $status === '3' || !empty($result)) {
                 $finishedMatches[] = $match;
-            } elseif ($status === 'upcoming' || $status === 'scheduled' || $status === 'not started') {
+            } elseif ($status === 'upcoming' || $status === 'scheduled' || $status === 'not started' || $status === '0') {
                 $upcomingMatches[] = $match;
             } else {
-                // Fallback heuristic: if result is empty and date_time > now, upcoming; otherwise finished/live
-                $upcomingMatches[] = $match;
+                // Default based on result availability
+                if (!empty($result)) {
+                    $finishedMatches[] = $match;
+                } else {
+                    $upcomingMatches[] = $match;
+                }
             }
         }
+
+        // If live matches are empty, check dedicated /liveMatches endpoint
+        if (empty($liveMatches)) {
+            $dedicatedLive = $cricketService->getLiveMatches();
+            if (!empty($dedicatedLive) && is_array($dedicatedLive)) {
+                $liveMatches = $dedicatedLive;
+            }
+        }
+
+        // Filter and cap upcoming and finished matches to clean, fast date windows
+        $upcomingMatches = $cricketService->filterMatchesByDateWindow($upcomingMatches, 'upcoming');
+        $finishedMatches = $cricketService->filterMatchesByDateWindow($finishedMatches, 'recent');
 
         // Selected list based on active tab
         $currentMatches = match ($this->activeTab) {

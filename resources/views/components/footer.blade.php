@@ -89,7 +89,7 @@
             <div class="flex items-center space-x-2 flex-wrap">
                 <span>Love. Play. Cricket. Repeat 🏏</span>
                 <span>|</span>
-                <a href="/more" wire:navigate class="hover:text-slate-300 transition">About Us</a>
+                <a href="/about-us" wire:navigate class="hover:text-slate-300 transition">About Us</a>
                 <span>|</span>
                 <a href="/privacy-policy" wire:navigate class="hover:text-slate-300 transition">Privacy Policy</a>
                 <span>|</span>

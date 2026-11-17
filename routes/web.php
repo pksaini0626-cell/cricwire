@@ -69,9 +69,12 @@ Route::get('/polls', App\Livewire\Pages\PollsPage::class)->name('polls');
 Route::get('/more', App\Livewire\Pages\MorePage::class)->name('more');
 Route::get('/profile', fn () => redirect()->route('more', [], 301))->name('profile');
 
-// Legal Pages
+// Legal & Informational Pages
+Route::view('/privacy-policy', 'legal.privacy')->name('privacy.policy');
 Route::view('/terms-and-conditions', 'legal.terms')->name('terms');
-Route::view('/privacy-policy', 'pages.privacy-policy')->name('privacy');
+Route::view('/about-us', 'legal.about')->name('about');
+// Backward compatibility route alias
+Route::get('/privacy', fn () => redirect()->route('privacy.policy', [], 301))->name('privacy');
 
 // OAuth Authentication
 Route::get('/auth/google/redirect', [SocialiteController::class, 'redirect'])->name('google.redirect');

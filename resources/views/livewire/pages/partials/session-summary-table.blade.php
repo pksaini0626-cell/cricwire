@@ -1,4 +1,4 @@
-@if(config('app.show_market_rates', true) && \App\Helpers\SystemSetting::isMarketRatesEnabled() && !empty($sessionSummary))
+@if(\App\Helpers\SystemSetting::isMarketRatesEnabled() && !empty($sessionSummary))
     @php
         $activeInning = $sessionSummary['active_inning'] ?? 1;
         $inng1 = $sessionSummary['innings_1'] ?? null;

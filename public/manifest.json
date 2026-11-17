@@ -1,0 +1,26 @@
+{
+  "name": "Cricwire - Live Cricket Score & Stats",
+  "short_name": "Cricwire",
+  "description": "Ultra-fast live cricket scores, ball-by-ball commentary, match statistics, and cricket updates.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "orientation": "portrait",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
+
