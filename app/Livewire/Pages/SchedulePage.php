@@ -44,7 +44,8 @@ class SchedulePage extends Component
 
     public function render(RapidApiCricketService $service)
     {
-        $scheduleData = $service->getScheduleMatches();
+        // Read strictly from cache (allowUpstreamFetch = false)
+        $scheduleData = $service->getScheduleMatches(false);
         $matches = $scheduleData[$this->tab] ?? [];
 
         // Apply category filtering

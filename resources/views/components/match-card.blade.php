@@ -43,6 +43,12 @@
         status: '{{ $statusString }}',
         isPinned: false,
         isSkipped: false,
+        teamAScore: '{{ $teamAScores }}',
+        teamAOver: '{{ $teamAOver }}',
+        teamBScore: '{{ $teamBScores }}',
+        teamBOver: '{{ $teamBOver }}',
+        needRunBall: '{{ $needRunBall }}',
+        resultText: '{{ $resultText }}',
         init() {
             const pinned = JSON.parse(localStorage.getItem('pinned_matches') || '[]');
             const skipped = JSON.parse(localStorage.getItem('skipped_matches') || '[]');
@@ -57,6 +63,19 @@
             }
 
             this.isSkipped = skipped.some(id => String(id) === String(this.matchId));
+
+            // React to WebSocket ticker updates
+            window.addEventListener('ticker-score-updated', (event) => {
+                if (String(event.detail?.matchId) === String(this.matchId)) {
+                    const d = event.detail.data;
+                    if (d.team_a_scores !== undefined) this.teamAScore = d.team_a_scores;
+                    if (d.team_a_over !== undefined) this.teamAOver = d.team_a_over;
+                    if (d.team_b_scores !== undefined) this.teamBScore = d.team_b_scores;
+                    if (d.team_b_over !== undefined) this.teamBOver = d.team_b_over;
+                    if (d.need_run_ball !== undefined) this.needRunBall = d.need_run_ball;
+                    if (d.result !== undefined && d.result !== '') this.resultText = d.result;
+                }
+            });
         },
         togglePin() {
             let pinned = JSON.parse(localStorage.getItem('pinned_matches') || '[]');
@@ -154,14 +173,11 @@
                 <div class="font-extrabold text-white text-sm tracking-wide group-hover:text-amber-300 transition-colors truncate">
                     {{ $teamAShort }}
                 </div>
-                @if(!empty($teamAScores))
-                    <div class="text-xs font-mono font-bold text-slate-100 tracking-tight">{{ $teamAScores }}</div>
-                    @if(!empty($teamAOver))
-                        <div class="text-[9px] text-slate-400 font-mono">({{ $teamAOver }} ov)</div>
-                    @endif
-                @else
-                    <div class="text-[11px] text-slate-500 font-mono">-</div>
-                @endif
+                <div x-show="teamAScore" class="text-xs font-mono font-bold text-slate-100 tracking-tight">
+                    <span x-text="teamAScore"></span>
+                    <span x-show="teamAOver" class="text-[9px] text-slate-400 font-mono" x-text="'(' + teamAOver + ' ov)'"></span>
+                </div>
+                <div x-show="!teamAScore" class="text-[11px] text-slate-500 font-mono">-</div>
             </div>
         </div>
 
@@ -178,14 +194,11 @@
                 <div class="font-extrabold text-white text-sm tracking-wide group-hover:text-amber-300 transition-colors truncate">
                     {{ $teamBShort }}
                 </div>
-                @if(!empty($teamBScores))
-                    <div class="text-xs font-mono font-bold text-slate-100 tracking-tight">{{ $teamBScores }}</div>
-                    @if(!empty($teamBOver))
-                        <div class="text-[9px] text-slate-400 font-mono">({{ $teamBOver }} ov)</div>
-                    @endif
-                @else
-                    <div class="text-[11px] text-slate-500 font-mono">-</div>
-                @endif
+                <div x-show="teamBScore" class="text-xs font-mono font-bold text-slate-100 tracking-tight">
+                    <span x-text="teamBScore"></span>
+                    <span x-show="teamBOver" class="text-[9px] text-slate-400 font-mono" x-text="'(' + teamBOver + ' ov)'"></span>
+                </div>
+                <div x-show="!teamBScore" class="text-[11px] text-slate-500 font-mono">-</div>
             </div>
             @if(!empty($teamBImg))
                 <img src="{{ $teamBImg }}" alt="{{ $teamBName }}" class="w-8 h-8 rounded-full object-cover bg-slate-800 border border-white/10 shrink-0 shadow-sm" onerror="this.style.display='none'">
@@ -199,31 +212,36 @@
 
     <!-- Status Bar: Requirement / Result / Toss -->
     <div class="mt-2.5 pt-2 border-t border-white/5 text-xs">
-        @if(!empty($resultText))
+        <template x-if="resultText">
             <div class="text-emerald-400 font-bold flex items-center gap-1.5 truncate">
                 <svg class="w-3.5 h-3.5 shrink-0 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
                 </svg>
-                <span class="truncate">{{ $resultText }}</span>
+                <span class="truncate" x-text="resultText"></span>
             </div>
-        @elseif(!empty($needRunBall))
+        </template>
+        <template x-if="!resultText && needRunBall">
             <div class="text-neon-gold font-bold flex items-center gap-1.5 truncate animate-pulse">
                 <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                <span class="truncate">{{ $needRunBall }}</span>
+                <span class="truncate" x-text="needRunBall"></span>
             </div>
-        @elseif(!empty($toss))
-            <div class="text-slate-400 text-[11px] truncate">
-                <span class="text-slate-300 font-semibold">Toss:</span> {{ $toss }}
+        </template>
+        <template x-if="!resultText && !needRunBall">
+            <div>
+                @if(!empty($toss))
+                    <div class="text-slate-400 text-[11px] truncate">
+                        <span class="text-slate-300 font-semibold">Toss:</span> {{ $toss }}
+                    </div>
+                @elseif(!empty($venue))
+                    <div class="text-slate-500 text-[11px] truncate flex items-center gap-1">
+                        <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        </svg>
+                        <span class="truncate">{{ $venue }}</span>
+                    </div>
+                @endif
             </div>
-        @elseif(!empty($venue))
-            <div class="text-slate-500 text-[11px] truncate flex items-center gap-1">
-                <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                </svg>
-                <span class="truncate">{{ $venue }}</span>
-            </div>
-        @endif
+        </template>
     </div>
     </a>
 </div>
-

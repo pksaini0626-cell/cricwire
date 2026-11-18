@@ -19,8 +19,9 @@ class HomeLiveScores extends Component
 
     public function render(RapidApiCricketService $cricketService)
     {
-        // 1. Fetch matches: Try dedicated endpoints, fall back to /home partitioning
-        $homeData = $cricketService->getHomeMatches();
+        // 1. Fetch matches strictly from cache (allowUpstreamFetch = false)
+        // Only LiveMatchPollerCommand is permitted to hit upstream RapidAPI HTTP endpoints
+        $homeData = $cricketService->getHomeMatches(false);
 
         // Check if $homeData is an array of matches (e.g. from $json['data'])
         $allMatches = is_array($homeData) ? $homeData : [];
@@ -54,9 +55,9 @@ class HomeLiveScores extends Component
             }
         }
 
-        // If live matches are empty, check dedicated /liveMatches endpoint
+        // If live matches are empty, check cached dedicated /liveMatches endpoint
         if (empty($liveMatches)) {
-            $dedicatedLive = $cricketService->getLiveMatches();
+            $dedicatedLive = $cricketService->getLiveMatches(false);
             if (!empty($dedicatedLive) && is_array($dedicatedLive)) {
                 $liveMatches = $dedicatedLive;
             }

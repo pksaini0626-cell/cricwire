@@ -46,9 +46,9 @@ class SessionController extends Controller
      */
     public static function getMatchSessionTable(string|int $matchId, RapidApiCricketService $service, array $matchDetail = []): array
     {
-        // 1. Fetch /fancy and /overHistory
-        $fancyData = $service->getMatchFancy($matchId);
-        $overData = $service->getMatchOverHistory($matchId);
+        // 1. Fetch /fancy and /overHistory strictly from cache (allowUpstreamFetch = false)
+        $fancyData = $service->getMatchFancy($matchId, false);
+        $overData = $service->getMatchOverHistory($matchId, false);
 
         // 2. Fetch min/max cache tracker
         $tracker = self::getMinMaxTracker($matchId);
@@ -447,4 +447,3 @@ class SessionController extends Controller
         return $tracker;
     }
 }
-

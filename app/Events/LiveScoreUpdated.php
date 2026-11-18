@@ -50,11 +50,12 @@ class LiveScoreUpdated implements ShouldBroadcastNow
      */
     public function broadcastWith(): array
     {
-        return [
+        return array_merge([
             'api_match_id' => $this->apiMatchId,
+            'match_id' => $this->apiMatchId,
             'payload' => $this->payload,
             'timestamp' => now()->toISOString(),
-        ];
+        ], $this->payload);
     }
 }
 

@@ -24,40 +24,79 @@ class RapidApiCricketService
     }
 
     /**
-     * Get home matches (live, upcoming, finished) cached for 45 seconds.
-     * Returns array of match objects.
+     * Get home matches (live, upcoming, finished).
      *
+     * @param bool $allowUpstreamFetch
      * @return array
      */
-    public function getHomeMatches(): array
+    public function getHomeMatches(bool $allowUpstreamFetch = true): array
     {
-        return Cache::remember('cricket:home_matches', 45, function () {
+        $key = 'cricket:home_matches';
+
+        if (!$allowUpstreamFetch) {
+            if (Cache::has($key)) {
+                return (array) Cache::get($key, []);
+            }
+            $resp = $this->fetchFromApi('home');
+            $data = $this->extractDataArray($resp);
+            Cache::put($key, $data, now()->addMinutes(30));
+            return $data;
+        }
+
+        return Cache::remember($key, 45, function () {
             $resp = $this->fetchFromApi('home');
             return $this->extractDataArray($resp);
         }) ?? [];
     }
 
     /**
-     * Get live matches cached for 15 seconds.
+     * Get live matches.
      *
+     * @param bool $allowUpstreamFetch
      * @return array
      */
-    public function getLiveMatches(): array
+    public function getLiveMatches(bool $allowUpstreamFetch = true): array
     {
-        return Cache::remember('cricket:live_matches', 15, function () {
+        $key = 'cricket:live_matches';
+
+        if (!$allowUpstreamFetch) {
+            if (Cache::has($key)) {
+                return (array) Cache::get($key, []);
+            }
+            $resp = $this->fetchFromApi('liveMatches');
+            $data = $this->extractDataArray($resp);
+            Cache::put($key, $data, now()->addMinutes(30));
+            return $data;
+        }
+
+        return Cache::remember($key, 15, function () {
             $resp = $this->fetchFromApi('liveMatches');
             return $this->extractDataArray($resp);
         }) ?? [];
     }
 
     /**
-     * Get upcoming matches cached for 300 seconds (5 minutes).
+     * Get upcoming matches.
      *
+     * @param bool $allowUpstreamFetch
      * @return array
      */
-    public function getUpcomingMatches(): array
+    public function getUpcomingMatches(bool $allowUpstreamFetch = true): array
     {
-        return Cache::remember('cricket:upcoming_matches', 300, function () {
+        $key = 'cricket:upcoming_matches';
+
+        if (!$allowUpstreamFetch) {
+            if (Cache::has($key)) {
+                return (array) Cache::get($key, []);
+            }
+            $resp = $this->fetchFromApi('upcomingMatches');
+            $data = $this->extractDataArray($resp);
+            $filtered = $this->filterMatchesByDateWindow($data, 'upcoming');
+            Cache::put($key, $filtered, now()->addMinutes(30));
+            return $filtered;
+        }
+
+        return Cache::remember($key, 300, function () {
             $resp = $this->fetchFromApi('upcomingMatches');
             $data = $this->extractDataArray($resp);
             return $this->filterMatchesByDateWindow($data, 'upcoming');
@@ -65,13 +104,27 @@ class RapidApiCricketService
     }
 
     /**
-     * Get recent/finished matches cached for 300 seconds (5 minutes).
+     * Get recent/finished matches.
      *
+     * @param bool $allowUpstreamFetch
      * @return array
      */
-    public function getRecentMatches(): array
+    public function getRecentMatches(bool $allowUpstreamFetch = true): array
     {
-        return Cache::remember('cricket:recent_matches', 300, function () {
+        $key = 'cricket:recent_matches';
+
+        if (!$allowUpstreamFetch) {
+            if (Cache::has($key)) {
+                return (array) Cache::get($key, []);
+            }
+            $resp = $this->fetchFromApi('recentMatches');
+            $data = $this->extractDataArray($resp);
+            $filtered = $this->filterMatchesByDateWindow($data, 'recent');
+            Cache::put($key, $filtered, now()->addMinutes(30));
+            return $filtered;
+        }
+
+        return Cache::remember($key, 300, function () {
             $resp = $this->fetchFromApi('recentMatches');
             $data = $this->extractDataArray($resp);
             return $this->filterMatchesByDateWindow($data, 'recent');
@@ -79,25 +132,33 @@ class RapidApiCricketService
     }
 
     /**
-     * Get schedule matches categorized as upcoming and recent cached for 10 minutes (600 seconds).
+     * Get schedule matches categorized as upcoming and recent.
      *
+     * @param bool $allowUpstreamFetch
      * @return array{upcoming: array, recent: array}
      */
-    public function getScheduleMatches(): array
+    public function getScheduleMatches(bool $allowUpstreamFetch = true): array
     {
-        return Cache::remember('cricket:schedule_matches', 600, function () {
-            $upcoming = $this->getUpcomingMatches();
-            $recent = $this->getRecentMatches();
+        $key = 'cricket:schedule_matches';
+
+        if (!$allowUpstreamFetch) {
+            if (Cache::has($key)) {
+                return (array) Cache::get($key, ['upcoming' => [], 'recent' => []]);
+            }
+        }
+
+        return Cache::remember($key, $allowUpstreamFetch ? 600 : 1800, function () use ($allowUpstreamFetch) {
+            $upcoming = $this->getUpcomingMatches($allowUpstreamFetch);
+            $recent = $this->getRecentMatches($allowUpstreamFetch);
 
             // Fallback: Partition matches from getHomeMatches() if dedicated endpoints return empty
             if (empty($upcoming) && empty($recent)) {
-                $home = $this->getHomeMatches();
+                $home = $this->getHomeMatches($allowUpstreamFetch);
                 if (is_array($home)) {
                     foreach ($home as $match) {
                         if (!is_array($match)) {
                             continue;
                         }
-
                         $status = strtolower(trim((string) ($match['match_status'] ?? $match['status'] ?? '')));
                         $result = trim((string) ($match['result'] ?? ''));
 
@@ -120,15 +181,32 @@ class RapidApiCricketService
     }
 
     /**
-     * Get single match detail/info cached for 120 seconds.
+     * Get single match detail/info.
      * Calls GET /match/{matchId}/info (with fallback to /match/{matchId}).
      *
      * @param string|int $matchId
+     * @param bool $allowUpstreamFetch
      * @return array
      */
-    public function getMatchInfo(string|int $matchId): array
+    public function getMatchInfo(string|int $matchId, bool $allowUpstreamFetch = true): array
     {
-        return Cache::remember("cricket:match:{$matchId}:info", 120, function () use ($matchId) {
+        $key = "cricket:match:{$matchId}:info";
+
+        if (!$allowUpstreamFetch) {
+            if (Cache::has($key)) {
+                return (array) Cache::get($key, []);
+            }
+            $resp = $this->fetchFromApi("match/{$matchId}/info");
+            $data = $this->extractDataArray($resp);
+            if (empty($data)) {
+                $fallback = $this->fetchFromApi("match/{$matchId}");
+                $data = $this->extractDataArray($fallback);
+            }
+            Cache::put($key, $data, now()->addMinutes(30));
+            return $data;
+        }
+
+        return Cache::remember($key, 300, function () use ($matchId) {
             $resp = $this->fetchFromApi("match/{$matchId}/info");
             $data = $this->extractDataArray($resp);
 
@@ -146,23 +224,46 @@ class RapidApiCricketService
      * Backward-compatible alias for getMatchInfo.
      *
      * @param string|int $matchId
+     * @param bool $allowUpstreamFetch
      * @return array
      */
-    public function getMatchDetail(string|int $matchId): array
+    public function getMatchDetail(string|int $matchId, bool $allowUpstreamFetch = true): array
     {
-        return $this->getMatchInfo($matchId);
+        return $this->getMatchInfo($matchId, $allowUpstreamFetch);
     }
 
     /**
-     * Get match live line cached for 10 seconds.
+     * Get match live line.
      * Calls GET /match/{matchId}/live (with fallback to /match/{matchId}/liveLine).
      *
      * @param string|int $matchId
+     * @param bool $allowUpstreamFetch
      * @return array
      */
-    public function getMatchLiveLine(string|int $matchId): array
+    public function getMatchLiveLine(string|int $matchId, bool $allowUpstreamFetch = true): array
     {
-        return Cache::remember("cricket:match:{$matchId}:live_line", 10, function () use ($matchId) {
+        $key = "cricket:match:{$matchId}:live";
+        $secondaryKey = "cricket:match:{$matchId}:live_line";
+
+        if (!$allowUpstreamFetch) {
+            if (Cache::has($key)) {
+                return (array) Cache::get($key, []);
+            }
+            if (Cache::has($secondaryKey)) {
+                return (array) Cache::get($secondaryKey, []);
+            }
+            $resp = $this->fetchFromApi("match/{$matchId}/live");
+            $data = $this->extractDataArray($resp);
+            if (empty($data)) {
+                $fallback = $this->fetchFromApi("match/{$matchId}/liveLine");
+                $data = $this->extractDataArray($fallback);
+            }
+            Cache::put($key, $data, now()->addMinutes(30));
+            Cache::put($secondaryKey, $data, now()->addMinutes(30));
+            return $data;
+        }
+
+        return Cache::remember($key, 60, function () use ($matchId, $secondaryKey) {
             $resp = $this->fetchFromApi("match/{$matchId}/live");
             $data = $this->extractDataArray($resp);
 
@@ -172,89 +273,184 @@ class RapidApiCricketService
                 $data = $this->extractDataArray($fallback);
             }
 
+            if (!empty($data)) {
+                Cache::put($secondaryKey, $data, 60);
+            }
+
             return $data;
         }) ?? [];
     }
 
     /**
-     * Get match scorecard cached for 20 seconds.
+     * Get match scorecard.
      *
      * @param string|int $matchId
+     * @param bool $allowUpstreamFetch
      * @return array
      */
-    public function getMatchScorecard(string|int $matchId): array
+    public function getMatchScorecard(string|int $matchId, bool $allowUpstreamFetch = true): array
     {
-        return Cache::remember("cricket:match:{$matchId}:scorecard", 20, function () use ($matchId) {
+        $key = "cricket:match:{$matchId}:scorecard";
+
+        if (!$allowUpstreamFetch) {
+            if (Cache::has($key)) {
+                return (array) Cache::get($key, []);
+            }
+            $resp = $this->fetchFromApi("match/{$matchId}/scorecard");
+            $data = $this->extractDataArray($resp);
+            Cache::put($key, $data, now()->addMinutes(30));
+            return $data;
+        }
+
+        return Cache::remember($key, 50, function () use ($matchId) {
             $resp = $this->fetchFromApi("match/{$matchId}/scorecard");
             return $this->extractDataArray($resp);
         }) ?? [];
     }
 
     /**
-     * Get match Playing XI cached for 300 seconds (5 minutes).
+     * Get match Playing XI.
      *
      * @param string|int $matchId
+     * @param bool $allowUpstreamFetch
      * @return array
      */
-    public function getMatchPlayingXI(string|int $matchId): array
+    public function getMatchPlayingXI(string|int $matchId, bool $allowUpstreamFetch = true): array
     {
-        return Cache::remember("cricket:match:{$matchId}:playing_xi", 300, function () use ($matchId) {
+        $key = "cricket:match:{$matchId}:playing_xi";
+
+        if (!$allowUpstreamFetch) {
+            if (Cache::has($key)) {
+                return (array) Cache::get($key, []);
+            }
             $resp = $this->fetchFromApi("match/{$matchId}/playingXI");
-            return $this->extractDataArray($resp);
-        }) ?? [];
+            $data = $this->extractDataArray($resp);
+            $ttl = !empty($data) ? 86400 : 300;
+            Cache::put($key, $data, $ttl);
+            return $data;
+        }
+
+        if (Cache::has($key)) {
+            return (array) Cache::get($key, []);
+        }
+
+        $resp = $this->fetchFromApi("match/{$matchId}/playingXI");
+        $data = $this->extractDataArray($resp);
+        $ttl = !empty($data) ? 86400 : 300;
+        Cache::put($key, $data, $ttl);
+
+        return $data;
     }
 
     /**
-     * Get match impact players cached for 300 seconds (5 minutes).
+     * Get match impact players.
      *
      * @param string|int $matchId
+     * @param bool $allowUpstreamFetch
      * @return array
      */
-    public function getMatchImpactPlayers(string|int $matchId): array
+    public function getMatchImpactPlayers(string|int $matchId, bool $allowUpstreamFetch = true): array
     {
-        return Cache::remember("cricket:match:{$matchId}:impact_players", 300, function () use ($matchId) {
+        $key = "cricket:match:{$matchId}:impact_players";
+
+        if (!$allowUpstreamFetch) {
+            if (Cache::has($key)) {
+                return (array) Cache::get($key, []);
+            }
             $resp = $this->fetchFromApi("match/{$matchId}/impactPlayers");
-            return $this->extractDataArray($resp);
-        }) ?? [];
+            $data = $this->extractDataArray($resp);
+            $ttl = !empty($data) ? 86400 : 300;
+            Cache::put($key, $data, $ttl);
+            return $data;
+        }
+
+        if (Cache::has($key)) {
+            return (array) Cache::get($key, []);
+        }
+
+        $resp = $this->fetchFromApi("match/{$matchId}/impactPlayers");
+        $data = $this->extractDataArray($resp);
+        $ttl = !empty($data) ? 86400 : 300;
+        Cache::put($key, $data, $ttl);
+
+        return $data;
     }
 
     /**
-     * Get match tracker stats (total_runs, total_wkts, total_fours, total_sixes, etc.) cached for 60 seconds.
+     * Get match tracker stats (total_runs, total_wkts, total_fours, total_sixes, etc.).
      *
      * @param string|int $matchId
+     * @param bool $allowUpstreamFetch
      * @return array
      */
-    public function getMatchTracker(string|int $matchId): array
+    public function getMatchTracker(string|int $matchId, bool $allowUpstreamFetch = true): array
     {
-        return Cache::remember("cricket:match:{$matchId}:tracker", 60, function () use ($matchId) {
+        $key = "cricket:match:{$matchId}:tracker";
+
+        if (!$allowUpstreamFetch) {
+            if (Cache::has($key)) {
+                return (array) Cache::get($key, []);
+            }
+            $resp = $this->fetchFromApi("match/{$matchId}/matchTracker");
+            $data = $this->extractDataArray($resp);
+            Cache::put($key, $data, now()->addMinutes(30));
+            return $data;
+        }
+
+        return Cache::remember($key, 60, function () use ($matchId) {
             $resp = $this->fetchFromApi("match/{$matchId}/matchTracker");
             return $this->extractDataArray($resp);
         }) ?? [];
     }
 
     /**
-     * Get match commentary cached for 15 seconds.
+     * Get match commentary.
      *
      * @param string|int $matchId
+     * @param bool $allowUpstreamFetch
      * @return array
      */
-    public function getMatchCommentary(string|int $matchId): array
+    public function getMatchCommentary(string|int $matchId, bool $allowUpstreamFetch = true): array
     {
-        return Cache::remember("cricket:match:{$matchId}:commentary", 15, function () use ($matchId) {
+        $key = "cricket:match:{$matchId}:commentary";
+
+        if (!$allowUpstreamFetch) {
+            if (Cache::has($key)) {
+                return (array) Cache::get($key, []);
+            }
+            $resp = $this->fetchFromApi("match/{$matchId}/commentary");
+            $data = $this->extractDataArray($resp);
+            Cache::put($key, $data, now()->addMinutes(30));
+            return $data;
+        }
+
+        return Cache::remember($key, 15, function () use ($matchId) {
             $resp = $this->fetchFromApi("match/{$matchId}/commentary");
             return $this->extractDataArray($resp);
         }) ?? [];
     }
 
     /**
-     * Get match fancy/session data cached for 15 seconds.
+     * Get match fancy/session data.
      *
      * @param string|int $matchId
+     * @param bool $allowUpstreamFetch
      * @return array
      */
-    public function getMatchFancy(string|int $matchId): array
+    public function getMatchFancy(string|int $matchId, bool $allowUpstreamFetch = true): array
     {
-        return Cache::remember("cricket:match:{$matchId}:fancy", 15, function () use ($matchId) {
+        $key = "cricket:match:{$matchId}:fancy";
+
+        if (!$allowUpstreamFetch) {
+            if (Cache::has($key)) {
+                return (array) Cache::get($key, []);
+            }
+            $data = $this->fetchFromApi("match/{$matchId}/fancy");
+            Cache::put($key, $data, now()->addMinutes(30));
+            return $data;
+        }
+
+        return Cache::remember($key, 60, function () use ($matchId) {
             $data = $this->fetchFromApi("match/{$matchId}/fancy");
             Log::info("RapidApiCricketService: Fancy response for match {$matchId}", [
                 'has_data' => !empty($data['data']),
@@ -266,14 +462,26 @@ class RapidApiCricketService
     }
 
     /**
-     * Get match over history cached for 20 seconds.
+     * Get match over history.
      *
      * @param string|int $matchId
+     * @param bool $allowUpstreamFetch
      * @return array
      */
-    public function getMatchOverHistory(string|int $matchId): array
+    public function getMatchOverHistory(string|int $matchId, bool $allowUpstreamFetch = true): array
     {
-        return Cache::remember("cricket:match:{$matchId}:over_history", 20, function () use ($matchId) {
+        $key = "cricket:match:{$matchId}:over_history";
+
+        if (!$allowUpstreamFetch) {
+            if (Cache::has($key)) {
+                return (array) Cache::get($key, []);
+            }
+            $data = $this->fetchFromApi("match/{$matchId}/overHistory");
+            Cache::put($key, $data, now()->addMinutes(30));
+            return $data;
+        }
+
+        return Cache::remember($key, 45, function () use ($matchId) {
             $data = $this->fetchFromApi("match/{$matchId}/overHistory");
             Log::info("RapidApiCricketService: OverHistory response for match {$matchId}", [
                 'has_data' => !empty($data['data']),

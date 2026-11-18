@@ -90,12 +90,13 @@ class MatchDetail extends Component
 
     public function render(RapidApiCricketService $service)
     {
-        // 1. Core Data: Fetch /info and /live line (with fallback to home matches)
-        $infoData = $service->getMatchInfo($this->matchId);
-        $liveLineData = $service->getMatchLiveLine($this->matchId);
+        // 1. Core Data: Fetch /info and /live line strictly from cache (allowUpstreamFetch = false)
+        // Upstream RapidAPI hits are solely reserved for LiveMatchPollerCommand daemon
+        $infoData = $service->getMatchInfo($this->matchId, false);
+        $liveLineData = $service->getMatchLiveLine($this->matchId, false);
 
         // Fetch home matches list for fallback / live-line synchronization
-        $homeData = $service->getHomeMatches();
+        $homeData = $service->getHomeMatches(false);
         $liveMatchInfo = null;
 
         $matchesList = is_array($homeData) ? $homeData : [];
@@ -129,7 +130,7 @@ class MatchDetail extends Component
         $rawBolwer = $liveLineData['bolwer'] ?? $match['bolwer'] ?? $liveLineData['bowler'] ?? $match['bowler'] ?? [];
         $liveBowler = is_array($rawBolwer) ? $rawBolwer : [];
 
-        // 3. Tab-Specific On-Demand Fetching (Preserving RapidAPI Quota)
+        // 3. Tab-Specific On-Demand Fetching (Preserving RapidAPI Quota, strictly cached)
         $scorecardData = [];
         $playingXI = [];
         $impactPlayers = [];
@@ -137,17 +138,17 @@ class MatchDetail extends Component
         $commentaryData = [];
 
         if ($this->tab === 'scorecard') {
-            $rawScorecard = $service->getMatchScorecard($this->matchId);
+            $rawScorecard = $service->getMatchScorecard($this->matchId, false);
             $scorecardData = $rawScorecard['scorecard'] ?? $rawScorecard['data']['scorecard'] ?? (is_array($rawScorecard) ? $rawScorecard : []);
         } elseif ($this->tab === 'squad') {
-            $playingXI = $service->getMatchPlayingXI($this->matchId);
-            $impactPlayers = $service->getMatchImpactPlayers($this->matchId);
+            $playingXI = $service->getMatchPlayingXI($this->matchId, false);
+            $impactPlayers = $service->getMatchImpactPlayers($this->matchId, false);
         } elseif ($this->tab === 'commentary' || $this->tab === 'live-line') {
-            $commentaryData = $service->getMatchCommentary($this->matchId);
+            $commentaryData = $service->getMatchCommentary($this->matchId, false);
         }
 
         if ($this->tab === 'info') {
-            $trackerData = $service->getMatchTracker($this->matchId);
+            $trackerData = $service->getMatchTracker($this->matchId, false);
         }
 
         // 4. Status determination

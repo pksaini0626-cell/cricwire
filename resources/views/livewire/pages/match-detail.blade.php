@@ -9,15 +9,36 @@
         isPinned: false,
         isSkipped: false,
         userVotes: {},
+        live: {},
+        sendHeartbeat() {
+            if (document.visibilityState === 'visible' && this.matchId) {
+                fetch('/api/matches/' + this.matchId + '/ping', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                    }
+                }).catch(() => {});
+            }
+        },
         init() {
-            // Echo Real-Time Listener
+            // Heartbeat: ping once on mount and every 20s while tab is visible
+            this.sendHeartbeat();
+            setInterval(() => this.sendHeartbeat(), 20000);
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    this.sendHeartbeat();
+                }
+            });
+
+            // Echo Real-Time Listener (Pure Alpine Client-Side Reactivity)
             if (window.Echo) {
                 window.Echo.channel('match.{{ $matchId }}')
                     .listen('LiveScoreUpdated', (e) => {
-                        this.handleBallEvent(e);
-                        if (typeof $wire !== 'undefined' && $wire.$refresh) {
-                            $wire.$refresh();
-                        }
+                        const data = e.payload || e.matchData || e.data || e;
+                        this.live = { ...this.live, ...data };
+                        this.handleBallEvent(data);
                     });
             }
 
@@ -368,7 +389,38 @@
                 }
             }
         }
+
+        // Active bowler list resolution
+        $activeBowlerList = [];
+        if (!empty($liveBowler) && is_array($liveBowler) && !empty($liveBowler['name']) && $liveBowler['name'] !== '-') {
+            $activeBowlerList[] = $liveBowler;
+        } elseif (!empty($liveBowlers) && is_array($liveBowlers)) {
+            $activeBowlerList = array_slice($liveBowlers, 0, 2);
+        }
+
+        // Prepare pure Alpine initial live state
+        $initialLiveState = [
+            'team_a_scores' => $teamAScores,
+            'team_a_over' => $teamAOver,
+            'team_b_scores' => $teamBScores,
+            'team_b_over' => $teamBOver,
+            'current_ball' => $currentBall,
+            'need_run_ball' => $needRunBall,
+            'result' => $result,
+            'fav_team' => $favTeam,
+            'min_rate' => $rateMin,
+            'max_rate' => $rateMax,
+            's_ovr' => $sessionOver,
+            's_min' => $sessionMin,
+            's_max' => $sessionMax,
+            'batsman' => array_values(array_slice($liveBatters, 0, 2)),
+            'bolwer' => array_values($activeBowlerList),
+            'recent_balls' => array_values(array_slice($allCommentaryItems, 0, 8)),
+            'last_wicket' => $lastWicket,
+        ];
     @endphp
+
+    <div x-init="live = Object.assign(@js($initialLiveState), live)"></div>
 
     <!-- Top Sticky Header -->
     <header class="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800/80 px-4 sm:px-6 lg:px-8 py-3 shadow-sm">
@@ -485,7 +537,7 @@
                 <!-- Large Centered Ball Indicator -->
                 <div class="py-2 flex items-center justify-center">
                     <div class="w-16 h-16 rounded-full bg-slate-900 border-2 border-amber-400/80 flex items-center justify-center shadow-[0_0_20px_rgba(245,158,11,0.25)]">
-                        <span class="text-3xl font-black font-mono text-white tracking-tighter">
+                        <span class="text-3xl font-black font-mono text-white tracking-tighter" x-text="live.ball_event || live.last_ball_event || live.current_ball || '{{ $currentBall }}'">
                             {{ $currentBall }}
                         </span>
                     </div>
@@ -496,7 +548,7 @@
                     @if($isTossPending && $isUpcoming)
                         Toss Pending
                     @else
-                        {{ $needRunBall ?: 'Ball in Progress' }}
+                        <span x-text="live.need_run_ball || '{{ $needRunBall ?: 'Ball in Progress' }}'">{{ $needRunBall ?: 'Ball in Progress' }}</span>
                     @endif
                 </div>
 
@@ -504,14 +556,14 @@
                 <div class="bg-slate-950/90 rounded-xl p-2.5 border border-slate-800/90 flex items-center justify-between text-xs font-mono">
                     <div class="text-left">
                         <span class="font-bold text-slate-200 block text-xs">{{ $teamAShort }}</span>
-                        <span class="text-sm font-black text-white">{{ $teamAScores ?: 'Yet to Bat' }}</span>
-                        @if($teamAOver)<span class="text-[10px] text-slate-400">({{ $teamAOver }})</span>@endif
+                        <span class="text-sm font-black text-white" x-text="live.team_a_scores || '{{ $teamAScores ?: 'Yet to Bat' }}'">{{ $teamAScores ?: 'Yet to Bat' }}</span>
+                        <span class="text-[10px] text-slate-400" x-show="live.team_a_over || '{{ $teamAOver }}'" x-text="'(' + (live.team_a_over || '{{ $teamAOver }}') + ')'">@if($teamAOver)({{ $teamAOver }})@endif</span>
                     </div>
                     <div class="text-slate-600 font-bold font-sans text-xs">VS</div>
                     <div class="text-right">
                         <span class="font-bold text-slate-200 block text-xs">{{ $teamBShort }}</span>
-                        <span class="text-sm font-black text-rose-400">{{ $teamBScores ?: 'Yet to Bat' }}</span>
-                        @if($teamBOver)<span class="text-[10px] text-slate-400">({{ $teamBOver }})</span>@endif
+                        <span class="text-sm font-black text-rose-400" x-text="live.team_b_scores || '{{ $teamBScores ?: 'Yet to Bat' }}'">{{ $teamBScores ?: 'Yet to Bat' }}</span>
+                        <span class="text-[10px] text-slate-400" x-show="live.team_b_over || '{{ $teamBOver }}'" x-text="'(' + (live.team_b_over || '{{ $teamBOver }}') + ')'">@if($teamBOver)({{ $teamBOver }})@endif</span>
                     </div>
                 </div>
             </div>
@@ -561,42 +613,38 @@
             @if(\App\Helpers\SystemSetting::isMarketRatesEnabled())
                 <div class="space-y-2">
                     <!-- Fav Team Row -->
-                    @if(!empty($favTeam) && $favTeam !== 'Fav' && (($rateMin !== '-' && !empty($rateMin)) || ($rateMax !== '-' && !empty($rateMax))))
-                        <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex items-center justify-between shadow-md">
-                            <div class="flex items-center space-x-2">
-                                <span class="text-xs font-bold text-slate-300">Fav Team:</span>
-                                <span class="px-2 py-0.5 rounded bg-slate-800 text-amber-300 font-bold text-xs border border-amber-500/30">
-                                    {{ $favTeam }}
-                                </span>
+                    <div x-show="(live.fav_team && live.fav_team !== 'Fav') || '{{ $favTeam }}' !== 'Fav'" class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex items-center justify-between shadow-md">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xs font-bold text-slate-300">Fav Team:</span>
+                            <span class="px-2 py-0.5 rounded bg-slate-800 text-amber-300 font-bold text-xs border border-amber-500/30" x-text="live.fav_team || '{{ $favTeam }}'">
+                                {{ $favTeam }}
+                            </span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <div class="bg-rose-600 text-white font-mono font-black text-xs px-3 py-1.5 rounded-lg shadow-sm text-center min-w-[54px]" title="Min Rate (Back)" x-text="live.min_rate || '{{ $rateMin }}'">
+                                {{ $rateMin }}
                             </div>
-                            <div class="flex items-center space-x-2">
-                                <div class="bg-rose-600 text-white font-mono font-black text-xs px-3 py-1.5 rounded-lg shadow-sm text-center min-w-[54px]" title="Min Rate (Back)">
-                                    {{ $rateMin }}
-                                </div>
-                                <div class="bg-emerald-600 text-white font-mono font-black text-xs px-3 py-1.5 rounded-lg shadow-sm text-center min-w-[54px]" title="Max Rate (Lay)">
-                                    {{ $rateMax }}
-                                </div>
+                            <div class="bg-emerald-600 text-white font-mono font-black text-xs px-3 py-1.5 rounded-lg shadow-sm text-center min-w-[54px]" title="Max Rate (Lay)" x-text="live.max_rate || '{{ $rateMax }}'">
+                                {{ $rateMax }}
                             </div>
                         </div>
-                    @endif
+                    </div>
 
                     <!-- Dynamic Session Row (Lambi / Over runs) -->
-                    @if($hasValidSession)
-                        <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex items-center justify-between shadow-md">
-                            <div class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                                <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                                <span>{{ $sessionOver }} Over Runs</span>
+                    <div x-show="live.s_ovr || '{{ $sessionOver }}'" class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex items-center justify-between shadow-md">
+                        <div class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                            <span><span x-text="live.s_ovr || '{{ $sessionOver }}'">{{ $sessionOver }}</span> Over Runs</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <div class="bg-rose-600 text-white font-mono font-black text-xs px-3 py-1.5 rounded-lg shadow-sm text-center min-w-[54px]" title="No / Under" x-text="live.s_min || '{{ $sessionMin }}'">
+                                {{ $sessionMin }}
                             </div>
-                            <div class="flex items-center space-x-2">
-                                <div class="bg-rose-600 text-white font-mono font-black text-xs px-3 py-1.5 rounded-lg shadow-sm text-center min-w-[54px]" title="No / Under">
-                                    {{ $sessionMin }}
-                                </div>
-                                <div class="bg-emerald-600 text-white font-mono font-black text-xs px-3 py-1.5 rounded-lg shadow-sm text-center min-w-[54px]" title="Yes / Over">
-                                    {{ $sessionMax }}
-                                </div>
+                            <div class="bg-emerald-600 text-white font-mono font-black text-xs px-3 py-1.5 rounded-lg shadow-sm text-center min-w-[54px]" title="Yes / Over" x-text="live.s_max || '{{ $sessionMax }}'">
+                                {{ $sessionMax }}
                             </div>
                         </div>
-                    @endif
+                    </div>
 
                     <!-- Session Summary Accordion (Innings 1 & 2 Table) -->
                     @include('livewire.pages.partials.session-summary-table')
@@ -624,28 +672,26 @@
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-800/50">
-                                @forelse(array_slice($liveBatters, 0, 2) as $idx => $batter)
-                                    @php
-                                        $isOnStrike = $idx === 0;
-                                    @endphp
-                                    <tr class="{{ $isOnStrike ? 'bg-amber-500/5' : '' }}">
+                                <template x-for="(batter, idx) in (live.batsman || @js(array_values(array_slice($liveBatters, 0, 2))))" :key="idx">
+                                    <tr :class="idx === 0 ? 'bg-amber-500/5' : ''">
                                         <td class="py-2 font-bold text-white flex items-center gap-1.5">
-                                            <span>{{ $batter['name'] ?? 'Batter' }}</span>
-                                            @if($isOnStrike)
+                                            <span x-text="batter.name || 'Batter'"></span>
+                                            <template x-if="idx === 0">
                                                 <span class="text-amber-400 text-xs font-black" title="On strike">*</span>
-                                            @endif
+                                            </template>
                                         </td>
-                                        <td class="py-2 text-right font-mono font-bold text-white">{{ $batter['run'] ?? 0 }}</td>
-                                        <td class="py-2 text-right font-mono text-slate-400">{{ $batter['ball'] ?? 0 }}</td>
-                                        <td class="py-2 text-right font-mono text-slate-300">{{ $batter['fours'] ?? 0 }}</td>
-                                        <td class="py-2 text-right font-mono text-slate-300">{{ $batter['sixes'] ?? 0 }}</td>
-                                        <td class="py-2 text-right font-mono text-amber-400">{{ $batter['strike_rate'] ?? '0.00' }}</td>
+                                        <td class="py-2 text-right font-mono font-bold text-white" x-text="batter.run ?? 0"></td>
+                                        <td class="py-2 text-right font-mono text-slate-400" x-text="batter.ball ?? 0"></td>
+                                        <td class="py-2 text-right font-mono text-slate-300" x-text="batter.fours ?? 0"></td>
+                                        <td class="py-2 text-right font-mono text-slate-300" x-text="batter.sixes ?? 0"></td>
+                                        <td class="py-2 text-right font-mono text-amber-400" x-text="batter.strike_rate || '0.00'"></td>
                                     </tr>
-                                @empty
+                                </template>
+                                <template x-if="!(live.batsman && live.batsman.length) && !{{ count($liveBatters) }}">
                                     <tr>
                                         <td colspan="6" class="py-3 text-center text-slate-500 text-xs">No live batters currently on crease.</td>
                                     </tr>
-                                @endforelse
+                                </template>
                             </tbody>
                         </table>
                     </div>
@@ -695,25 +741,26 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @forelse($activeBowlerList as $bIdx => $bowler)
+                                <template x-for="(bowler, bIdx) in (live.bolwer && live.bolwer.length ? live.bolwer : (live.bowler && live.bowler.length ? live.bowler : (live.bolwer && live.bolwer.name ? [live.bolwer] : (live.bowler && live.bowler.name ? [live.bowler] : @js($activeBowlerList)))))" :key="bIdx">
                                     <tr>
                                         <td class="py-2 font-bold text-white flex items-center gap-1.5">
-                                            <span>{{ trim($bowler['name'] ?? 'Bowler') }}</span>
-                                            @if($bIdx === 0)
+                                            <span x-text="bowler.name ? bowler.name.trim() : 'Bowler'"></span>
+                                            <template x-if="bIdx === 0">
                                                 <span class="w-1.5 h-1.5 rounded-full bg-cyan-400" title="Current bowler"></span>
-                                            @endif
+                                            </template>
                                         </td>
-                                        <td class="py-2 text-right font-mono text-slate-300">{{ $bowler['over'] ?? 0 }}</td>
-                                        <td class="py-2 text-right font-mono text-slate-400">{{ $bowler['maiden'] ?? 0 }}</td>
-                                        <td class="py-2 text-right font-mono font-bold text-white">{{ $bowler['run'] ?? 0 }}</td>
-                                        <td class="py-2 text-right font-mono font-bold text-rose-400">{{ $bowler['wicket'] ?? 0 }}</td>
-                                        <td class="py-2 text-right font-mono text-cyan-300">{{ $bowler['economy'] ?? '0.00' }}</td>
+                                        <td class="py-2 text-right font-mono text-slate-300" x-text="bowler.over ?? 0"></td>
+                                        <td class="py-2 text-right font-mono text-slate-400" x-text="bowler.maiden ?? 0"></td>
+                                        <td class="py-2 text-right font-mono font-bold text-white" x-text="bowler.run ?? 0"></td>
+                                        <td class="py-2 text-right font-mono font-bold text-rose-400" x-text="bowler.wicket ?? 0"></td>
+                                        <td class="py-2 text-right font-mono text-cyan-300" x-text="bowler.economy || '0.00'"></td>
                                     </tr>
-                                @empty
+                                </template>
+                                <template x-if="!(live.bolwer && live.bolwer.length) && !{{ count($activeBowlerList) }}">
                                     <tr>
                                         <td colspan="6" class="py-3 text-center text-slate-500 text-xs">No active bowling figures.</td>
                                     </tr>
-                                @endforelse
+                                </template>
                             </tbody>
                         </table>
                     </div>
@@ -1071,48 +1118,25 @@
                     <span class="text-slate-500 font-mono">Ball-by-Ball Live</span>
                 </div>
                 <div class="flex items-center gap-2 overflow-x-auto py-1">
-                    @php
-                        $recentBalls = array_slice($allCommentaryItems, 0, 8);
-                    @endphp
-                    @forelse($recentBalls as $cBall)
-                        @php
-                            $runs = (string) ($cBall['runs'] ?? '0');
-                            $isWkt = !empty($cBall['wicket']) && $cBall['wicket'] != '0';
-                            $isWide = !empty($cBall['wides']) && $cBall['wides'] != '0';
-                            $isNoBall = !empty($cBall['noballs']) && $cBall['noballs'] != '0';
-                            
-                            $label = $runs;
-                            $bgClass = 'bg-slate-800/80 border-slate-700/80 text-slate-200';
-                            $textClass = 'text-xs';
-                            
-                            if ($isWkt) {
-                                $label = 'W';
-                                $bgClass = 'bg-rose-600 border-rose-500 text-white animate-pulse shadow-sm shadow-rose-600/50';
-                            } elseif ($isWide) {
-                                $label = 'wd';
-                                $bgClass = 'bg-cyan-500/20 border-cyan-400 text-cyan-300';
-                                $textClass = 'text-[10px] lowercase';
-                            } elseif ($isNoBall) {
-                                $label = 'nb';
-                                $bgClass = 'bg-cyan-500/20 border-cyan-400 text-cyan-300';
-                                $textClass = 'text-[10px] lowercase';
-                            } elseif ($runs === '4') {
-                                $bgClass = 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-sm shadow-emerald-500/20';
-                            } elseif ($runs === '6') {
-                                $bgClass = 'bg-amber-500/20 border-amber-400 text-amber-300 shadow-sm shadow-amber-500/30';
-                            } elseif ($runs === '0') {
-                                $label = '0';
-                                $bgClass = 'bg-slate-900 border-slate-700/60 text-slate-400';
-                            }
-                        @endphp
-                        <span class="w-8 h-8 rounded-full border font-mono font-bold flex items-center justify-center shrink-0 shadow-sm {{ $textClass }} {{ $bgClass }}" title="{{ $cBall['overs'] ?? '' }} ov">
-                            {{ $label }}
+                    <template x-for="(cBall, bIndex) in (live.recent_balls && live.recent_balls.length ? live.recent_balls : @js(array_values(array_slice($allCommentaryItems, 0, 8))))" :key="bIndex">
+                        <span class="w-8 h-8 rounded-full border font-mono font-bold flex items-center justify-center shrink-0 shadow-sm text-xs"
+                            :class="{
+                                'bg-rose-600 border-rose-500 text-white animate-pulse shadow-sm shadow-rose-600/50': (cBall.wicket && cBall.wicket != '0'),
+                                'bg-cyan-500/20 border-cyan-400 text-cyan-300 text-[10px] lowercase': ((cBall.wides && cBall.wides != '0') || (cBall.noballs && cBall.noballs != '0')),
+                                'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-sm shadow-emerald-500/20': (String(cBall.runs) === '4'),
+                                'bg-amber-500/20 border-amber-400 text-amber-300 shadow-sm shadow-amber-500/30': (String(cBall.runs) === '6'),
+                                'bg-slate-900 border-slate-700/60 text-slate-400': (String(cBall.runs) === '0' && !cBall.wicket && !cBall.wides && !cBall.noballs),
+                                'bg-slate-800/80 border-slate-700/80 text-slate-200': (String(cBall.runs) !== '4' && String(cBall.runs) !== '6' && String(cBall.runs) !== '0' && !cBall.wicket && !cBall.wides && !cBall.noballs)
+                            }"
+                            x-text="(cBall.wicket && cBall.wicket != '0') ? 'W' : ((cBall.wides && cBall.wides != '0') ? 'wd' : ((cBall.noballs && cBall.noballs != '0') ? 'nb' : (cBall.runs ?? '•')))"
+                            :title="(cBall.overs || '') + ' ov'">
                         </span>
-                    @empty
-                        <span class="w-8 h-8 rounded-full bg-slate-900 border border-slate-700/60 text-slate-300 font-mono font-bold text-xs flex items-center justify-center shrink-0 shadow-sm">
+                    </template>
+                    <template x-if="!(live.recent_balls && live.recent_balls.length) && !{{ count($allCommentaryItems) }}">
+                        <span class="w-8 h-8 rounded-full bg-slate-900 border border-slate-700/60 text-slate-300 font-mono font-bold text-xs flex items-center justify-center shrink-0 shadow-sm" x-text="live.ball_event || live.current_ball || '{{ $currentBall }}'">
                             {{ $currentBall }}
                         </span>
-                    @endforelse
+                    </template>
                 </div>
             </div>
 

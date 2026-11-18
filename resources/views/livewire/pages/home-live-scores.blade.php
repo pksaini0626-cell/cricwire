@@ -3,10 +3,27 @@
     x-data="{
         pinnedIds: [],
         skippedIds: [],
+        liveTickerData: {},
         init() {
             this.syncPreferences();
             window.addEventListener('match-pin-updated', () => this.syncPreferences());
             window.addEventListener('match-skip-updated', () => this.syncPreferences());
+
+            if (window.Echo) {
+                window.Echo.channel('matches.live.ticker')
+                    .listen('LiveScoreUpdated', (e) => {
+                        const mId = String(e.api_match_id || e.match_id || (e.payload && e.payload.match_id) || '');
+                        if (!mId) return;
+                        const data = e.payload || e;
+                        this.liveTickerData[mId] = {
+                            ...(this.liveTickerData[mId] || {}),
+                            ...data
+                        };
+                        window.dispatchEvent(new CustomEvent('ticker-score-updated', {
+                            detail: { matchId: mId, data: this.liveTickerData[mId] }
+                        }));
+                    });
+            }
         },
         syncPreferences() {
             this.pinnedIds = JSON.parse(localStorage.getItem('pinned_matches') || '[]');
