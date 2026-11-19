@@ -25,6 +25,10 @@ class LiveEngineSettings extends Page
     {
         $this->form->fill([
             'live_engine_enabled' => LiveEngineConfig::isEnabled(),
+            'poll_interval_t20' => LiveEngineConfig::pollIntervalT20(),
+            'poll_interval_odi' => LiveEngineConfig::pollIntervalOdi(),
+            'poll_interval_test' => LiveEngineConfig::pollIntervalTest(),
+            'daily_api_call_limit' => LiveEngineConfig::dailyApiCallLimit(),
             'show_market_rates_and_session' => LiveEngineConfig::isMarketRatesEnabled(),
             'polling_interval_seconds' => LiveEngineConfig::pollingInterval(),
 
@@ -104,22 +108,48 @@ class LiveEngineSettings extends Page
                     ])->columns(2),
 
                 Section::make('Live Poller & Adaptive Engine Configuration')
-                    ->description('Control the daemon polling behavior and API consumption dynamically.')
+                    ->description('Control background live polling behavior, format-wise delays, and daily API safety quotas.')
                     ->schema([
                         Toggle::make('live_engine_enabled')
                             ->label('Enable Background Live Poller')
-                            ->helperText('When turned off, the live poller enters an idle sleep state without calling the external RapidAPI endpoint.')
+                            ->helperText('When turned off, the live poller enters an idle sleep state without making upstream API calls.')
                             ->default(true),
 
-                        TextInput::make('polling_interval_seconds')
-                            ->label('Adaptive Polling Delay (Seconds)')
-                            ->helperText('Set 30s for RapidAPI $10 plan (approx 300 calls/match), or 1-2s for Unlimited API tier. Valid values: 1 to 120 seconds.')
+                        TextInput::make('poll_interval_t20')
+                            ->label('T20 / T10 Polling Delay (Seconds)')
+                            ->helperText('Polling interval for T20/T10 matches (default: 10 seconds).')
                             ->numeric()
-                            ->minValue(1)
+                            ->minValue(3)
                             ->maxValue(120)
+                            ->default(10)
+                            ->required(),
+
+                        TextInput::make('poll_interval_odi')
+                            ->label('ODI Polling Delay (Seconds)')
+                            ->helperText('Polling interval for 50-50 ODI matches (default: 25 seconds).')
+                            ->numeric()
+                            ->minValue(5)
+                            ->maxValue(180)
+                            ->default(25)
+                            ->required(),
+
+                        TextInput::make('poll_interval_test')
+                            ->label('Test Match Polling Delay (Seconds)')
+                            ->helperText('Polling interval for Test matches (default: 30 seconds).')
+                            ->numeric()
+                            ->minValue(5)
+                            ->maxValue(300)
                             ->default(30)
                             ->required(),
-                    ]),
+
+                        TextInput::make('daily_api_call_limit')
+                            ->label('Daily API Call Safety Limit')
+                            ->helperText('Safety cap below 5,000/day quota (default: 4800). Polling suspends when reached.')
+                            ->numeric()
+                            ->minValue(100)
+                            ->default(4800)
+                            ->required(),
+                    ])->columns(2),
             ])
             ->statePath('data');
     }
@@ -129,6 +159,10 @@ class LiveEngineSettings extends Page
         $state = $this->form->getState();
 
         LiveEngineConfig::set('live_engine_enabled', (bool) ($state['live_engine_enabled'] ?? true));
+        LiveEngineConfig::set('poll_interval_t20', (int) ($state['poll_interval_t20'] ?? 10));
+        LiveEngineConfig::set('poll_interval_odi', (int) ($state['poll_interval_odi'] ?? 25));
+        LiveEngineConfig::set('poll_interval_test', (int) ($state['poll_interval_test'] ?? 30));
+        LiveEngineConfig::set('daily_api_call_limit', (int) ($state['daily_api_call_limit'] ?? 4800));
         LiveEngineConfig::set('show_market_rates_and_session', (bool) ($state['show_market_rates_and_session'] ?? true));
         LiveEngineConfig::set('polling_interval_seconds', (int) ($state['polling_interval_seconds'] ?? 30));
 

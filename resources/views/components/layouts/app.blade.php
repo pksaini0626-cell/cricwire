@@ -3,8 +3,54 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ $title ?? 'CricWire - Live Cricket Scores, Fast Ball-by-Ball Live Line' }}</title>
+        @php
+            $seo = $seoData ?? [];
+            $pageTitle = $seo['title'] ?? $title ?? \App\Support\SeoConfig::get('seo_home_title', \App\Support\SeoConfig::DEFAULTS['seo_home_title']);
+            $pageDesc = $seo['description'] ?? \App\Support\SeoConfig::get('seo_home_description', \App\Support\SeoConfig::DEFAULTS['seo_home_description']);
+            $pageKeywords = $seo['keywords'] ?? \App\Support\SeoConfig::get('seo_home_keywords', \App\Support\SeoConfig::DEFAULTS['seo_home_keywords']);
+            $canonicalUrl = $seo['canonical'] ?? url()->current();
+            $robots = $seo['robots'] ?? 'index, follow';
+            $ogType = $seo['og_type'] ?? 'website';
+            $ogImage = $seo['og_image'] ?? asset('icons/cricwire_favicons/android-chrome-512x512.png');
+            $siteName = \App\Support\SeoConfig::get('seo_org_name', 'Cricwire');
+            $googleVerification = \App\Support\SeoConfig::get('google_site_verification');
+            $bingVerification = \App\Support\SeoConfig::get('bing_site_verification');
+        @endphp
+
+        <!-- Primary Meta Tags -->
+        <title>{{ $pageTitle }}</title>
+        <meta name="title" content="{{ $pageTitle }}">
+        <meta name="description" content="{{ $pageDesc }}">
+        @if(!empty($pageKeywords))
+            <meta name="keywords" content="{{ $pageKeywords }}">
+        @endif
+        <meta name="robots" content="{{ $robots }}">
+        <link rel="canonical" href="{{ $canonicalUrl }}">
+
+        <!-- Search Engine Verification Codes -->
+        @if(!empty($googleVerification))
+            <meta name="google-site-verification" content="{{ $googleVerification }}">
+        @endif
+        @if(!empty($bingVerification))
+            <meta name="msvalidate.01" content="{{ $bingVerification }}">
+        @endif
+
+        <!-- Open Graph / Facebook -->
+        <meta property="og:type" content="{{ $ogType }}">
+        <meta property="og:url" content="{{ $canonicalUrl }}">
+        <meta property="og:title" content="{{ $pageTitle }}">
+        <meta property="og:description" content="{{ $pageDesc }}">
+        <meta property="og:image" content="{{ $ogImage }}">
+        <meta property="og:site_name" content="{{ $siteName }}">
+
+        <!-- Twitter Card -->
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:url" content="{{ $canonicalUrl }}">
+        <meta name="twitter:title" content="{{ $pageTitle }}">
+        <meta name="twitter:description" content="{{ $pageDesc }}">
+        <meta name="twitter:image" content="{{ $ogImage }}">
 
         <!-- CricWire Favicons & PWA -->
         <link rel="icon" type="image/x-icon" href="{{ asset('icons/cricwire_favicons/favicon.ico') }}">
@@ -39,6 +85,17 @@
             </script>
         @endif
 
+        <!-- Dynamic JSON-LD Structured Data Schemas -->
+        @if(!empty($seo['schemas']) && is_array($seo['schemas']))
+            @foreach($seo['schemas'] as $schemaItem)
+                <script type="application/ld+json">
+{!! json_encode($schemaItem, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) !!}
+                </script>
+            @endforeach
+        @endif
+
+        @stack('seo_schema')
+
         @livewireStyles
     </head>
     <style>
@@ -62,6 +119,22 @@
         </div>
 
         @livewireScripts
+
+        <!-- Livewire 419 Auto-Recovery Handler -->
+        <script>
+            document.addEventListener('livewire:init', () => {
+                if (window.Livewire && window.Livewire.hook) {
+                    window.Livewire.hook('request', ({ fail }) => {
+                        fail(({ status, preventDefault }) => {
+                            if (status === 419) {
+                                preventDefault();
+                                window.location.reload();
+                            }
+                        });
+                    });
+                }
+            });
+        </script>
 
         <!-- PWA Service Worker Registration -->
         <script>

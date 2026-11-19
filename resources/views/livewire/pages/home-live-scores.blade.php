@@ -4,25 +4,46 @@
         pinnedIds: [],
         skippedIds: [],
         liveTickerData: {},
+        pollInterval: null,
         init() {
             this.syncPreferences();
             window.addEventListener('match-pin-updated', () => this.syncPreferences());
             window.addEventListener('match-skip-updated', () => this.syncPreferences());
 
-            if (window.Echo) {
-                window.Echo.channel('matches.live.ticker')
-                    .listen('LiveScoreUpdated', (e) => {
-                        const mId = String(e.api_match_id || e.match_id || (e.payload && e.payload.match_id) || '');
-                        if (!mId) return;
-                        const data = e.payload || e;
-                        this.liveTickerData[mId] = {
-                            ...(this.liveTickerData[mId] || {}),
-                            ...data
-                        };
-                        window.dispatchEvent(new CustomEvent('ticker-score-updated', {
-                            detail: { matchId: mId, data: this.liveTickerData[mId] }
-                        }));
-                    });
+            // Lightweight Alpine.js Static JSON Poller hitting /live-data/home.json every 15s (Zero PHP/DB load)
+            this.fetchHomeData();
+            this.pollInterval = setInterval(() => {
+                if (document.visibilityState === 'visible') {
+                    this.fetchHomeData();
+                }
+            }, 15000);
+        },
+        destroy() {
+            if (this.pollInterval) clearInterval(this.pollInterval);
+        },
+        async fetchHomeData() {
+            try {
+                const res = await fetch('/live-data/home.json?t=' + Date.now());
+                if (!res.ok) return;
+                const json = await res.json();
+                const data = (json && json.data) ? json.data : (json || {});
+                const liveList = data.live || [];
+                const recentList = data.recent || data.finished || [];
+                
+                // Dispatch updates for both live and recently completed matches
+                [...liveList, ...recentList].forEach(m => {
+                    const mId = String(m.match_id || m.id || '');
+                    if (!mId) return;
+                    this.liveTickerData[mId] = {
+                        ...(this.liveTickerData[mId] || {}),
+                        ...m
+                    };
+                    window.dispatchEvent(new CustomEvent('ticker-score-updated', {
+                        detail: { matchId: mId, data: this.liveTickerData[mId] }
+                    }));
+                });
+            } catch (e) {
+                // Ignore transient network errors
             }
         },
         syncPreferences() {
@@ -103,7 +124,7 @@
             <!-- Center Main Column: Match Feed -->
             <main class="col-span-1 md:col-span-8 lg:col-span-6 space-y-4">
                 <!-- Reactive Filter Tabs -->
-                <x-filter-tabs :activeTab="$activeTab" />
+                <x-filter-tabs :activeTab="$activeTab" :liveCount="$liveCount" :upcomingCount="$upcomingCount" :finishedCount="$finishedCount" />
 
                 <!-- User Pinned Matches Container (Shown when pinned matches exist) -->
                 <template x-if="pinnedIds.length > 0">

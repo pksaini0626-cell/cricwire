@@ -60,14 +60,18 @@ class NewsShow extends Component
             $relatedArticles = $latestNews;
         }
 
+        $seoData = \App\Services\Seo\CricketSeoService::forNewsArticle($this->article);
+
         return view('livewire.pages.news-show', [
             'article' => $this->article,
             'latestNews' => $latestNews,
             'sidebarBanner' => $sidebarBanner,
             'tags' => $tags,
             'relatedArticles' => $relatedArticles,
+            'seoData' => $seoData,
         ])->layout('components.layouts.app', [
-            'title' => ($this->article->seo_meta_title ?: $this->article->title) . ' | CricWire',
+            'seoData' => $seoData,
+            'title' => $seoData['title'],
         ]);
     }
 }

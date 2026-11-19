@@ -20,6 +20,36 @@ class LiveEngineConfig
     }
 
     /**
+     * Polling intervals format-wise (in seconds)
+     */
+    public static function pollIntervalT20(): int
+    {
+        $val = (int) self::get('poll_interval_t20', 10);
+        return max(3, min(120, $val));
+    }
+
+    public static function pollIntervalOdi(): int
+    {
+        $val = (int) self::get('poll_interval_odi', 25);
+        return max(5, min(180, $val));
+    }
+
+    public static function pollIntervalTest(): int
+    {
+        $val = (int) self::get('poll_interval_test', 30);
+        return max(5, min(300, $val));
+    }
+
+    /**
+     * Daily API call limit / safety cap
+     */
+    public static function dailyApiCallLimit(): int
+    {
+        $val = (int) self::get('daily_api_call_limit', 4800);
+        return max(100, $val);
+    }
+
+    /**
      * Check if market rates and session odds are enabled (Safe-Mode toggle).
      */
     public static function isMarketRatesEnabled(): bool
@@ -122,6 +152,10 @@ class LiveEngineConfig
             Cache::forget(self::CACHE_PREFIX . $key);
         } else {
             Cache::forget(self::CACHE_PREFIX . 'live_engine_enabled');
+            Cache::forget(self::CACHE_PREFIX . 'poll_interval_t20');
+            Cache::forget(self::CACHE_PREFIX . 'poll_interval_odi');
+            Cache::forget(self::CACHE_PREFIX . 'poll_interval_test');
+            Cache::forget(self::CACHE_PREFIX . 'daily_api_call_limit');
             Cache::forget(self::CACHE_PREFIX . 'show_market_rates_and_session');
             Cache::forget(self::CACHE_PREFIX . 'polling_interval_seconds');
             Cache::forget(self::CACHE_PREFIX . 'social_facebook_url');

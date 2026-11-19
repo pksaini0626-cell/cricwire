@@ -11,7 +11,7 @@ class CricketSlugHelper
      */
     public static function makeSeriesSlug(array $match): string
     {
-        $series = $match['series'] ?? $match['series_name'] ?? $match['series_title'] ?? 'cricket-tournament';
+        $series = $match['series_name'] ?? $match['series'] ?? $match['tournament'] ?? $match['series_title'] ?? 'cricket-tournament';
         $season = $match['season'] ?? $match['year'] ?? '';
         $raw = trim("{$series} {$season}");
         return Str::slug($raw) ?: 'cricket-match-series';
@@ -24,7 +24,15 @@ class CricketSlugHelper
     {
         $teamA = $match['team_a'] ?? $match['team_a_short'] ?? $match['team1'] ?? 'team-a';
         $teamB = $match['team_b'] ?? $match['team_b_short'] ?? $match['team2'] ?? 'team-b';
-        $stage = $match['match_title'] ?? $match['match_stage'] ?? $match['round'] ?? $match['match_desc'] ?? $match['matchs'] ?? '';
+        $stage = $match['match_desc'] ?? $match['matchs'] ?? $match['match_title'] ?? $match['match_stage'] ?? $match['round'] ?? '';
+
+        // Avoid generic fallback like "team-a-vs-team-b" if real names exist in nested first_team/second_team
+        if (in_array(strtolower($teamA), ['team a', 'team-a', 'tma', '']) && !empty($match['raw']['first_team']['full_name'])) {
+            $teamA = $match['raw']['first_team']['full_name'];
+        }
+        if (in_array(strtolower($teamB), ['team b', 'team-b', 'tmb', '']) && !empty($match['raw']['second_team']['full_name'])) {
+            $teamB = $match['raw']['second_team']['full_name'];
+        }
 
         $title = trim("{$teamA} vs {$teamB} {$stage}");
         $slug = Str::slug($title);

@@ -25,3 +25,6 @@ Schedule::job(new SyncRankingsJob)->dailyAt('03:00');
 
 // Sync high-frequency Redis poll votes down to MySQL every 60 seconds
 Schedule::job(new SyncPollVotesToDatabaseJob)->everyMinute();
+
+// Sync CricketLiveApi matches and ball data into public/live-data/*.json every minute
+Schedule::command('cricket:sync-static-json')->everyMinute()->withoutOverlapping();

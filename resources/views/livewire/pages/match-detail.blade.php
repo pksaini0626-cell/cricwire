@@ -1,161 +1,40 @@
+<script src="{{ asset('js/match-detail-engine.js') }}"></script>
+
 <div 
     class="min-h-screen bg-slate-950 text-slate-100 pb-24 font-sans antialiased flex flex-col selection:bg-rose-500 selection:text-white transition-all duration-300"
     :class="{ 'ring-2 ring-amber-400': isFlashing }"
-    x-data="{
-        soundEnabled: false,
-        isFlashing: false,
-        lastEvent: '',
-        matchId: '{{ $matchId }}',
-        isPinned: false,
-        isSkipped: false,
-        userVotes: {},
-        live: {},
-        sendHeartbeat() {
-            if (document.visibilityState === 'visible' && this.matchId) {
-                fetch('/api/matches/' + this.matchId + '/ping', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-                    }
-                }).catch(() => {});
-            }
-        },
-        init() {
-            // Heartbeat: ping once on mount and every 20s while tab is visible
-            this.sendHeartbeat();
-            setInterval(() => this.sendHeartbeat(), 20000);
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') {
-                    this.sendHeartbeat();
-                }
-            });
-
-            // Echo Real-Time Listener (Pure Alpine Client-Side Reactivity)
-            if (window.Echo) {
-                window.Echo.channel('match.{{ $matchId }}')
-                    .listen('LiveScoreUpdated', (e) => {
-                        const data = e.payload || e.matchData || e.data || e;
-                        this.live = { ...this.live, ...data };
-                        this.handleBallEvent(data);
-                    });
-            }
-
-            // Sync user local preferences
-            const pinned = JSON.parse(localStorage.getItem('pinned_matches') || '[]');
-            const skipped = JSON.parse(localStorage.getItem('skipped_matches') || '[]');
-            this.isPinned = pinned.some(id => String(id) === String(this.matchId));
-            this.isSkipped = skipped.some(id => String(id) === String(this.matchId));
-            this.userVotes = JSON.parse(localStorage.getItem('user_poll_votes') || '{}');
-        },
-        togglePin() {
-            let pinned = JSON.parse(localStorage.getItem('pinned_matches') || '[]');
-            if (this.isPinned) {
-                pinned = pinned.filter(id => String(id) !== String(this.matchId));
-                this.isPinned = false;
-            } else {
-                if (!pinned.some(id => String(id) === String(this.matchId))) {
-                    pinned.push(String(this.matchId));
-                }
-                this.isPinned = true;
-            }
-            localStorage.setItem('pinned_matches', JSON.stringify(pinned));
-            window.dispatchEvent(new CustomEvent('match-pin-updated'));
-        },
-        skipMatch() {
-            let skipped = JSON.parse(localStorage.getItem('skipped_matches') || '[]');
-            if (!skipped.some(id => String(id) === String(this.matchId))) {
-                skipped.push(String(this.matchId));
-                localStorage.setItem('skipped_matches', JSON.stringify(skipped));
-            }
-            this.isSkipped = true;
-            window.dispatchEvent(new CustomEvent('match-skip-updated'));
-            window.location.href = '{{ url('/') }}';
-        },
-        castVote(pollId, option) {
-            if (this.userVotes[pollId]) return;
-            this.userVotes[pollId] = option;
-            localStorage.setItem('user_poll_votes', JSON.stringify(this.userVotes));
-            if (typeof $wire !== 'undefined' && $wire.vote) {
-                $wire.vote(pollId, option);
-            }
-        },
-        handleBallEvent(e) {
-            this.isFlashing = true;
-            setTimeout(() => { this.isFlashing = false; }, 800);
-
-            const payload = e.payload || e;
-            const eventType = payload.last_ball_event || payload.event || payload.raw_status || '';
-
-            if (eventType && eventType !== this.lastEvent) {
-                this.lastEvent = eventType;
-                this.speakEvent(eventType);
-            }
-        },
-        speakEvent(text) {
-            if (!this.soundEnabled || !('speechSynthesis' in window)) {
-                return;
-            }
-
-            let speechText = text;
-            const lower = (text || '').toLowerCase();
-
-            if (lower.includes('four') || lower === '4') {
-                speechText = 'Four Runs!';
-            } else if (lower.includes('six') || lower === '6') {
-                speechText = 'Six Runs!';
-            } else if (lower.includes('out') || lower.includes('wicket') || lower === 'w') {
-                speechText = 'Wicket!';
-            } else if (lower.includes('dot') || lower === '0' || lower === '0 run') {
-                speechText = 'Dot Ball';
-            } else if (lower.includes('1 run') || lower === '1') {
-                speechText = 'One Run';
-            } else if (lower.includes('2 run') || lower === '2') {
-                speechText = 'Two Runs';
-            } else if (lower.includes('wide')) {
-                speechText = 'Wide Ball';
-            } else if (lower.includes('no ball')) {
-                speechText = 'No Ball';
-            }
-
-            try {
-                window.speechSynthesis.cancel();
-                const utterance = new SpeechSynthesisUtterance(speechText);
-                utterance.rate = 1.05;
-                utterance.pitch = 1.0;
-                window.speechSynthesis.speak(utterance);
-            } catch (err) {
-                console.warn('SpeechSynthesis error:', err);
-            }
-        }
-    }"
+    x-data="matchDetailEngine({ matchId: '{{ $matchId }}', pollSeconds: {{ (int) ($pollSeconds ?? 10) }} })"
 >
     @php
+        // Unified Score Resolution (Never empty!)
+        $scoreA = $match['team_a_scores'] ?? $match['score_a'] ?? $match['team_a_score'] ?? $liveInfo['team_a_scores'] ?? $liveInfo['score_a'] ?? $liveInfo['team_a_score'] ?? '';
+        $scoreB = $match['team_b_scores'] ?? $match['score_b'] ?? $match['team_b_score'] ?? $liveInfo['team_b_scores'] ?? $liveInfo['score_b'] ?? $liveInfo['team_b_score'] ?? '';
+        $combinedScore = $match['score'] ?? $liveInfo['score'] ?? '';
+
         // Merge match detail with liveInfo fallback
         $teamAName = $match['team_a'] ?? $liveInfo['team_a'] ?? 'Team A';
         $teamAShort = $match['team_a_short'] ?? $liveInfo['team_a_short'] ?? substr($teamAName, 0, 3);
         $teamAImg = $match['team_a_img'] ?? $liveInfo['team_a_img'] ?? '';
-        $teamAScores = $liveInfo['team_a_scores'] ?? $match['team_a_scores'] ?? '';
+        $teamAScores = $scoreA;
         $teamAOver = $liveInfo['team_a_over'] ?? $match['team_a_over'] ?? '';
 
         $teamBName = $match['team_b'] ?? $liveInfo['team_b'] ?? 'Team B';
         $teamBShort = $match['team_b_short'] ?? $liveInfo['team_b_short'] ?? substr($teamBName, 0, 3);
         $teamBImg = $match['team_b_img'] ?? $liveInfo['team_b_img'] ?? '';
-        $teamBScores = $liveInfo['team_b_scores'] ?? $match['team_b_scores'] ?? '';
+        $teamBScores = $scoreB;
         $teamBOver = $liveInfo['team_b_over'] ?? $match['team_b_over'] ?? '';
 
-        $series = $match['series'] ?? $liveInfo['series'] ?? 'Cricket Series';
-        $matchs = $match['matchs'] ?? $liveInfo['matchs'] ?? 'Match';
+        $series = $match['series'] ?? $liveInfo['series'] ?? $match['series_name'] ?? 'Cricket Series';
+        $matchs = $match['matchs'] ?? $liveInfo['matchs'] ?? $match['match_desc'] ?? 'Match';
         $venue = $match['venue'] ?? $liveInfo['venue'] ?? 'Venue info';
         $place = $match['place'] ?? $liveInfo['place'] ?? '';
-        $matchType = $match['match_type'] ?? $liveInfo['match_type'] ?? 'Cricket Match';
+        $matchType = $match['match_type'] ?? $liveInfo['match_type'] ?? $match['format'] ?? 'Cricket Match';
         $toss = $match['toss'] ?? $liveInfo['toss'] ?? '';
         $umpire = $match['umpire'] ?? $liveInfo['umpire'] ?? '';
         $thirdUmpire = $match['third_umpire'] ?? $liveInfo['third_umpire'] ?? '';
         $referee = $match['referee'] ?? $liveInfo['referee'] ?? '';
         $manOfMatch = $match['man_of_match_player'] ?? $match['man_of_match'] ?? '';
-        $result = $match['result'] ?? $liveInfo['result'] ?? '';
+        $result = $match['result'] ?? $liveInfo['result'] ?? $match['status'] ?? $match['state'] ?? '';
         $needRunBall = $liveInfo['need_run_ball'] ?? $match['need_run_ball'] ?? '';
         $matchDate = $match['match_date'] ?? $liveInfo['match_date'] ?? 'Upcoming';
         $matchTime = $match['match_time'] ?? $liveInfo['match_time'] ?? '';
@@ -250,11 +129,11 @@
         }
 
         // Active Inning details
-        $currentInningNum = (int) ($liveInfo['current_inning'] ?? $activeInningKey ?? 1);
+        $currentInningNum = (int) ($liveInfo['current_inning'] ?? $match['live_inning'] ?? $activeInningKey ?? 1);
         $activeInningTeam = $activeInningData['team'] ?? [];
-        $currInningScore = (int) ($activeInningTeam['score'] ?? 0);
-        $currInningWkts = (int) ($activeInningTeam['wicket'] ?? 0);
-        $currInningOverStr = (string) ($activeInningTeam['over'] ?? '0.0');
+        $currInningScore = (int) ($activeInningTeam['score'] ?? $activeInningData['score'] ?? 0);
+        $currInningWkts = (int) ($activeInningTeam['wicket'] ?? $activeInningData['wickets'] ?? 0);
+        $currInningOverStr = (string) ($activeInningTeam['over'] ?? $activeInningData['overs'] ?? '0.0');
 
         // Target and Requirement Calculation
         $targetVal = null;
@@ -323,23 +202,28 @@
         }
 
         // Live Batters (Striker and Non-Striker)
-        $liveBatters = [];
+        $liveBatters = $match['live_batters'] ?? [];
         $liveBowlers = [];
         $lastWicket = null;
 
-        if ($activeInningData) {
-            $allBatsmen = $activeInningData['batsman'] ?? [];
+        if (empty($liveBatters) && $activeInningData) {
+            $allBatsmen = $activeInningData['batsmen'] ?? $activeInningData['batsman'] ?? [];
             foreach ($allBatsmen as $b) {
-                if (strtolower(trim($b['out_by'] ?? '')) === 'not out') {
+                $out = strtolower(trim($b['out_desc'] ?? $b['out_by'] ?? ''));
+                if ($out === 'batting' || $out === 'not out' || $out === '' || str_contains($out, 'not out')) {
                     $liveBatters[] = $b;
                 }
             }
             if (empty($liveBatters) && !empty($allBatsmen)) {
                 $liveBatters = array_slice($allBatsmen, -2);
             }
+        }
+
+        if ($activeInningData) {
+            $allBatsmen = $activeInningData['batsmen'] ?? $activeInningData['batsman'] ?? [];
 
             // Last Wicket extraction
-            $fallWickets = $activeInningData['fallwicket'] ?? [];
+            $fallWickets = $activeInningData['fall_of_wickets'] ?? $activeInningData['fallwicket'] ?? [];
             if (!empty($fallWickets)) {
                 $lastW = end($fallWickets);
                 if (!empty($lastW['player'])) {
@@ -349,8 +233,8 @@
                     $wBalls = null;
                     foreach ($allBatsmen as $b) {
                         if (str_contains(strtolower($b['name'] ?? ''), strtolower($wName)) || str_contains(strtolower($wName), strtolower($b['name'] ?? ''))) {
-                            $wRuns = $b['run'] ?? null;
-                            $wBalls = $b['ball'] ?? null;
+                            $wRuns = $b['runs'] ?? $b['run'] ?? null;
+                            $wBalls = $b['balls'] ?? $b['ball'] ?? null;
                             break;
                         }
                     }
@@ -358,15 +242,15 @@
                         'name' => $wName,
                         'runs' => $wRuns,
                         'balls' => $wBalls,
-                        'score' => $lastW['score'] ?? '',
-                        'wicket' => $lastW['wicket'] ?? '',
+                        'score' => $lastW['runs'] ?? $lastW['score'] ?? '',
+                        'wicket' => $lastW['wkt_num'] ?? $lastW['wicket'] ?? '',
                         'over' => $lastW['over'] ?? '',
                     ];
                 }
             }
 
             // Bowlers: Pick only active bowler (1 or at most 2 for live line tab)
-            $allBowlers = $activeInningData['bolwer'] ?? $activeInningData['bowler'] ?? [];
+            $allBowlers = $activeInningData['bowlers'] ?? $activeInningData['bolwer'] ?? $activeInningData['bowler'] ?? [];
             $liveBowlers = $allBowlers;
         }
 
@@ -392,7 +276,9 @@
 
         // Active bowler list resolution
         $activeBowlerList = [];
-        if (!empty($liveBowler) && is_array($liveBowler) && !empty($liveBowler['name']) && $liveBowler['name'] !== '-') {
+        if (!empty($match['live_bowler']) && is_array($match['live_bowler']) && !empty($match['live_bowler']['name']) && $match['live_bowler']['name'] !== '-') {
+            $activeBowlerList[] = $match['live_bowler'];
+        } elseif (!empty($liveBowler) && is_array($liveBowler) && !empty($liveBowler['name']) && $liveBowler['name'] !== '-') {
             $activeBowlerList[] = $liveBowler;
         } elseif (!empty($liveBowlers) && is_array($liveBowlers)) {
             $activeBowlerList = array_slice($liveBowlers, 0, 2);
@@ -404,6 +290,9 @@
             'team_a_over' => $teamAOver,
             'team_b_scores' => $teamBScores,
             'team_b_over' => $teamBOver,
+            'score_a' => $scoreA,
+            'score_b' => $scoreB,
+            'score' => $combinedScore,
             'current_ball' => $currentBall,
             'need_run_ball' => $needRunBall,
             'result' => $result,
@@ -415,7 +304,7 @@
             's_max' => $sessionMax,
             'batsman' => array_values(array_slice($liveBatters, 0, 2)),
             'bolwer' => array_values($activeBowlerList),
-            'recent_balls' => array_values(array_slice($allCommentaryItems, 0, 8)),
+            'recent_balls' => array_values(array_slice($allCommentaryItems, 0, 12)),
             'last_wicket' => $lastWicket,
         ];
     @endphp
@@ -556,13 +445,18 @@
                 <div class="bg-slate-950/90 rounded-xl p-2.5 border border-slate-800/90 flex items-center justify-between text-xs font-mono">
                     <div class="text-left">
                         <span class="font-bold text-slate-200 block text-xs">{{ $teamAShort }}</span>
-                        <span class="text-sm font-black text-white" x-text="live.team_a_scores || '{{ $teamAScores ?: 'Yet to Bat' }}'">{{ $teamAScores ?: 'Yet to Bat' }}</span>
+                        <span class="text-sm font-black text-white" x-text="live.score_a || live.team_a_scores || live.team_a_score || '{{ $scoreA ?: ($combinedScore ?: 'Yet to Bat') }}'">{{ $scoreA ?: ($combinedScore ?: 'Yet to Bat') }}</span>
                         <span class="text-[10px] text-slate-400" x-show="live.team_a_over || '{{ $teamAOver }}'" x-text="'(' + (live.team_a_over || '{{ $teamAOver }}') + ')'">@if($teamAOver)({{ $teamAOver }})@endif</span>
                     </div>
-                    <div class="text-slate-600 font-bold font-sans text-xs">VS</div>
+                    <div class="text-center px-2">
+                        <span class="text-slate-600 font-bold font-sans text-xs block">VS</span>
+                        <template x-if="!(live.score_a || live.team_a_scores) && !(live.score_b || live.team_b_scores) && (live.score || '{{ $combinedScore }}')">
+                            <span class="inline-block px-2 py-0.5 mt-1 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-bold" x-text="live.score || '{{ $combinedScore }}'">{{ $combinedScore }}</span>
+                        </template>
+                    </div>
                     <div class="text-right">
                         <span class="font-bold text-slate-200 block text-xs">{{ $teamBShort }}</span>
-                        <span class="text-sm font-black text-rose-400" x-text="live.team_b_scores || '{{ $teamBScores ?: 'Yet to Bat' }}'">{{ $teamBScores ?: 'Yet to Bat' }}</span>
+                        <span class="text-sm font-black text-rose-400" x-text="live.score_b || live.team_b_scores || live.team_b_score || '{{ $scoreB ?: 'Yet to Bat' }}'">{{ $scoreB ?: 'Yet to Bat' }}</span>
                         <span class="text-[10px] text-slate-400" x-show="live.team_b_over || '{{ $teamBOver }}'" x-text="'(' + (live.team_b_over || '{{ $teamBOver }}') + ')'">@if($teamBOver)({{ $teamBOver }})@endif</span>
                     </div>
                 </div>
@@ -676,12 +570,12 @@
                                     <tr :class="idx === 0 ? 'bg-amber-500/5' : ''">
                                         <td class="py-2 font-bold text-white flex items-center gap-1.5">
                                             <span x-text="batter.name || 'Batter'"></span>
-                                            <template x-if="idx === 0">
+                                            <template x-if="idx === 0 || batter.is_striker">
                                                 <span class="text-amber-400 text-xs font-black" title="On strike">*</span>
                                             </template>
                                         </td>
-                                        <td class="py-2 text-right font-mono font-bold text-white" x-text="batter.run ?? 0"></td>
-                                        <td class="py-2 text-right font-mono text-slate-400" x-text="batter.ball ?? 0"></td>
+                                        <td class="py-2 text-right font-mono font-bold text-white" x-text="batter.runs ?? (batter.run ?? 0)"></td>
+                                        <td class="py-2 text-right font-mono text-slate-400" x-text="batter.balls ?? (batter.ball ?? 0)"></td>
                                         <td class="py-2 text-right font-mono text-slate-300" x-text="batter.fours ?? 0"></td>
                                         <td class="py-2 text-right font-mono text-slate-300" x-text="batter.sixes ?? 0"></td>
                                         <td class="py-2 text-right font-mono text-amber-400" x-text="batter.strike_rate || '0.00'"></td>
@@ -749,10 +643,10 @@
                                                 <span class="w-1.5 h-1.5 rounded-full bg-cyan-400" title="Current bowler"></span>
                                             </template>
                                         </td>
-                                        <td class="py-2 text-right font-mono text-slate-300" x-text="bowler.over ?? 0"></td>
-                                        <td class="py-2 text-right font-mono text-slate-400" x-text="bowler.maiden ?? 0"></td>
-                                        <td class="py-2 text-right font-mono font-bold text-white" x-text="bowler.run ?? 0"></td>
-                                        <td class="py-2 text-right font-mono font-bold text-rose-400" x-text="bowler.wicket ?? 0"></td>
+                                        <td class="py-2 text-right font-mono text-slate-300" x-text="bowler.overs ?? (bowler.over ?? '0.0')"></td>
+                                        <td class="py-2 text-right font-mono text-slate-400" x-text="bowler.maidens ?? (bowler.maiden ?? 0)"></td>
+                                        <td class="py-2 text-right font-mono font-bold text-white" x-text="bowler.runs ?? (bowler.run ?? 0)"></td>
+                                        <td class="py-2 text-right font-mono font-bold text-rose-400" x-text="bowler.wickets ?? (bowler.wicket ?? 0)"></td>
                                         <td class="py-2 text-right font-mono text-cyan-300" x-text="bowler.economy || '0.00'"></td>
                                     </tr>
                                 </template>
@@ -848,10 +742,16 @@
                             </div>
                         @endif
                         <h3 class="font-extrabold text-white text-sm">{{ $teamAName }}</h3>
+                        @if(!empty($scoreA))
+                            <div class="mt-1 font-mono font-black text-amber-400 text-xs">{{ $scoreA }}</div>
+                        @endif
                     </div>
 
                     <div class="text-center px-2">
                         <span class="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 text-xs font-black text-amber-400 flex items-center justify-center shadow-inner">VS</span>
+                        @if(empty($scoreA) && empty($scoreB) && !empty($combinedScore))
+                            <div class="mt-1 font-mono text-[10px] text-amber-400 font-bold">{{ $combinedScore }}</div>
+                        @endif
                     </div>
 
                     <div class="text-center">
@@ -863,6 +763,9 @@
                             </div>
                         @endif
                         <h3 class="font-extrabold text-white text-sm">{{ $teamBName }}</h3>
+                        @if(!empty($scoreB))
+                            <div class="mt-1 font-mono font-black text-rose-400 text-xs">{{ $scoreB }}</div>
+                        @endif
                     </div>
                 </div>
 
@@ -893,6 +796,44 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Match FAQs Accordion (SEO & Schema FAQPage Alignment) -->
+            @if(!empty($faqs) && count($faqs) > 0)
+                <div x-data="{ activeFaq: 0 }" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 shadow-md space-y-3">
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+                        <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                            <span class="text-amber-400">❓</span>
+                            <span>Match FAQs & Key Questions</span>
+                        </h3>
+                        <span class="text-[10px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">Verified Info</span>
+                    </div>
+
+                    <div class="space-y-2">
+                        @foreach($faqs as $fIndex => $faqItem)
+                            <div class="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/70 transition-colors">
+                                <button type="button"
+                                        @click="activeFaq = (activeFaq === {{ $fIndex }} ? null : {{ $fIndex }})"
+                                        class="w-full flex items-center justify-between p-3 text-left text-xs font-bold text-slate-200 hover:text-amber-400 focus:outline-none transition-colors">
+                                    <span class="flex items-center gap-2 pr-2">
+                                        <span class="w-5 h-5 rounded-full bg-slate-900 border border-slate-800 text-amber-400 flex items-center justify-center text-[10px] font-mono font-bold shrink-0">{{ $fIndex + 1 }}</span>
+                                        <span>{{ $faqItem['question'] }}</span>
+                                    </span>
+                                    <svg class="w-4 h-4 text-slate-400 transform transition-transform duration-200 shrink-0"
+                                         :class="activeFaq === {{ $fIndex }} ? 'rotate-180 text-amber-400' : ''"
+                                         fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </button>
+                                <div x-show="activeFaq === {{ $fIndex }}"
+                                     x-collapse
+                                     class="px-3 pb-3 pt-0 text-xs text-slate-400 border-t border-slate-900 leading-relaxed font-sans">
+                                    {{ $faqItem['answer'] }}
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
 
             <!-- 3. Squads & Playing 11 Section -->
             <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 shadow-md space-y-3">
@@ -1065,20 +1006,20 @@
                 <div class="flex items-center space-x-2.5">
                     <div class="truncate">
                         <div class="font-bold text-sm text-white truncate">{{ $teamAShort }}</div>
-                        <div class="text-sm font-black text-white font-mono tracking-tight">{{ $teamAScores ?: '-' }}</div>
+                        <div class="text-sm font-black text-white font-mono tracking-tight">{{ $scoreA ?: ($combinedScore ?: '-') }}</div>
                     </div>
                 </div>
                 <div class="flex items-center justify-end space-x-2.5 text-right">
                     <div class="truncate">
                         <div class="font-bold text-sm text-white truncate">{{ $teamBShort }}</div>
-                        <div class="text-sm font-black text-white font-mono tracking-tight">{{ $teamBScores ?: '-' }}</div>
+                        <div class="text-sm font-black text-white font-mono tracking-tight">{{ $scoreB ?: '-' }}</div>
                     </div>
                 </div>
             </div>
 
             <div class="mt-3 pt-2.5 border-t border-slate-800/80 text-center">
                 <p class="text-xs font-bold text-emerald-400">
-                    {{ $result ?: 'Match completed' }}
+                    {{ $result ?: ($match['status'] ?? ($match['state'] ?? 'Match completed')) }}
                 </p>
             </div>
         </section>
@@ -1093,6 +1034,7 @@
                     'commentary' => 'Commentary',
                     'scorecard' => 'Scorecard',
                     'squad' => 'Squad',
+                    'highlights' => 'Highlights',
                 ];
                 if (\App\Helpers\SystemSetting::isMarketRatesEnabled()) {
                     $tabDefinitions['odds'] = 'Odds';
@@ -1146,15 +1088,15 @@
                 @forelse($scorecardData as $inKey => $inning)
                     @php
                         $inTeam = $inning['team'] ?? [];
-                        $inTeamName = $inTeam['name'] ?? $inTeam['short_name'] ?? "Inning {$inKey}";
-                        $inScore = $inTeam['score'] ?? 0;
-                        $inWkts = $inTeam['wicket'] ?? 0;
-                        $inOver = $inTeam['over'] ?? '0.0';
-                        $inExtras = $inTeam['extras'] ?? null;
-                        $inBatsmen = $inning['batsman'] ?? [];
-                        $inBowlers = $inning['bolwer'] ?? $inning['bowler'] ?? [];
-                        $inFallWickets = $inning['fallwicket'] ?? [];
-                        $inPartnerships = $inning['partnership'] ?? [];
+                        $inTeamName = $inning['bat_team'] ?? $inTeam['name'] ?? $inTeam['short_name'] ?? $inning['bat_team_short'] ?? "Inning {$inKey}";
+                        $inScore = $inTeam['score'] ?? $inning['score'] ?? 0;
+                        $inWkts = $inTeam['wicket'] ?? $inning['wickets'] ?? 0;
+                        $inOver = $inTeam['over'] ?? $inning['overs'] ?? '0.0';
+                        $inExtras = $inning['extras'] ?? ($inTeam['extras'] ?? null);
+                        $inBatsmen = $inning['batsmen'] ?? $inning['batsman'] ?? [];
+                        $inBowlers = $inning['bowlers'] ?? $inning['bolwer'] ?? $inning['bowler'] ?? [];
+                        $inFallWickets = $inning['fall_of_wickets'] ?? $inning['fallwicket'] ?? [];
+                        $inPartnerships = $inning['partnerships'] ?? $inning['partnership'] ?? [];
                     @endphp
                     <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-md space-y-3.5">
                         <div class="flex items-center justify-between pb-2.5 border-b border-slate-800">
@@ -1164,8 +1106,8 @@
                                 @endif
                                 <span>{{ $inTeamName }}</span>
                                 <span class="text-slate-500">•</span>
-                                <span class="text-amber-400 font-mono">{{ $inScore }}/{{ $inWkts }}</span>
-                                @if(!empty($inTeam['test_declare']))
+                                <span class="text-amber-400 font-mono">{{ is_numeric($inScore) ? "{$inScore}/{$inWkts}" : $inScore }}</span>
+                                @if(!empty($inTeam['test_declare']) || !empty($inning['is_declared']))
                                     <span class="text-[9px] text-rose-400 font-bold uppercase px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/30">d</span>
                                 @endif
                             </h3>
@@ -1196,15 +1138,15 @@
                                         <tr>
                                             <td class="py-2 font-sans font-medium text-slate-200">
                                                 <div class="flex items-center gap-1.5 flex-wrap">
-                                                    <span class="font-bold text-white">{{ $b['name'] ?? 'Batter' }}</span>
+                                                    <span class="font-bold text-white">{{ $b['name'] ?? $b['short_name'] ?? 'Batter' }}</span>
                                                     @if(isset($b['impact_status']) && (string)$b['impact_status'] === '2')
                                                         <span class="px-1 py-0.2 rounded text-[8px] font-black uppercase bg-amber-500/20 text-amber-300 border border-amber-500/40" title="Impact Player">IMP</span>
                                                     @endif
                                                 </div>
-                                                <div class="text-[10px] text-slate-500 font-normal">{{ $b['out_by'] ?? '' }}</div>
+                                                <div class="text-[10px] text-slate-500 font-normal">{{ $b['out_desc'] ?? $b['out_by'] ?? '' }}</div>
                                             </td>
-                                            <td class="py-2 text-right font-bold text-white text-xs">{{ $b['run'] ?? 0 }}</td>
-                                            <td class="py-2 text-right text-slate-400">{{ $b['ball'] ?? 0 }}</td>
+                                            <td class="py-2 text-right font-bold text-white text-xs">{{ $b['runs'] ?? $b['run'] ?? 0 }}</td>
+                                            <td class="py-2 text-right text-slate-400">{{ $b['balls'] ?? $b['ball'] ?? 0 }}</td>
                                             <td class="py-2 text-right text-slate-300">{{ $b['fours'] ?? 0 }}</td>
                                             <td class="py-2 text-right text-slate-300">{{ $b['sixes'] ?? 0 }}</td>
                                             <td class="py-2 text-right text-slate-400">{{ $b['strike_rate'] ?? '0.00' }}</td>
@@ -1218,7 +1160,7 @@
                             </table>
                         </div>
 
-                        <!-- Bowlers Table (API: bolwer) -->
+                        <!-- Bowlers Table (API: bolwer / bowlers) -->
                         @if(!empty($inBowlers))
                             <div class="pt-2 border-t border-slate-800/70 overflow-x-auto">
                                 <div class="text-[10px] font-bold text-cyan-400 uppercase tracking-wider mb-1.5">Bowling</div>
@@ -1239,17 +1181,17 @@
                                             <tr>
                                                 <td class="py-2 font-sans font-medium text-slate-200">
                                                     <div class="flex items-center gap-1.5">
-                                                        <span class="font-bold text-white">{{ trim($bowl['name'] ?? 'Bowler') }}</span>
+                                                        <span class="font-bold text-white">{{ trim($bowl['name'] ?? $bowl['short_name'] ?? 'Bowler') }}</span>
                                                         @if(isset($bowl['impact_status']) && (string)$bowl['impact_status'] === '2')
                                                             <span class="px-1 py-0.2 rounded text-[8px] font-black uppercase bg-cyan-500/20 text-cyan-300 border border-cyan-500/40" title="Impact Player">IMP</span>
                                                         @endif
                                                     </div>
                                                 </td>
-                                                <td class="py-2 text-right text-slate-300">{{ $bowl['over'] ?? 0 }}</td>
-                                                <td class="py-2 text-right text-slate-400">{{ $bowl['maiden'] ?? 0 }}</td>
-                                                <td class="py-2 text-right font-bold text-white">{{ $bowl['run'] ?? 0 }}</td>
-                                                <td class="py-2 text-right font-bold text-rose-400">{{ $bowl['wicket'] ?? 0 }}</td>
-                                                <td class="py-2 text-right text-slate-400">{{ $bowl['dot_ball'] ?? '-' }}</td>
+                                                <td class="py-2 text-right text-slate-300">{{ $bowl['overs'] ?? $bowl['over'] ?? 0 }}</td>
+                                                <td class="py-2 text-right text-slate-400">{{ $bowl['maidens'] ?? $bowl['maiden'] ?? 0 }}</td>
+                                                <td class="py-2 text-right font-bold text-white">{{ $bowl['runs'] ?? $bowl['run'] ?? 0 }}</td>
+                                                <td class="py-2 text-right font-bold text-rose-400">{{ $bowl['wickets'] ?? $bowl['wicket'] ?? 0 }}</td>
+                                                <td class="py-2 text-right text-slate-400">{{ $bowl['dots'] ?? $bowl['dot_ball'] ?? '-' }}</td>
                                                 <td class="py-2 text-right text-cyan-300">{{ $bowl['economy'] ?? '0.00' }}</td>
                                             </tr>
                                         @endforeach
@@ -1279,11 +1221,11 @@
                                         @foreach($inFallWickets as $fow)
                                             <div class="p-2 rounded-lg bg-slate-950/80 border border-slate-800/80 flex items-center justify-between">
                                                 <div class="truncate mr-2">
-                                                    <span class="text-amber-400 font-bold">{{ $fow['wicket'] ?? '' }}w:</span>
+                                                    <span class="text-amber-400 font-bold">{{ $fow['wkt_num'] ?? $fow['wicket'] ?? '' }}w:</span>
                                                     <span class="text-white font-sans truncate">{{ $fow['player'] ?? '' }}</span>
                                                 </div>
                                                 <div class="text-slate-400 shrink-0 text-[11px]">
-                                                    <span class="text-white font-bold">{{ $fow['score'] ?? '' }}</span>
+                                                    <span class="text-white font-bold">{{ $fow['runs'] ?? $fow['score'] ?? '' }}</span>
                                                     <span>({{ $fow['over'] ?? '' }} ov)</span>
                                                 </div>
                                             </div>
@@ -1314,11 +1256,11 @@
                                         @foreach($inPartnerships as $part)
                                             <div class="p-2 rounded-lg bg-slate-950/80 border border-slate-800/80 flex items-center justify-between">
                                                 <div class="truncate mr-2 font-sans">
-                                                    <span class="text-white font-semibold truncate">{{ $part['players_name'] ?? (($part['player_a_name'] ?? '') . ' & ' . ($part['player_b_name'] ?? '')) }}</span>
+                                                    <span class="text-white font-semibold truncate">{{ $part['players_name'] ?? (($part['bat1_name'] ?? $part['player_a_name'] ?? '') . ' & ' . ($part['bat2_name'] ?? $part['player_b_name'] ?? '')) }}</span>
                                                 </div>
                                                 <div class="text-amber-400 font-bold shrink-0 text-xs">
-                                                    <span>{{ $part['run'] ?? 0 }}</span>
-                                                    <span class="text-slate-500 font-normal text-[10px]">({{ $part['ball'] ?? 0 }}b)</span>
+                                                    <span>{{ $part['total_runs'] ?? $part['run'] ?? 0 }}</span>
+                                                    <span class="text-slate-500 font-normal text-[10px]">({{ $part['total_balls'] ?? $part['ball'] ?? 0 }}b)</span>
                                                 </div>
                                             </div>
                                         @endforeach
@@ -1651,6 +1593,69 @@
                     @include('livewire.pages.partials.session-summary-table')
                 </div>
             @endif
+
+        @elseif($tab === 'highlights')
+            <!-- HIGHLIGHTS TAB: Video Highlights & Replays -->
+            <div class="space-y-4">
+                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg">
+                    <h3 class="text-xs sm:text-sm font-black text-amber-400 uppercase tracking-wider mb-4 pb-2.5 border-b border-slate-800 flex items-center justify-between">
+                        <span class="flex items-center gap-2">
+                            <span>🎬</span>
+                            <span>Match Highlights & Video Clips</span>
+                        </span>
+                        <span class="text-[10px] text-slate-400 font-mono">HLS STREAM READY</span>
+                    </h3>
+
+                    @php
+                        $highlightsList = $highlights ?? $match['highlights'] ?? [];
+                    @endphp
+
+                    @if(!empty($highlightsList))
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            @foreach($highlightsList as $hl)
+                                @php
+                                    $hlTitle = $hl['title'] ?? 'Match Highlight';
+                                    $hlThumb = $hl['thumbnail'] ?? '';
+                                    $hlUrl = $hl['hls_url'] ?? '';
+                                    $hlDuration = $hl['duration'] ?? '';
+                                @endphp
+                                <div class="bg-slate-950 border border-slate-800/80 rounded-xl overflow-hidden group hover:border-amber-400/40 transition">
+                                    @if($hlThumb)
+                                        <div class="relative aspect-video bg-slate-900 overflow-hidden">
+                                            <img src="{{ $hlThumb }}" alt="{{ $hlTitle }}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                                            @if($hlDuration)
+                                                <span class="absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-black/80 text-white">
+                                                    {{ $hlDuration }}
+                                                </span>
+                                            @endif
+                                            @if($hlUrl)
+                                                <a href="{{ $hlUrl }}" target="_blank" rel="noopener noreferrer" class="absolute inset-0 flex items-center justify-center bg-black/40 group-hover:bg-black/20 transition">
+                                                    <span class="w-10 h-10 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center shadow-lg font-bold pl-0.5">▶</span>
+                                                </a>
+                                            @endif
+                                        </div>
+                                    @endif
+                                    <div class="p-3">
+                                        <h4 class="text-xs font-bold text-white line-clamp-2 mb-2">{{ $hlTitle }}</h4>
+                                        @if($hlUrl)
+                                            <a href="{{ $hlUrl }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-400 hover:underline">
+                                                <span>Watch Stream</span>
+                                                <span>→</span>
+                                            </a>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    @else
+                        <div class="text-center py-12 bg-slate-950/60 rounded-xl border border-slate-800/60">
+                            <span class="text-3xl block mb-2">📹</span>
+                            <p class="text-slate-400 text-xs font-medium">No video highlights uploaded for this fixture yet.</p>
+                            <p class="text-slate-600 text-[11px] mt-1">Highlights will appear once video streams are processed.</p>
+                        </div>
+                    @endif
+                </div>
+            </div>
 
         @elseif($tab === 'info')
             <!-- INFO TAB: Complete Match Specifications & Technical Overview -->

@@ -2,7 +2,10 @@
 
 namespace App\Livewire\Pages;
 
-use App\Services\Cricket\RapidApiCricketService;
+use App\Helpers\CricketMatchFormatter;
+use App\Models\ManagedMatch;
+use App\Services\Cricket\CricketLiveApiService;
+use App\Services\Cricket\StaticJsonCacheWriter;
 use Livewire\Component;
 
 class HomeLiveScores extends Component
@@ -17,55 +20,54 @@ class HomeLiveScores extends Component
         }
     }
 
-    public function render(RapidApiCricketService $cricketService)
+    public function render(CricketLiveApiService $apiService)
     {
-        // 1. Fetch matches strictly from cache (allowUpstreamFetch = false)
-        // Only LiveMatchPollerCommand is permitted to hit upstream RapidAPI HTTP endpoints
-        $homeData = $cricketService->getHomeMatches(false);
-
-        // Check if $homeData is an array of matches (e.g. from $json['data'])
-        $allMatches = is_array($homeData) ? $homeData : [];
+        // 1. First attempt to read directly from static JSON edge cache (public/live-data/home.json)
+        $homeData = StaticJsonCacheWriter::read('home.json');
 
         $liveMatches = [];
         $upcomingMatches = [];
         $finishedMatches = [];
 
-        // Partition matches strictly according to verified API match_status values
-        foreach ($allMatches as $match) {
-            if (!is_array($match)) {
-                continue;
-            }
+        if ($homeData && is_array($homeData)) {
+            // Support both top-level and nested 'data' structures
+            $data = isset($homeData['data']) && is_array($homeData['data']) ? $homeData['data'] : $homeData;
+            $liveMatches = $data['live'] ?? [];
+            $upcomingMatches = $data['upcoming'] ?? [];
+            $finishedMatches = $data['recent'] ?? $data['finished'] ?? [];
+        }
 
-            $status = strtolower(trim((string) ($match['match_status'] ?? $match['status'] ?? '')));
-            $result = trim((string) ($match['result'] ?? ''));
+        // Fallback to CricketLiveApiService only if empty
+        if (empty($liveMatches) && empty($upcomingMatches) && empty($finishedMatches)) {
+            $liveMatches = $apiService->getLiveMatches();
+            $upcomingMatches = $apiService->getUpcomingMatches();
+            $finishedMatches = $apiService->getRecentMatches();
+        }
 
-            if ($status === 'live' || $status === 'in progress' || $status === 'innings break' || $status === '1' || $status === '2') {
-                $liveMatches[] = $match;
-            } elseif ($status === 'finished' || $status === 'completed' || $status === '3' || !empty($result)) {
-                $finishedMatches[] = $match;
-            } elseif ($status === 'upcoming' || $status === 'scheduled' || $status === 'not started' || $status === '0') {
-                $upcomingMatches[] = $match;
-            } else {
-                // Default based on result availability
-                if (!empty($result)) {
-                    $finishedMatches[] = $match;
-                } else {
-                    $upcomingMatches[] = $match;
+        // 2. Exclude any match where ManagedMatch::where('is_covered', false) has skipped it
+        $skippedMatchIds = ManagedMatch::where('is_covered', false)
+            ->pluck('match_id')
+            ->map(fn ($id) => (int) $id)
+            ->flip()
+            ->all();
+
+        $filterAndFormat = function (array $matches) use ($skippedMatchIds) {
+            $filtered = array_filter($matches, function ($m) use ($skippedMatchIds) {
+                if (!is_array($m)) {
+                    return false;
                 }
-            }
-        }
+                $mId = (int) ($m['match_id'] ?? $m['id'] ?? 0);
+                return !isset($skippedMatchIds[$mId]);
+            });
 
-        // If live matches are empty, check cached dedicated /liveMatches endpoint
-        if (empty($liveMatches)) {
-            $dedicatedLive = $cricketService->getLiveMatches(false);
-            if (!empty($dedicatedLive) && is_array($dedicatedLive)) {
-                $liveMatches = $dedicatedLive;
-            }
-        }
+            return array_values(array_map(function ($m) {
+                return CricketMatchFormatter::formatMatchForCard($m);
+            }, $filtered));
+        };
 
-        // Filter and cap upcoming and finished matches to clean, fast date windows
-        $upcomingMatches = $cricketService->filterMatchesByDateWindow($upcomingMatches, 'upcoming');
-        $finishedMatches = $cricketService->filterMatchesByDateWindow($finishedMatches, 'recent');
+        $liveMatches = $filterAndFormat($liveMatches);
+        $upcomingMatches = $filterAndFormat($upcomingMatches);
+        $finishedMatches = $filterAndFormat($finishedMatches);
 
         // Selected list based on active tab
         $currentMatches = match ($this->activeTab) {
@@ -73,6 +75,13 @@ class HomeLiveScores extends Component
             'finished' => $finishedMatches,
             default => $liveMatches,
         };
+
+        $seoData = class_exists(\App\Services\Seo\CricketSeoService::class)
+            ? \App\Services\Seo\CricketSeoService::forHome()
+            : [
+                'title' => 'Live Cricket Scores & Ball-by-Ball Commentary | CricWire',
+                'description' => 'Fastest live cricket score updates, ball-by-ball commentary, and match schedules.',
+            ];
 
         return view('livewire.pages.home-live-scores', [
             'activeTab' => $this->activeTab,
@@ -83,6 +92,10 @@ class HomeLiveScores extends Component
             'upcomingMatches' => $upcomingMatches,
             'finishedMatches' => $finishedMatches,
             'matches' => $currentMatches,
+            'seoData' => $seoData,
+        ])->layout('layouts.app', [
+            'seoData' => $seoData,
+            'title' => $seoData['title'] ?? 'CricWire - Live Cricket Scores',
         ]);
     }
 }

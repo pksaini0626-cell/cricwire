@@ -56,14 +56,39 @@ class NewsIndex extends Component
             ->take(5)
             ->get();
 
+        $appUrl = config('app.url', 'https://cricwire.in');
+        $seoData = [
+            'title' => 'Latest Cricket News, Match Predictions & Pitch Reports | Cricwire',
+            'description' => 'Read trending cricket breaking news, match predictions, fantasy playing 11 tips, expert pitch reports, and tournament coverage on Cricwire.',
+            'canonical' => route('news.index'),
+            'robots' => 'index, follow',
+            'og_type' => 'website',
+            'og_image' => asset('icons/cricwire_favicons/android-chrome-512x512.png'),
+            'schemas' => [
+                [
+                    '@context' => 'https://schema.org',
+                    '@type' => 'CollectionPage',
+                    'name' => 'Latest Cricket News & Updates',
+                    'url' => route('news.index'),
+                    'description' => 'Comprehensive editorial coverage of international and domestic cricket tournaments.',
+                    'publisher' => [
+                        '@type' => 'Organization',
+                        'name' => \App\Support\SeoConfig::get('seo_org_name', 'Cricwire'),
+                    ],
+                ],
+            ],
+        ];
+
         return view('livewire.pages.news-index', [
             'articles' => $articles,
             'recentHeadlines' => $recentHeadlines,
             'totalCount' => $totalCount,
             'category' => $this->category,
             'hasMore' => $hasMore,
+            'seoData' => $seoData,
         ])->layout('components.layouts.app', [
-            'title' => 'Latest Cricket News, Match Predictions & Pitch Reports | CricWire',
+            'seoData' => $seoData,
+            'title' => $seoData['title'],
         ]);
     }
 }

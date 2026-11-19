@@ -86,6 +86,9 @@ Route::get('/go/{banner}', [AdRedirectController::class, 'trackAndRedirect'])->n
 // Cricket Session & Fancy API
 Route::get('/api/matches/{matchId}/sessions', [\App\Http\Controllers\Cricket\SessionController::class, 'show'])->name('match.sessions');
 
-// Sitemaps for Google News & Search Indexing
-Route::get('/sitemap.xml', [SitemapController::class, 'index']);
-Route::get('/sitemap-news.xml', [SitemapController::class, 'news']);
+// High-Speed Dynamic XML Sitemaps & Robots.txt
+Route::get('/sitemap.xml', [SitemapController::class, 'index'])->name('sitemap.index');
+Route::get('/sitemap-static.xml', [SitemapController::class, 'staticPages'])->name('sitemap.static');
+Route::get('/sitemap-matches.xml', [SitemapController::class, 'matches'])->name('sitemap.matches');
+Route::get('/sitemap-news.xml', [SitemapController::class, 'news'])->name('sitemap.news');
+Route::get('/robots.txt', [SitemapController::class, 'robots'])->name('robots.txt');
