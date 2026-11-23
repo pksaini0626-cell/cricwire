@@ -55,6 +55,12 @@ class SyncStaticCricketJson extends Command
             $upcomingMatches = $api->getUpcomingMatches();
             $recentMatches = $api->getRecentMatches();
 
+            // Strict sanitization: ensure no completed or live matches leak into upcoming
+            $sanitized = CricketLiveApiService::sanitizeMatchBuckets($liveMatches, $upcomingMatches, $recentMatches);
+            $cleanLive = $sanitized['live'];
+            $cleanUpcoming = $sanitized['upcoming'];
+            $cleanRecent = $sanitized['recent'];
+
             // Fetch list of skipped match IDs from DB (is_covered = false)
             $skippedMatchIds = ManagedMatch::where('is_covered', false)
                 ->pluck('match_id')
@@ -63,17 +69,17 @@ class SyncStaticCricketJson extends Command
                 ->all();
 
             // Filter out skipped matches
-            $coveredLive = array_values(array_filter($liveMatches, function ($m) use ($skippedMatchIds) {
+            $coveredLive = array_values(array_filter($cleanLive, function ($m) use ($skippedMatchIds) {
                 $mId = (int) ($m['match_id'] ?? 0);
                 return !isset($skippedMatchIds[$mId]);
             }));
 
-            $coveredUpcoming = array_values(array_filter($upcomingMatches, function ($m) use ($skippedMatchIds) {
+            $coveredUpcoming = array_values(array_filter($cleanUpcoming, function ($m) use ($skippedMatchIds) {
                 $mId = (int) ($m['match_id'] ?? 0);
                 return !isset($skippedMatchIds[$mId]);
             }));
 
-            $coveredRecent = array_values(array_filter($recentMatches, function ($m) use ($skippedMatchIds) {
+            $coveredRecent = array_values(array_filter($cleanRecent, function ($m) use ($skippedMatchIds) {
                 $mId = (int) ($m['match_id'] ?? 0);
                 return !isset($skippedMatchIds[$mId]);
             }));
@@ -89,7 +95,7 @@ class SyncStaticCricketJson extends Command
             StaticJsonCacheWriter::write('home.json', $homePayload);
 
             // Upsert any unseen matches to managed_matches catalog for admin visibility
-            $this->upsertCatalogMatches($liveMatches, $upcomingMatches, $recentMatches);
+            $this->upsertCatalogMatches($cleanLive, $cleanUpcoming, $cleanRecent);
 
             // If 0 covered live matches exist, exit early to save CPU & API quota on shared hosting
             if (empty($coveredLive)) {

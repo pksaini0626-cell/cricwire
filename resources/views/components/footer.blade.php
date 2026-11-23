@@ -50,21 +50,27 @@
                 <h3 class="text-xs font-black uppercase tracking-widest text-white">FOLLOW US ON</h3>
                 <ul class="space-y-2.5 text-xs">
                     <li>
-                        <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" class="flex items-center space-x-2 text-slate-300 hover:text-red-400 transition">
+                        <a href="https://t.me/cricwireofficial" target="_blank" rel="noopener noreferrer" class="flex items-center space-x-2 text-slate-300 hover:text-sky-400 transition">
+                            <span class="w-4 h-4 rounded bg-sky-500 flex items-center justify-center text-[10px] text-white font-bold">✈️</span>
+                            <span class="font-medium">Telegram</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="https://www.youtube.com/@cricwire.official" target="_blank" rel="noopener noreferrer" class="flex items-center space-x-2 text-slate-300 hover:text-red-400 transition">
                             <span class="w-4 h-4 rounded bg-red-600 flex items-center justify-center text-[10px] text-white font-bold">▶</span>
                             <span class="font-medium">YouTube</span>
                         </a>
                     </li>
                     <li>
-                        <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" class="flex items-center space-x-2 text-slate-300 hover:text-pink-400 transition">
+                        <a href="https://instagram.com/cricwire.in" target="_blank" rel="noopener noreferrer" class="flex items-center space-x-2 text-slate-300 hover:text-pink-400 transition">
                             <span class="w-4 h-4 rounded bg-gradient-to-tr from-yellow-500 via-pink-500 to-purple-600 flex items-center justify-center text-[10px] text-white">📸</span>
                             <span class="font-medium">Instagram</span>
                         </a>
                     </li>
                     <li>
-                        <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" class="flex items-center space-x-2 text-slate-300 hover:text-white transition">
+                        <a href="https://x.com/cricwire" target="_blank" rel="noopener noreferrer" class="flex items-center space-x-2 text-slate-300 hover:text-white transition">
                             <span class="w-4 h-4 flex items-center justify-center font-bold text-white text-xs">𝕏</span>
-                            <span class="font-medium">Twitter</span>
+                            <span class="font-medium">X (Twitter)</span>
                         </a>
                     </li>
                 </ul>

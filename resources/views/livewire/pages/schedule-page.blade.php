@@ -114,9 +114,9 @@
                                                 <span class="px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20">
                                                     {{ $match['match_type'] ?? $match['match_stage'] ?? $match['round'] ?? 'MATCH' }}
                                                 </span>
-                                                <span class="text-slate-400 truncate text-[11px] sm:text-xs font-medium">
+                                                <a href="{{ route('series.detail', ['seriesSlug' => $seriesSlug, 'tab' => 'matches']) }}" wire:navigate class="text-slate-400 hover:text-amber-400 transition truncate text-[11px] sm:text-xs font-medium underline-offset-2 hover:underline">
                                                     {{ $match['series_name'] ?? $match['series'] ?? 'Tournament Series' }}
-                                                </span>
+                                                </a>
                                             </div>
 
                                             <div class="flex items-center space-x-2 shrink-0">

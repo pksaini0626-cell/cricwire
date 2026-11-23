@@ -11,7 +11,7 @@ class CricketUrlService
     /**
      * Allowed tabs for match detail pages.
      */
-    public const ALLOWED_TABS = ['live-line', 'commentary', 'scorecard', 'squad', 'odds', 'info'];
+    public const ALLOWED_TABS = ['live-line', 'commentary', 'scorecard', 'squad', 'odds', 'info', 'overs', 'highlights'];
 
     /**
      * Generate an SEO-friendly series slug from series name and season/year.

@@ -21,11 +21,11 @@ class SeoConfig
         'google_site_verification' => null,
         'bing_site_verification' => null,
 
-        'seo_live_match_title_tpl' => '{team_a} vs {team_b} Live Score, Ball by Ball Commentary & Scorecard - {series}',
+        'seo_live_match_title_tpl' => '{team_a} vs {team_b} Live Score, Ball by Ball Commentary & Scorecard | Cricwire',
         'seo_live_match_desc_tpl' => 'Get {team_a} vs {team_b} live cricket score, ultra-fast ball-by-ball commentary, live odds, and full scorecard from {venue} on {date}.',
-        'seo_upcoming_match_title_tpl' => '{team_a} vs {team_b} Match Prediction, Pitch Report, Playing 11 & Live Score - {series}',
+        'seo_upcoming_match_title_tpl' => '{team_a} vs {team_b} Match Prediction, Playing 11, Pitch Report & Live Score | Cricwire',
         'seo_upcoming_match_desc_tpl' => 'Detailed match preview, pitch report, weather forecast, playing 11 squad, and prediction for {team_a} vs {team_b} at {venue}. Match starts {date}.',
-        'seo_finished_match_title_tpl' => '{team_a} vs {team_b} Full Scorecard, Highlights & Match Result - {series}',
+        'seo_finished_match_title_tpl' => '{team_a} vs {team_b} Full Scorecard & Match Result | Cricwire',
         'seo_finished_match_desc_tpl' => '{team_a} vs {team_b} complete cricket match results, full scorecard, player statistics, and match report from {venue}.',
 
         'seo_auto_noindex_old_matches_days' => 30,

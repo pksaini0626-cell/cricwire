@@ -26,5 +26,13 @@ Schedule::job(new SyncRankingsJob)->dailyAt('03:00');
 // Sync high-frequency Redis poll votes down to MySQL every 60 seconds
 Schedule::job(new SyncPollVotesToDatabaseJob)->everyMinute();
 
-// Sync CricketLiveApi matches and ball data into public/live-data/*.json every minute
-Schedule::command('cricket:sync-static-json')->everyMinute()->withoutOverlapping();
+// Ultra-Low-Quota Match Lifecycle Cron (IST triggers for Toss, XI, Pre-match & Live First Ball)
+Schedule::command('cricket:lifecycle-tick')->everyMinute()->withoutOverlapping(2);
+
+// Twice-Daily Static Page Sync (Schedule, Series, ICC Rankings into Redis + JSON Archive)
+Schedule::call(function (\App\Services\Cricket\CricketLiveApiService $apiService) {
+    // 3 calls twice a day = 6 calls/day
+    $apiService->getScheduleByCategory('all');
+    $apiService->getSeriesByCategory('all');
+    $apiService->getIccRankings('men', 't20');
+})->twiceDailyAt(6, 18)->timezone('Asia/Kolkata')->name('sync-static-cricket-archive');

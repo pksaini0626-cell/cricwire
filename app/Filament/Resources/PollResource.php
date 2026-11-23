@@ -50,6 +50,11 @@ class PollResource extends Resource
                         Forms\Components\Toggle::make('is_active')
                             ->label('Active for voting')
                             ->default(true),
+                        Forms\Components\Toggle::make('send_push_notification')
+                            ->label('🔔 Send Push Notification to All Users')
+                            ->helperText('Dispatches push notification broadcast on save')
+                            ->default(false)
+                            ->dehydrated(false),
                     ])->columns(2),
 
                 Forms\Components\Section::make('Live Vote Tallies')

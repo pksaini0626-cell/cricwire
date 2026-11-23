@@ -28,7 +28,7 @@ class LiveMatchPollerCommand extends Command
      *
      * @var string
      */
-    protected $description = 'Supervisor daemon poller for cricket live scores with subscriber-aware polling and adaptive backoff';
+    protected $description = '[DEPRECATED - Legacy RapidAPI] Use cricket:redis-worker for pure Redis CricketLiveAPI';
 
     /**
      * Execute the console command.
@@ -144,7 +144,7 @@ class LiveMatchPollerCommand extends Command
                         'result' => $detailedLive['result'] ?? $matchMeta['result'] ?? '',
                         'need_run_ball' => $detailedLive['need_run_ball'] ?? '',
                         'batsman' => $detailedLive['batsman'] ?? [],
-                        'bolwer' => $detailedLive['bolwer'] ?? $detailedLive['bowler'] ?? [],
+                        'bowler' => $detailedLive['bowler'] ?? $detailedLive['bolwer'] ?? [],
                         'fav_team' => $detailedLive['fav_team'] ?? null,
                         'min_rate' => $detailedLive['min_rate'] ?? '-',
                         'max_rate' => $detailedLive['max_rate'] ?? '-',

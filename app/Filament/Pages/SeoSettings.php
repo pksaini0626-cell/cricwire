@@ -175,7 +175,7 @@ class SeoSettings extends Page
                                 Textarea::make('seo_robots_txt_content')
                                     ->label('Dynamic robots.txt Content')
                                     ->rows(8)
-                                    ->fontFamily(\Filament\Support\Enums\FontFamily::Mono)
+                                    ->extraInputAttributes(['class' => 'font-mono'])
                                     ->helperText('Live rules served immediately at /robots.txt with Content-Type: text/plain.')
                                     ->required(),
                             ]),

@@ -16,6 +16,16 @@ class ListNewsArticles extends ListRecords
 {
     protected static string $resource = NewsArticleResource::class;
 
+    /**
+     * Component property storing fetched preview articles across Livewire renders.
+     */
+    public array $previewArticles = [];
+
+    /**
+     * Component property storing any error or status message from the last fetch attempt.
+     */
+    public ?string $fetchStatusMessage = null;
+
     protected function getHeaderActions(): array
     {
         return [
@@ -23,91 +33,88 @@ class ListNewsArticles extends ListRecords
                 ->label('⚡ Fetch Trending News')
                 ->color('warning')
                 ->modalHeading('Interactive Cricket News Ingestion')
-                ->modalDescription('Fetch live trending headlines and pick only the stories you want to draft.')
+                ->modalDescription('Select the specific cricket articles you want to rewrite and publish. Only selected items will be imported as drafts.')
                 ->modalSubmitActionLabel('Import Selected to Drafts')
                 ->modalWidth('4xl')
-                ->steps([
-                    Forms\Components\Wizard\Step::make('Select Provider')
-                        ->description('Pick an active cricket news API source')
-                        ->schema([
-                            Forms\Components\Select::make('provider_id')
-                                ->label('News API Provider')
-                                ->options(fn () => NewsApiConfig::where('is_active', true)->pluck('name', 'id'))
-                                ->required()
-                                ->searchable()
-                                ->placeholder('Select an active provider')
-                                ->helperText(function () {
-                                    $count = NewsApiConfig::where('is_active', true)->count();
-                                    return $count === 0 
-                                        ? 'No active providers configured. Please add one in News API Configs.' 
-                                        : "{$count} active provider(s) available.";
-                                }),
-                        ]),
+                ->form([
+                    Forms\Components\Select::make('provider_id')
+                        ->label('News API Provider')
+                        ->options(fn () => NewsApiConfig::where('is_active', true)->pluck('name', 'id'))
+                        ->required()
+                        ->searchable()
+                        ->placeholder('Select an active provider')
+                        ->live()
+                        ->afterStateUpdated(function ($state, Forms\Set $set, NewsIngestionService $service) {
+                            $set('selected_articles', []);
+                            $this->previewArticles = [];
+                            $this->fetchStatusMessage = null;
 
-                    Forms\Components\Wizard\Step::make('Review & Select Articles')
-                        ->description('Check only the articles you wish to import')
-                        ->schema([
-                            Forms\Components\Placeholder::make('instructions')
-                                ->label('Instructions')
-                                ->content('Select the specific cricket articles you want to rewrite and publish. Only selected items will be imported as drafts.'),
+                            if (!$state) {
+                                return;
+                            }
 
-                            Forms\Components\CheckboxList::make('selected_article_indices')
-                                ->label('Available Headlines')
-                                ->options(function (Forms\Get $get, Forms\Set $set, NewsIngestionService $service): array {
-                                    $providerId = $get('provider_id');
-                                    if (!$providerId) {
-                                        return [];
-                                    }
+                            $config = NewsApiConfig::find($state);
+                            if (!$config) {
+                                $this->fetchStatusMessage = 'Selected provider could not be found.';
+                                return;
+                            }
 
-                                    $config = NewsApiConfig::find($providerId);
-                                    if (!$config) {
-                                        return [];
-                                    }
+                            $articles = $service->fetchRawPreviews($config);
+                            $this->previewArticles = $articles;
 
-                                    // Check if articles are already loaded in state
-                                    $cachedArticles = $get('fetched_articles_payload');
-                                    if (empty($cachedArticles)) {
-                                        $articles = $service->fetchRawPreviews($config);
-                                        $set('fetched_articles_payload', $articles);
-                                    } else {
-                                        $articles = $cachedArticles;
-                                    }
+                            if (empty($articles)) {
+                                $status = $service->getLastHttpStatus();
+                                $err = $service->getLastErrorMessage();
+                                $reason = $err ?: ($status ? "HTTP {$status}" : 'No articles returned by provider.');
+                                $this->fetchStatusMessage = "Failed to load articles from [{$config->name}]: {$reason}";
+                            }
+                        })
+                        ->helperText(function () {
+                            $count = NewsApiConfig::where('is_active', true)->count();
+                            return $count === 0 
+                                ? 'No active providers configured. Please add one in News API Configs.' 
+                                : "{$count} active provider(s) available. Selecting a provider immediately fetches trending headlines.";
+                        }),
 
-                                    if (empty($articles)) {
-                                        return [];
-                                    }
+                    Forms\Components\Placeholder::make('no_articles_warning')
+                        ->label('Fetch Status')
+                        ->content(fn () => new HtmlString('<div class="p-3 text-sm text-amber-300 bg-amber-950/40 border border-amber-800/60 rounded-lg flex items-center gap-2"><span>⚠️</span> <span>' . e($this->fetchStatusMessage ?? 'No articles found or provider quota exceeded.') . '</span></div>'))
+                        ->visible(fn (Forms\Get $get) => filled($get('provider_id')) && empty($this->previewArticles) && filled($this->fetchStatusMessage)),
 
-                                    $options = [];
-                                    foreach ($articles as $index => $article) {
-                                        $title = e($article['title'] ?? 'Untitled Article');
-                                        $summary = e(Str::limit($article['summary'] ?? 'No summary provided.', 140));
-                                        $image = !empty($article['image']) 
-                                            ? '<img src="' . e($article['image']) . '" alt="Thumbnail" class="w-16 h-12 object-cover rounded-md shrink-0 border border-slate-700">'
-                                            : '<div class="w-16 h-12 rounded-md bg-slate-800 flex items-center justify-center shrink-0 text-xs text-slate-500 font-bold border border-slate-700">NO IMG</div>';
+                    Forms\Components\Placeholder::make('instructions')
+                        ->label('Instructions')
+                        ->content('Select the specific cricket articles you want to rewrite and publish. Only selected items will be imported as drafts.')
+                        ->visible(fn () => !empty($this->previewArticles)),
 
-                                        $options[$index] = new HtmlString('
-                                            <div class="flex items-start gap-3 py-1.5 w-full">
-                                                ' . $image . '
-                                                <div class="min-w-0 flex-1">
-                                                    <div class="font-bold text-sm text-slate-100 leading-snug line-clamp-2">' . $title . '</div>
-                                                    <div class="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">' . $summary . '</div>
-                                                </div>
-                                            </div>
-                                        ');
-                                    }
+                    Forms\Components\CheckboxList::make('selected_articles')
+                        ->label('Available Headlines')
+                        ->options(function (): array {
+                            $options = [];
+                            foreach ($this->previewArticles as $index => $article) {
+                                $title = e($article['title'] ?? 'Untitled Article');
+                                $summary = !empty($article['summary']) 
+                                    ? ' — ' . e(Str::limit(strip_tags($article['summary']), 70)) 
+                                    : '';
+                                $image = !empty($article['image']) 
+                                    ? '<img src="' . e($article['image']) . '" alt="Thumbnail" class="w-14 h-10 object-cover rounded shrink-0 border border-slate-700">'
+                                    : '<div class="w-14 h-10 rounded bg-slate-800 flex items-center justify-center shrink-0 text-[10px] text-slate-500 font-bold border border-slate-700">NO IMG</div>';
 
-                                    return $options;
-                                })
-                                ->descriptions(function (Forms\Get $get): array {
-                                    return [];
-                                })
-                                ->columns(1)
-                                ->bulkToggleable()
-                                ->required()
-                                ->helperText('Check the boxes of the articles you want to save to your drafts.'),
-
-                            Forms\Components\Hidden::make('fetched_articles_payload'),
-                        ]),
+                                $options[(string)$index] = new HtmlString('
+                                    <div class="flex items-center gap-3 py-1 w-full">
+                                        ' . $image . '
+                                        <div class="min-w-0 flex-1">
+                                            <div class="font-semibold text-sm text-slate-100 leading-snug line-clamp-2">' . $title . '<span class="font-normal text-xs text-slate-400">' . $summary . '</span></div>
+                                        </div>
+                                    </div>
+                                ');
+                            }
+                            return $options;
+                        })
+                        ->visible(fn () => !empty($this->previewArticles))
+                        ->columns(1)
+                        ->bulkToggleable()
+                        ->required()
+                        ->helperText('Check the boxes of the articles you want to save to your drafts.'),
                 ])
                 ->action(function (array $data, NewsIngestionService $service): void {
                     $providerId = $data['provider_id'] ?? null;
@@ -122,17 +129,12 @@ class ListNewsArticles extends ListRecords
                         return;
                     }
 
-                    $allArticles = $data['fetched_articles_payload'] ?? [];
-                    if (empty($allArticles)) {
-                        $allArticles = $service->fetchRawPreviews($config);
-                    }
-
-                    $selectedIndices = $data['selected_article_indices'] ?? [];
+                    $selectedIndices = $data['selected_articles'] ?? [];
                     $selectedArticles = [];
 
                     foreach ($selectedIndices as $index) {
-                        if (isset($allArticles[$index])) {
-                            $selectedArticles[] = $allArticles[$index];
+                        if (isset($this->previewArticles[$index])) {
+                            $selectedArticles[] = $this->previewArticles[$index];
                         }
                     }
 
@@ -146,6 +148,10 @@ class ListNewsArticles extends ListRecords
                     }
 
                     $importedCount = $service->importSelectedArticles($selectedArticles, $config->name);
+
+                    // Reset component properties after import
+                    $this->previewArticles = [];
+                    $this->fetchStatusMessage = null;
 
                     if ($importedCount > 0) {
                         Notification::make()

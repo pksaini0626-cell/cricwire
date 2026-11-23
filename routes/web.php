@@ -14,7 +14,7 @@ Route::get('/live-scores', App\Livewire\Pages\HomeLiveScores::class);
 
 // Match Detail Views - Primary SEO Industry-Standard URL Structure
 Route::get('/match-detail/{seriesSlug}/{tab}/{matchSlug}', App\Livewire\Pages\MatchDetail::class)
-    ->where('tab', 'live-line|commentary|scorecard|squad|odds|info')
+    ->where('tab', 'live-line|commentary|scorecard|squad|highlights|odds|info')
     ->name('match.detail');
 
 // Match Detail Views - Backward Compatibility & Redirect Route
@@ -55,9 +55,16 @@ Route::get('/live-cricket-score/{matchId}/{tab?}', function (string $matchId, ?s
     );
 })->name('match.detail.legacy');
 
-// Tournament Schedules & Tables
+// Tournament Schedules, Series Hub & Tables
 Route::get('/cricket-schedule/{status?}/{category?}', App\Livewire\Pages\SchedulePage::class)->name('schedule');
-Route::get('/cricket-series/{series:slug}/overview', App\Livewire\Pages\SeriesDetail::class)->name('series.detail');
+
+Route::get('/cricket-series', \App\Livewire\Pages\SeriesListPage::class)
+    ->name('series.index');
+
+Route::get('/cricket-series/{seriesSlug}/{tab?}', \App\Livewire\Pages\SeriesDetailPage::class)
+    ->where('tab', 'matches|points-table|news|squads')
+    ->name('series.detail');
+
 Route::get('/cricket-rankings/{gender?}', App\Livewire\Pages\RankingsPage::class)->name('rankings');
 
 // Editorial & Fan Engagement
@@ -86,9 +93,47 @@ Route::get('/go/{banner}', [AdRedirectController::class, 'trackAndRedirect'])->n
 // Cricket Session & Fancy API
 Route::get('/api/matches/{matchId}/sessions', [\App\Http\Controllers\Cricket\SessionController::class, 'show'])->name('match.sessions');
 
+// Match Viewer Presence Heartbeat Ping
+Route::post('/api/matches/{matchId}/ping', function (string|int $matchId, \Illuminate\Http\Request $request) {
+    if (!$request->attributes->get('is_search_crawler') && !app()->bound('crawler_read_only_mode')) {
+        \Illuminate\Support\Facades\Cache::put('active_site_visitor', now()->timestamp, 120);
+        \Illuminate\Support\Facades\Cache::put("watching:match:{$matchId}", true, 30);
+        \Illuminate\Support\Facades\Cache::put("cricket:watchers:match:{$matchId}", true, 30);
+    }
+    return response()->json(['status' => true, 'match_id' => $matchId]);
+})->name('match.ping');
+
+// Direct Fast Real-Time Live Cricket JSON Endpoints (Cache-Backed)
+Route::get('/api/live/home', function (\Illuminate\Http\Request $request, \App\Services\Cricket\CricketLiveApiService $service) {
+    if (!$request->attributes->get('is_search_crawler') && !app()->bound('crawler_read_only_mode')) {
+        \Illuminate\Support\Facades\Cache::put('active_site_visitor', now()->timestamp, 120);
+    }
+    return response()
+        ->json($service->getFastHomeData())
+        ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+})->name('api.live.home');
+
+Route::get('/api/live/match/{matchId}', function ($matchId, \Illuminate\Http\Request $request, \App\Services\Cricket\CricketLiveApiService $service) {
+    if (!$request->attributes->get('is_search_crawler') && !app()->bound('crawler_read_only_mode')) {
+        \Illuminate\Support\Facades\Cache::put('active_site_visitor', now()->timestamp, 120);
+        \Illuminate\Support\Facades\Cache::put("watching:match:{$matchId}", true, 30);
+    }
+    $includeCommentary = $request->boolean('include_commentary');
+    return response()
+        ->json($service->getFastMatchData($matchId, $includeCommentary))
+        ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+})->name('api.live.match');
+
 // High-Speed Dynamic XML Sitemaps & Robots.txt
 Route::get('/sitemap.xml', [SitemapController::class, 'index'])->name('sitemap.index');
 Route::get('/sitemap-static.xml', [SitemapController::class, 'staticPages'])->name('sitemap.static');
 Route::get('/sitemap-matches.xml', [SitemapController::class, 'matches'])->name('sitemap.matches');
 Route::get('/sitemap-news.xml', [SitemapController::class, 'news'])->name('sitemap.news');
 Route::get('/robots.txt', [SitemapController::class, 'robots'])->name('robots.txt');
+
+// Push Notifications & FCM Subscription API
+Route::post('/api/push/subscribe', [\App\Http\Controllers\PushSubscriptionController::class, 'subscribe'])->name('api.push.subscribe');
+Route::post('/api/push/unsubscribe', [\App\Http\Controllers\PushSubscriptionController::class, 'unsubscribe'])->name('api.push.unsubscribe');
+Route::get('/api/notifications/latest', [\App\Http\Controllers\PushSubscriptionController::class, 'latest'])->name('api.notifications.latest');
+Route::get('/api/firebase/config', [\App\Http\Controllers\PushSubscriptionController::class, 'firebaseConfig'])->name('api.firebase.config');
+

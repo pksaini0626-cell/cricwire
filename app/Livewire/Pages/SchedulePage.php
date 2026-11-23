@@ -7,7 +7,6 @@ use App\Models\AdBanner;
 use App\Models\NewsArticle;
 use App\Services\Cricket\CricketLiveApiService;
 use App\Services\Cricket\RapidApiCricketService;
-use App\Services\Cricket\StaticJsonCacheWriter;
 use Carbon\Carbon;
 use Livewire\Component;
 
@@ -48,18 +47,12 @@ class SchedulePage extends Component
 
     public function render(RapidApiCricketService $rapidService, CricketLiveApiService $apiService)
     {
-        // 1. Read from static JSON (public/live-data/home.json) first
-        $homeData = StaticJsonCacheWriter::read('home.json');
-        $rawUpcoming = [];
-        $rawRecent = [];
+        // Direct Fast Real-Time Live Cricket Data backed by Cache
+        $homeData = $apiService->getFastHomeData();
+        $rawUpcoming = $homeData['upcoming'] ?? [];
+        $rawRecent = $homeData['recent'] ?? $homeData['finished'] ?? [];
 
-        if ($homeData && is_array($homeData)) {
-            $data = isset($homeData['data']) && is_array($homeData['data']) ? $homeData['data'] : $homeData;
-            $rawUpcoming = $data['upcoming'] ?? [];
-            $rawRecent = $data['recent'] ?? $data['finished'] ?? [];
-        }
-
-        // 2. Fallback to RapidApi or CricketLiveApiService if static cache is empty
+        // Fallback to RapidApi or upstream if empty
         if (empty($rawUpcoming) && empty($rawRecent)) {
             $scheduleData = $rapidService->getScheduleMatches(false);
             $rawUpcoming = $scheduleData['upcoming'] ?? [];
@@ -105,7 +98,7 @@ class SchedulePage extends Component
                 return match ($target) {
                     't20' => str_contains($format, 't20') || str_contains($matchType, 't20') || str_contains($desc, 't20') || str_contains($combined, 'twenty20'),
                     'odi' => str_contains($format, 'odi') || str_contains($matchType, 'odi') || str_contains($desc, 'odi') || str_contains($combined, 'one day'),
-                    'test' => str_contains($format, 'test') || str_contains($matchType, 'test') || str_contains($desc, 'test'),
+                    'test' => str_contains($format, 'test') || str_contains($matchType, 'test') || str_contains($desc, 'test') || str_contains($combined, 'test') || str_contains($combined, 'first-class'),
                     'leagues', 't20-leagues' => str_contains($rawType, 'league') || str_contains($matchType, 'league') || str_contains($combined, 'league') || str_contains($combined, 'ipl') || str_contains($combined, 'bbl') || str_contains($combined, 'psl') || str_contains($combined, 'cpl') || str_contains($combined, 'sa20') || str_contains($combined, 'bpl') || str_contains($combined, 'ilt20'),
                     default => true,
                 };
@@ -148,7 +141,7 @@ class SchedulePage extends Component
             'canonical' => route('schedule'),
             'robots' => 'index, follow',
             'og_type' => 'website',
-            'og_image' => asset('icons/cricwire_favicons/android-chrome-512x512.png'),
+            'og_image' => file_exists(public_path('images/og-image.png')) ? asset('images/og-image.png') : asset('icons/cricwire_favicons/android-chrome-512x512.png'),
         ];
 
         return view('livewire.pages.schedule-page', [

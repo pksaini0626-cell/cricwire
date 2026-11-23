@@ -10,7 +10,7 @@ use App\Models\Poll;
 use App\Models\PollVote;
 use App\Services\Cricket\CricketLiveApiService;
 use App\Services\Cricket\CricketUrlService;
-use App\Services\Cricket\StaticJsonCacheWriter;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Request;
 use Livewire\Component;
 
@@ -20,6 +20,8 @@ class MatchDetail extends Component
     public string $tab = 'live-line'; // Options: 'live-line', 'commentary', 'scorecard', 'squad', 'odds', 'info', 'highlights'
     public ?string $seriesSlug = null;
     public ?string $matchSlug = null;
+    public bool $isCompleted = false;
+    public bool $commentaryUnavailable = false;
 
     /**
      * Mount component supporting both:
@@ -47,12 +49,63 @@ class MatchDetail extends Component
         }
 
         $this->matchId = $resolved ?? $matchId ?? 1;
-        $this->tab = CricketUrlService::normalizeTab($tab);
+
+        // Auto-select scorecard for finished matches if default 'live-line' requested
+        $requestedTab = CricketUrlService::normalizeTab($tab);
+        $apiService = app(CricketLiveApiService::class);
+        $isFinishedMatch = $apiService->isFinishedMatch($this->matchId);
+
+        // Pre-hydrate fast match data immediately on initial page mount (0 delay, batters + bowler populated on first paint)
+        $fastData = $apiService->getFastMatchData($this->matchId);
+        if (!empty($fastData)) {
+            $fastState = strtolower((string) ($fastData['state'] ?? $fastData['status'] ?? ''));
+            if (in_array($fastState, ['finished', 'completed', 'complete', '3'], true) || !empty($fastData['result'])) {
+                $isFinishedMatch = true;
+            }
+        }
+
+        if ($requestedTab === 'live-line' && $isFinishedMatch) {
+            $requestedTab = 'scorecard';
+        }
+
+        $this->tab = $requestedTab;
+
+        $isCrawler = request()->attributes->get('is_search_crawler') || app()->bound('crawler_read_only_mode');
+        if (!$isCrawler) {
+            if (!$isFinishedMatch) {
+                Cache::put("watching:match:{$this->matchId}", true, 30);
+            }
+            Cache::put('active_site_visitor', now()->timestamp, 120);
+        }
+
+        \Illuminate\Support\Facades\Log::info("MatchDetail loaded", [
+            'slug' => $this->matchSlug,
+            'extracted_id' => $this->matchId,
+        ]);
     }
 
     public function setTab(string $tab): void
     {
-        $this->tab = CricketUrlService::normalizeTab($tab);
+        $cleanTab = CricketUrlService::normalizeTab($tab);
+        $this->tab = $cleanTab;
+
+        if ($this->seriesSlug && $this->matchSlug) {
+            $url = route('match.detail', [
+                'seriesSlug' => $this->seriesSlug,
+                'tab' => $cleanTab,
+                'matchSlug' => $this->matchSlug,
+            ]);
+            $this->js("window.history.replaceState({}, '', '{$url}')");
+        }
+    }
+
+    /**
+     * Lightweight Livewire action loadTabData: fetches only the clicked tab's data on demand.
+     */
+    public function loadTabData(string $tab): void
+    {
+        $cleanTab = CricketUrlService::normalizeTab($tab);
+        $this->setTab($cleanTab);
     }
 
     /**
@@ -98,325 +151,190 @@ class MatchDetail extends Component
             abort(404, 'Match not found or coverage skipped.');
         }
 
-        // 1. First attempt to read match data directly from public/live-data/match-{$matchId}.json
-        $staticMatch = StaticJsonCacheWriter::read("match-{$this->matchId}.json");
-        $staticHome = StaticJsonCacheWriter::read('home.json');
+        $matchDataLoaded = $this->loadMatchData($apiService);
+        $match = $matchDataLoaded['match'];
+        $scorecardData = $matchDataLoaded['scorecardData'];
+        $commentaryData = $matchDataLoaded['commentaryData'];
+        $matchFacts = $matchDataLoaded['matchFacts'];
+        $highlights = $matchDataLoaded['highlights'];
+        $liveBatters = $matchDataLoaded['liveBatters'];
+        $liveBowler = $matchDataLoaded['liveBowler'];
+        $liveBowlers = $matchDataLoaded['liveBowlers'] ?? [];
+        $pollSeconds = $matchDataLoaded['pollSeconds'];
 
-        // Look for baseline match object from public/live-data/home.json
-        $baseMatch = null;
-        if ($staticHome && is_array($staticHome)) {
-            $allHome = array_merge(
-                $staticHome['live'] ?? [],
-                $staticHome['upcoming'] ?? [],
-                $staticHome['recent'] ?? [],
-                $staticHome['finished'] ?? []
-            );
-            foreach ($allHome as $m) {
-                if ((string) ($m['match_id'] ?? $m['id'] ?? '') === (string) $this->matchId) {
-                    $baseMatch = $m;
+        // Status determination
+        $state = strtolower((string) ($match['state'] ?? $match['status'] ?? 'live'));
+        $result = strtolower(trim((string) ($match['result'] ?? '')));
+        $completedKeywords = ['finished', 'complete', 'completed', 'won', 'abandoned', 'no result', 'draw', 'tie'];
+        
+        $isCompletedStatus = in_array($state, ['finished', 'completed', 'complete', '3'], true);
+        if (!$isCompletedStatus) {
+            foreach ($completedKeywords as $kw) {
+                if (str_contains($state, $kw)) {
+                    $isCompletedStatus = true;
                     break;
                 }
             }
         }
 
-        // Check if static match file exists and is fresh (< 60 seconds old)
-        $matchFilePath = StaticJsonCacheWriter::getStorageDir() . DIRECTORY_SEPARATOR . "match-{$this->matchId}.json";
-        $isStaticFresh = file_exists($matchFilePath) && (time() - filemtime($matchFilePath)) < 60;
+        $isCompletedResult = false;
+        if (!empty($result)) {
+            foreach ($completedKeywords as $kw) {
+                if (str_contains($result, $kw)) {
+                    $isCompletedResult = true;
+                    break;
+                }
+            }
+            if (!$isCompletedResult && !in_array($state, ['live', 'in progress', 'in_progress', 'innings break', '1', '2'], true)) {
+                $isCompletedResult = true;
+            }
+        }
 
-        $matchData = $baseMatch ?? [];
-        $commentaryData = [];
-        $scorecardData = [];
-        $highlights = [];
-        $matchFacts = [];
+        $this->isCompleted = $isCompletedStatus || $isCompletedResult || $apiService->isFinishedMatch($this->matchId);
 
-        if ($staticMatch && is_array($staticMatch) && $isStaticFresh) {
-            $matchData = array_merge($matchData, $staticMatch);
-            $commentaryData = $staticMatch['commentary'] ?? [];
-            $scorecardData = $staticMatch['scorecard'] ?? [];
-            $highlights = $staticMatch['highlights'] ?? [];
-            $matchFacts = $staticMatch['facts'] ?? [];
+        // Pre-Match & Playing XI Archived Lookups (0 Upstream API calls!)
+        $preMatchData = $apiService->getPreMatchArchivedData($this->matchId);
+        $archivedXI = $apiService->getArchivedPlayingXI($this->matchId);
+
+        if ($preMatchData) {
+            if (empty($matchFacts) && !empty($preMatchData['facts'])) {
+                $matchFacts = $preMatchData['facts'];
+            }
+            if (empty($match['venue']) && !empty($preMatchData['venue'])) {
+                $match['venue'] = $preMatchData['venue'];
+            }
+            if (empty($match['toss']) && !empty($preMatchData['toss'])) {
+                $match['toss'] = $preMatchData['toss'];
+            }
+        }
+
+        // When match is completed, enforce default scorecard tab, archived scorecard loading, and disable commentary
+        if ($this->isCompleted) {
+            $this->commentaryUnavailable = true;
+            $commentaryData = [];
+
+            $matchMeta = [
+                'series_name' => $match['series'] ?? $match['series_name'] ?? null,
+                'match_title' => $match['matchs'] ?? $match['match_desc'] ?? null,
+                'team_a' => $match['team_a'] ?? null,
+                'team_b' => $match['team_b'] ?? null,
+                'result_text' => $match['result'] ?? null,
+            ];
+
+            // Always serve scorecard via getOrArchiveCompletedScorecard
+            try {
+                $archivedScorecard = $apiService->getOrArchiveCompletedScorecard($this->matchId, $matchMeta);
+                $scorecardData = $archivedScorecard['innings'] ?? $archivedScorecard;
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error("Failed fetching archived scorecard for match {$this->matchId}: " . $e->getMessage());
+            }
         } else {
-            // Static file is missing or stale (> 60s) -> Fetch from Live API endpoints with short 15s cache
-            try {
-                $cacheKeyPrefix = "cricket:match_detail:{$this->matchId}";
-                $commRes = \Illuminate\Support\Facades\Cache::remember("{$cacheKeyPrefix}:comm", 15, fn () => $apiService->getCommentary($this->matchId));
-                $scRes = \Illuminate\Support\Facades\Cache::remember("{$cacheKeyPrefix}:sc", 15, fn () => $apiService->getScorecard($this->matchId));
-                $factsRes = \Illuminate\Support\Facades\Cache::remember("{$cacheKeyPrefix}:facts", 15, fn () => $apiService->getMatchFacts($this->matchId));
-                $highRes = \Illuminate\Support\Facades\Cache::remember("{$cacheKeyPrefix}:highlights", 60, fn () => $apiService->getHighlights($this->matchId));
-
-                $commentaryData = $commRes['commentary'] ?? [];
-                $scorecardData = $scRes['innings'] ?? [];
-                $matchFacts = $factsRes ?? [];
-                $highlights = $highRes ?? [];
-
-                // Fallback to upstream matches if baseMatch wasn't in home.json
-                if (empty($baseMatch)) {
-                    $upstreamLive = $apiService->getLiveMatches();
-                    $upstreamRecent = $apiService->getRecentMatches();
-                    $upstreamUpcoming = $apiService->getUpcomingMatches();
-                    $allUpstream = array_merge($upstreamLive, $upstreamRecent, $upstreamUpcoming);
-                    foreach ($allUpstream as $m) {
-                        if ((string) ($m['match_id'] ?? $m['id'] ?? '') === (string) $this->matchId) {
-                            $baseMatch = $m;
-                            $matchData = array_merge($matchData, $baseMatch);
-                            break;
-                        }
-                    }
+            // Lazy-load Scorecard: when scorecard tab is active and scorecardData is empty
+            if ($this->tab === 'scorecard' && empty($scorecardData)) {
+                try {
+                    $scorecardRes = $apiService->getScorecard($this->matchId);
+                    $scorecardData = $scorecardRes['innings'] ?? $scorecardRes;
+                } catch (\Throwable $e) {
+                    $scorecardData = [];
                 }
+            }
 
-                // If static match previously existed, merge its non-empty fields
-                if ($staticMatch && is_array($staticMatch)) {
-                    $matchData = array_merge($matchData, array_filter($staticMatch, fn ($v) => $v !== null && $v !== ''));
+            // Lazy-load Commentary: when commentary tab is active and commentaryData is empty
+            if ($this->tab === 'commentary' && empty($commentaryData)) {
+                try {
+                    $commRes = $apiService->getCommentary($this->matchId);
+                    $commentaryData = $commRes['commentary'] ?? $commRes;
+                } catch (\Throwable $e) {
+                    $commentaryData = [];
                 }
+            }
 
-                // Build and write updated public/live-data/match-{$matchId}.json via StaticJsonCacheWriter
-                $format = strtoupper($matchData['format'] ?? 'ODI');
-                $pollIntervalSec = match ($format) {
-                    'T20' => \App\Support\LiveEngineConfig::pollIntervalT20(),
-                    'TEST' => \App\Support\LiveEngineConfig::pollIntervalTest(),
-                    default => \App\Support\LiveEngineConfig::pollIntervalOdi(),
-                };
-
-                $writePayload = array_merge($matchData, [
-                    'match_id' => (int) $this->matchId,
-                    'series_name' => $matchData['series_name'] ?? ($matchFacts['series'] ?? ''),
-                    'match_desc' => $matchData['match_desc'] ?? '',
-                    'format' => $format,
-                    'poll_interval_seconds' => $pollIntervalSec,
-                    'poll_ms' => $pollIntervalSec * 1000,
-                    'state' => $matchData['state'] ?? 'Live',
-                    'score' => $matchData['score'] ?? '',
-                    'team_a' => $matchData['team_a'] ?? 'Team A',
-                    'team_b' => $matchData['team_b'] ?? 'Team B',
-                    'team_a_short' => $matchData['team_a_short'] ?? '',
-                    'team_b_short' => $matchData['team_b_short'] ?? '',
-                    'team_a_img' => $matchData['team_a_img'] ?? '',
-                    'team_b_img' => $matchData['team_b_img'] ?? '',
-                    'team_a_scores' => $matchData['team_a_scores'] ?? $matchData['score_a'] ?? '',
-                    'team_b_scores' => $matchData['team_b_scores'] ?? $matchData['score_b'] ?? '',
-                    'score_a' => $matchData['score_a'] ?? $matchData['team_a_scores'] ?? '',
-                    'score_b' => $matchData['score_b'] ?? $matchData['team_b_scores'] ?? '',
-                    'team_a_score' => $matchData['team_a_scores'] ?? $matchData['score_a'] ?? '',
-                    'team_b_score' => $matchData['team_b_scores'] ?? $matchData['score_b'] ?? '',
-                    'status' => $matchData['status'] ?? 'Live',
-                    'result' => $matchData['result'] ?? '',
-                    'latest_ball' => !empty($commentaryData) ? $commentaryData[0] : null,
-                    'recent_balls' => array_slice($commentaryData, 0, 12),
-                    'commentary' => $commentaryData,
-                    'scorecard' => $scorecardData,
-                    'highlights' => $highlights,
-                    'facts' => $matchFacts,
-                    'updated_at' => now()->toIso8601String(),
-                    'timestamp' => time(),
-                ]);
-
-                StaticJsonCacheWriter::write("match-{$this->matchId}.json", $writePayload);
-                $matchData = $writePayload;
-            } catch (\Throwable $e) {
-                // If API call fails, fall back gracefully to baseMatch or staticMatch
-                if ($staticMatch && is_array($staticMatch)) {
-                    $matchData = array_merge($matchData, $staticMatch);
-                    $commentaryData = $commentaryData ?: ($staticMatch['commentary'] ?? []);
-                    $scorecardData = $scorecardData ?: ($staticMatch['scorecard'] ?? []);
-                    $highlights = $highlights ?: ($staticMatch['highlights'] ?? []);
-                    $matchFacts = $matchFacts ?: ($staticMatch['facts'] ?? []);
+            // Lazy-load Highlights: when highlights tab is active and highlights is empty
+            if ($this->tab === 'highlights' && empty($highlights)) {
+                try {
+                    $highlights = $apiService->getHighlights($this->matchId);
+                } catch (\Throwable $e) {
+                    $highlights = [];
                 }
             }
         }
 
-        // 3. Extract & Compute Innings Scores from Scorecard / Live Data
-        $scoreA = $matchData['score_a'] ?? $matchData['team_a_scores'] ?? $matchData['team_a_score'] ?? ($baseMatch['score_a'] ?? $baseMatch['team_a_scores'] ?? '');
-        $scoreB = $matchData['score_b'] ?? $matchData['team_b_scores'] ?? $matchData['team_b_score'] ?? ($baseMatch['score_b'] ?? $baseMatch['team_b_scores'] ?? '');
-        $scoreCombined = $matchData['score'] ?? ($baseMatch['score'] ?? '');
-
-        // If scorecard data is available, compute and match scores directly from innings
-        if (!empty($scorecardData) && is_array($scorecardData)) {
-            $teamAName = strtolower(trim((string) ($matchData['team_a'] ?? $baseMatch['team_a'] ?? '')));
-            $teamBName = strtolower(trim((string) ($matchData['team_b'] ?? $baseMatch['team_b'] ?? '')));
-            $teamAShort = strtolower(trim((string) ($matchData['team_a_short'] ?? $baseMatch['team_a_short'] ?? '')));
-            $teamBShort = strtolower(trim((string) ($matchData['team_b_short'] ?? $baseMatch['team_b_short'] ?? '')));
-
-            foreach ($scorecardData as $inn) {
-                if (!is_array($inn)) continue;
-
-                // Extract team name and score string
-                $inTeam = $inn['bat_team'] ?? $inn['team']['name'] ?? $inn['team']['short_name'] ?? $inn['team_name'] ?? '';
-                $inTeamShort = $inn['bat_team_short'] ?? $inn['team']['short_name'] ?? '';
-                $inScore = trim((string) ($inn['score'] ?? ''));
-
-                if (empty($inScore) && isset($inn['team']['score'])) {
-                    $runs = $inn['team']['score'] ?? 0;
-                    $wkts = $inn['team']['wicket'] ?? 0;
-                    $ovs = $inn['team']['over'] ?? '';
-                    $inScore = "{$runs}/{$wkts}" . ($ovs ? " ({$ovs} ov)" : '');
-                }
-
-                if (!empty($inScore)) {
-                    $inTeamLower = strtolower(trim((string) $inTeam));
-                    $inTeamShortLower = strtolower(trim((string) $inTeamShort));
-
-                    $isTeamA = ($inTeamLower && ($inTeamLower === $teamAName || str_contains($teamAName, $inTeamLower) || str_contains($inTeamLower, $teamAName)))
-                        || ($inTeamShortLower && ($inTeamShortLower === $teamAShort || str_contains($teamAShort, $inTeamShortLower)));
-
-                    $isTeamB = ($inTeamLower && ($inTeamLower === $teamBName || str_contains($teamBName, $inTeamLower) || str_contains($inTeamLower, $teamBName)))
-                        || ($inTeamShortLower && ($inTeamShortLower === $teamBShort || str_contains($teamBShort, $inTeamShortLower)));
-
-                    if ($isTeamA && empty($scoreA)) {
-                        $scoreA = $inScore;
-                    } elseif ($isTeamB && empty($scoreB)) {
-                        $scoreB = $inScore;
-                    }
-                }
-            }
-        }
-
-        // If still empty, fallback to combined score
-        if (empty($scoreA) && empty($scoreB) && !empty($scoreCombined)) {
-            $scoreA = $scoreCombined;
-        }
-        if (empty($scoreCombined)) {
-            $scoreCombined = $scoreA ?: $scoreB;
-        }
-
-        // Populate ALL score aliases identically on $match
-        $match = array_merge([
-            'match_id' => $this->matchId,
-            'team_a' => $baseMatch['team_a'] ?? 'Team A',
-            'team_b' => $baseMatch['team_b'] ?? 'Team B',
-            'team_a_short' => $baseMatch['team_a_short'] ?? 'TMA',
-            'team_b_short' => $baseMatch['team_b_short'] ?? 'TMB',
-            'team_a_img' => $baseMatch['team_a_img'] ?? '',
-            'team_b_img' => $baseMatch['team_b_img'] ?? '',
-            'series_name' => $baseMatch['series_name'] ?? 'Cricket Series',
-            'series' => $baseMatch['series'] ?? ($baseMatch['series_name'] ?? 'Cricket Series'),
-            'match_desc' => $baseMatch['match_desc'] ?? 'Match',
-            'matchs' => $baseMatch['matchs'] ?? ($baseMatch['match_desc'] ?? 'Match'),
-            'format' => $baseMatch['format'] ?? 'ODI',
-            'state' => $baseMatch['state'] ?? 'Live',
-            'result' => $baseMatch['result'] ?? '',
-        ], $matchData, [
-            'score' => $scoreCombined,
-            'score_a' => $scoreA,
-            'score_b' => $scoreB,
-            'team_a_scores' => $scoreA,
-            'team_b_scores' => $scoreB,
-            'team_a_score' => $scoreA,
-            'team_b_score' => $scoreB,
-        ]);
-
-        // 4. STEP 2: Extract Active Batters, Current Bowler & Ball-by-Ball Mapping
-        $liveBatters = [];
-        $liveBowler = [];
-
-        // Current Batters on Crease
-        if (!empty($scorecardData) && is_array($scorecardData)) {
-            $activeInning = end($scorecardData);
-            if (is_array($activeInning)) {
-                $allBatsmen = $activeInning['batsmen'] ?? $activeInning['batsman'] ?? [];
-                foreach ($allBatsmen as $b) {
-                    $outDesc = strtolower(trim((string) ($b['out_desc'] ?? $b['out_by'] ?? '')));
-                    if ($outDesc === 'batting' || $outDesc === 'not out' || $outDesc === '' || str_contains($outDesc, 'not out')) {
-                        $liveBatters[] = [
-                            'name' => $b['name'] ?? $b['short_name'] ?? 'Batter',
-                            'runs' => $b['runs'] ?? $b['run'] ?? 0,
-                            'run' => $b['runs'] ?? $b['run'] ?? 0,
-                            'balls' => $b['balls'] ?? $b['ball'] ?? 0,
-                            'ball' => $b['balls'] ?? $b['ball'] ?? 0,
-                            'fours' => $b['fours'] ?? 0,
-                            'sixes' => $b['sixes'] ?? 0,
-                            'strike_rate' => $b['strike_rate'] ?? '0.00',
-                            'is_striker' => (bool) ($b['is_striker'] ?? false),
-                        ];
-                    }
-                }
-            }
-        }
-
-        // Fallback / check active batters from commentary miniscore if present
-        if (empty($liveBatters) && !empty($matchData['latest_ball']['batsman'])) {
-            $liveBatters[] = [
-                'name' => $matchData['latest_ball']['batsman'],
-                'runs' => 0,
-                'run' => 0,
-                'balls' => 0,
-                'ball' => 0,
-                'fours' => 0,
-                'sixes' => 0,
-                'strike_rate' => '0.00',
-                'is_striker' => true,
-            ];
-        }
-
-        // Current Bowler
-        if (!empty($scorecardData) && is_array($scorecardData)) {
-            $activeInning = end($scorecardData);
-            if (is_array($activeInning)) {
-                $allBowlers = $activeInning['bowlers'] ?? $activeInning['bolwer'] ?? $activeInning['bowler'] ?? [];
-                // Sort or pick bowler with recent overs
-                if (!empty($allBowlers)) {
-                    $lastB = end($allBowlers);
-                    $liveBowler = [
-                        'name' => $lastB['name'] ?? $lastB['short_name'] ?? 'Bowler',
-                        'overs' => $lastB['overs'] ?? $lastB['over'] ?? '0.0',
-                        'over' => $lastB['overs'] ?? $lastB['over'] ?? '0.0',
-                        'maidens' => $lastB['maidens'] ?? $lastB['maiden'] ?? 0,
-                        'maiden' => $lastB['maidens'] ?? $lastB['maiden'] ?? 0,
-                        'runs' => $lastB['runs'] ?? $lastB['run'] ?? 0,
-                        'run' => $lastB['runs'] ?? $lastB['run'] ?? 0,
-                        'wickets' => $lastB['wickets'] ?? $lastB['wicket'] ?? 0,
-                        'wicket' => $lastB['wickets'] ?? $lastB['wicket'] ?? 0,
-                        'economy' => $lastB['economy'] ?? '0.00',
-                    ];
-                }
-            }
-        }
-
-        if (empty($liveBowler) && !empty($matchData['latest_ball']['bowler'])) {
-            $liveBowler = [
-                'name' => $matchData['latest_ball']['bowler'],
-                'overs' => '0.0',
-                'over' => '0.0',
-                'maidens' => 0,
-                'maiden' => 0,
-                'runs' => 0,
-                'run' => 0,
-                'wickets' => 0,
-                'wicket' => 0,
-                'economy' => '0.00',
-            ];
-        }
-
-        // Attach live batters & bowler to match array
-        $match['live_batters'] = $liveBatters;
-        $match['live_bowler'] = $liveBowler;
-
-        // Format and poll interval calculation
-        $format = strtoupper($match['format'] ?? 'ODI');
-        $pollSeconds = match ($format) {
-            'T20' => \App\Support\LiveEngineConfig::pollIntervalT20(),
-            'TEST' => \App\Support\LiveEngineConfig::pollIntervalTest(),
-            default => \App\Support\LiveEngineConfig::pollIntervalOdi(),
-        };
-
-        // Squads
+        // Lazy-load Squads: ONLY when the squad/playing-xi tab is active
         $squads = [];
-        if ($this->tab === 'squad') {
-            try {
-                $squads = $apiService->getSquads($this->matchId);
-            } catch (\Throwable $e) {
-                $squads = [];
+        if (in_array($this->tab, ['squad', 'squads', 'playing-xi'], true)) {
+            if ($archivedXI && !empty($archivedXI['team_a']['playing_xi'])) {
+                $squads = [
+                    'team_a' => $archivedXI['team_a'],
+                    'team_b' => $archivedXI['team_b'],
+                ];
+            } elseif ($preMatchData && !empty($preMatchData['squads'])) {
+                $squads = $preMatchData['squads'];
+            } else {
+                try {
+                    $squads = $apiService->getSquads($this->matchId);
+                } catch (\Throwable $e) {
+                    $squads = [];
+                }
             }
         }
 
-        // Live Batters and Current Bowler
-        $liveBatters = $match['live_batters'] ?? [];
-        $liveBowler = $match['live_bowler'] ?? [];
+        // Lazy-load Match Facts: ONLY when the info tab is active
+        if ($this->tab === 'info' && empty($matchFacts)) {
+            try {
+                $matchFacts = $apiService->getMatchFacts($this->matchId);
+            } catch (\Throwable $e) {
+                $matchFacts = [];
+            }
+        }
 
-        // Status determination
-        $state = strtolower($match['state'] ?? $match['status'] ?? 'live');
-        $result = $match['result'] ?? '';
-        $isLive = in_array($state, ['live', 'in progress', 'innings break', '1', '2']);
-        $isFinished = !empty($result) || in_array($state, ['finished', 'completed', 'complete', '3']);
+        // Lazy-load Highlights: ONLY when the highlights tab is active
+        if ($this->tab === 'highlights' && empty($highlights)) {
+            try {
+                $highlights = $apiService->getHighlights($this->matchId);
+            } catch (\Throwable $e) {
+                $highlights = [];
+            }
+        }
+
+        // Lazy-load Commentary: ONLY when commentary tab is explicitly active and match is NOT completed
+        if ($this->tab === 'commentary' && empty($commentaryData) && !$this->isCompleted) {
+            try {
+                $commRes = $apiService->getCommentary($this->matchId);
+                $commentaryData = $commRes['commentary'] ?? [];
+            } catch (\Throwable $e) {
+                $commentaryData = [];
+            }
+        }
+
+        // Over History & Recent Balls normalization
+        $recentOvers = [];
+        $recentBalls = [];
+        try {
+            $recentOvers = $apiService->getNormalizedRecentOvers($this->matchId, $commentaryData);
+            // Collect flat recent balls (up to 18 balls)
+            foreach ($recentOvers as $ov) {
+                foreach ($ov['balls'] ?? [] as $b) {
+                    $recentBalls[] = [
+                        'label' => (string) ($b['label'] ?? $b),
+                        'runs' => is_array($b) ? ($b['runs'] ?? 0) : (is_numeric($b) ? (int)$b : 0),
+                        'wicket' => is_array($b) ? (!empty($b['wicket']) || ($b['label'] ?? '') === 'W') : ($b === 'W'),
+                        'wides' => is_array($b) ? (($b['label'] ?? '') === 'wd') : ($b === 'wd'),
+                        'noballs' => is_array($b) ? (($b['label'] ?? '') === 'nb') : ($b === 'nb'),
+                        'overs' => $ov['over_number'] ?? '',
+                    ];
+                    if (count($recentBalls) >= 18) {
+                        break 2;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            $recentOvers = [];
+            $recentBalls = [];
+        }
+
+        $hasScores = !empty($match['score_a']) || !empty($match['score_b']) || !empty($match['score']) || !empty($match['team_a_scores']) || !empty($match['team_b_scores']);
+        $isLive = !$this->isCompleted && (in_array($state, ['live', 'in progress', 'in_progress', 'innings break', '1', '2']) || ($hasScores && empty($result)));
+        $isFinished = $this->isCompleted;
         $isUpcoming = !$isLive && !$isFinished;
 
         // Team names & polls
@@ -453,6 +371,7 @@ class MatchDetail extends Component
             'liveLine' => $match,
             'liveBatters' => $liveBatters,
             'liveBowler' => $liveBowler,
+            'liveBowlers' => $liveBowlers,
             'pollSeconds' => $pollSeconds,
             'scorecardData' => $scorecardData,
             'commentaryData' => $commentaryData,
@@ -467,16 +386,84 @@ class MatchDetail extends Component
             'isUpcoming' => $isUpcoming,
             'isLive' => $isLive,
             'isFinished' => $isFinished,
+            'isCompleted' => $this->isCompleted,
+            'commentaryUnavailable' => $this->commentaryUnavailable,
             'polls' => $polls,
             'featuredArticles' => $featuredArticles,
             'sidebarBanner' => $sidebarBanner,
             'socialLinks' => $socialLinks,
             'seoData' => $seoData,
             'faqs' => $seoData['faqs'] ?? [],
+            'recentOvers' => $recentOvers,
+            'recentBalls' => $recentBalls,
+            'preMatchData' => $preMatchData,
+            'archivedXI' => $archivedXI,
+            'managedMatch' => $managed,
         ])->layout('components.layouts.app', [
             'seoData' => $seoData,
             'title' => $seoData['title'],
         ]);
+    }
+
+    /**
+     * Load match data directly via Fast Real-Time Live Cricket Data backed strictly by Redis.
+     */
+    protected function loadMatchData(CricketLiveApiService $apiService): array
+    {
+        $payload = $apiService->getFastMatchData($this->matchId);
+
+        $format = strtoupper($payload['format'] ?? 'T20');
+        $pollSeconds = match ($format) {
+            'T20' => \App\Support\LiveEngineConfig::pollIntervalT20(),
+            'TEST' => \App\Support\LiveEngineConfig::pollIntervalTest(),
+            default => \App\Support\LiveEngineConfig::pollIntervalOdi(),
+        };
+
+        $liveBatters = $payload['batters'] ?? $payload['live_batters'] ?? $payload['batsman'] ?? [];
+        
+        // Standardize bowler normalization: extract current bowler and previous bowler
+        $rawBowlers = $payload['bowler'] ?? $payload['live_bowlers'] ?? $payload['live_bowler'] ?? [];
+        $liveBowlers = [];
+        if (is_array($rawBowlers)) {
+            if (isset($rawBowlers['name'])) {
+                $rawBowlers = [$rawBowlers];
+            }
+            foreach ($rawBowlers as $idx => $b) {
+                if (is_array($b) && !empty($b['name']) && $b['name'] !== '-') {
+                    $liveBowlers[] = [
+                        'name' => trim($b['name']),
+                        'overs' => \App\Helpers\CricketMatchFormatter::normalizeOvers($b['overs'] ?? $b['over'] ?? '0.0'),
+                        'over' => \App\Helpers\CricketMatchFormatter::normalizeOvers($b['overs'] ?? $b['over'] ?? '0.0'),
+                        'maidens' => (int) ($b['maidens'] ?? $b['maiden'] ?? 0),
+                        'maiden' => (int) ($b['maidens'] ?? $b['maiden'] ?? 0),
+                        'runs' => (int) ($b['runs'] ?? $b['run'] ?? 0),
+                        'run' => (int) ($b['runs'] ?? $b['run'] ?? 0),
+                        'wickets' => (int) ($b['wickets'] ?? $b['wicket'] ?? 0),
+                        'wicket' => (int) ($b['wickets'] ?? $b['wicket'] ?? 0),
+                        'economy' => (string) ($b['economy'] ?? '0.00'),
+                        'is_current' => $idx === 0,
+                    ];
+                }
+            }
+        }
+        $liveBowler = $liveBowlers[0] ?? [];
+
+        $match = array_merge($payload, [
+            'poll_interval_seconds' => $pollSeconds,
+            'poll_ms' => $pollSeconds * 1000,
+        ]);
+
+        return [
+            'match' => $match,
+            'scorecardData' => $payload['scorecard'] ?? [],
+            'commentaryData' => $payload['commentary'] ?? [],
+            'matchFacts' => $payload['facts'] ?? [],
+            'highlights' => $payload['highlights'] ?? [],
+            'liveBatters' => $liveBatters,
+            'liveBowler' => $liveBowler,
+            'liveBowlers' => $liveBowlers,
+            'pollSeconds' => $pollSeconds,
+        ];
     }
 
     /**

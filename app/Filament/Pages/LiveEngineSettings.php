@@ -33,16 +33,16 @@ class LiveEngineSettings extends Page
             'polling_interval_seconds' => LiveEngineConfig::pollingInterval(),
 
             // Social media links & toggles
-            'social_telegram_url' => LiveEngineConfig::get('social_telegram_url', 'https://t.me/cricwire'),
+            'social_telegram_url' => LiveEngineConfig::get('social_telegram_url', 'https://t.me/cricwireofficial'),
             'social_telegram_enabled' => filter_var(LiveEngineConfig::get('social_telegram_enabled', '1'), FILTER_VALIDATE_BOOLEAN),
 
-            'social_instagram_url' => LiveEngineConfig::get('social_instagram_url', 'https://instagram.com/cricwire'),
+            'social_instagram_url' => LiveEngineConfig::get('social_instagram_url', 'https://instagram.com/cricwire.in'),
             'social_instagram_enabled' => filter_var(LiveEngineConfig::get('social_instagram_enabled', '0'), FILTER_VALIDATE_BOOLEAN),
 
             'social_twitter_url' => LiveEngineConfig::get('social_twitter_url', 'https://x.com/cricwire'),
             'social_twitter_enabled' => filter_var(LiveEngineConfig::get('social_twitter_enabled', '0'), FILTER_VALIDATE_BOOLEAN),
 
-            'social_youtube_url' => LiveEngineConfig::get('social_youtube_url', 'https://youtube.com/@cricwire'),
+            'social_youtube_url' => LiveEngineConfig::get('social_youtube_url', 'https://www.youtube.com/@cricwire.official'),
             'social_youtube_enabled' => filter_var(LiveEngineConfig::get('social_youtube_enabled', '0'), FILTER_VALIDATE_BOOLEAN),
 
             'social_facebook_url' => LiveEngineConfig::get('social_facebook_url', 'https://facebook.com/cricwire'),

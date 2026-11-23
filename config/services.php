@@ -59,4 +59,15 @@ return [
         'base_url' => env('RAPIDAPI_BASE_URL', 'https://cricket-live-line1.p.rapidapi.com'),
     ],
 
+    'firebase' => [
+        'credentials' => env('FIREBASE_CREDENTIALS', storage_path('app/firebase/firebase-credentials.json')),
+        'api_key' => env('FIREBASE_WEB_API_KEY', ''),
+        'auth_domain' => env('FIREBASE_WEB_AUTH_DOMAIN', ''),
+        'project_id' => env('FIREBASE_WEB_PROJECT_ID', ''),
+        'storage_bucket' => env('FIREBASE_WEB_STORAGE_BUCKET', ''),
+        'messaging_sender_id' => env('FIREBASE_WEB_MESSAGING_SENDER_ID', ''),
+        'app_id' => env('FIREBASE_WEB_APP_ID', ''),
+        'vapid_key' => env('FIREBASE_WEB_VAPID_KEY', ''),
+    ],
+
 ];

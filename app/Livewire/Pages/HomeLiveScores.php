@@ -5,12 +5,14 @@ namespace App\Livewire\Pages;
 use App\Helpers\CricketMatchFormatter;
 use App\Models\ManagedMatch;
 use App\Services\Cricket\CricketLiveApiService;
-use App\Services\Cricket\StaticJsonCacheWriter;
 use Livewire\Component;
 
 class HomeLiveScores extends Component
 {
     public string $activeTab = 'live';
+    public int $upcomingPage = 1;
+    public int $finishedPage = 1;
+    public int $perPage = 10;
 
     public function setTab(string $tab): void
     {
@@ -20,31 +22,74 @@ class HomeLiveScores extends Component
         }
     }
 
+    public function nextUpcomingPage(): void
+    {
+        $this->upcomingPage++;
+    }
+
+    public function prevUpcomingPage(): void
+    {
+        if ($this->upcomingPage > 1) {
+            $this->upcomingPage--;
+        }
+    }
+
+    public function setUpcomingPage(int $page): void
+    {
+        $this->upcomingPage = max(1, $page);
+    }
+
+    public function nextFinishedPage(): void
+    {
+        $this->finishedPage++;
+    }
+
+    public function prevFinishedPage(): void
+    {
+        if ($this->finishedPage > 1) {
+            $this->finishedPage--;
+        }
+    }
+
+    public function setFinishedPage(int $page): void
+    {
+        $this->finishedPage = max(1, $page);
+    }
+
     public function render(CricketLiveApiService $apiService)
     {
-        // 1. First attempt to read directly from static JSON edge cache (public/live-data/home.json)
-        $homeData = StaticJsonCacheWriter::read('home.json');
-
-        $liveMatches = [];
-        $upcomingMatches = [];
-        $finishedMatches = [];
-
-        if ($homeData && is_array($homeData)) {
-            // Support both top-level and nested 'data' structures
-            $data = isset($homeData['data']) && is_array($homeData['data']) ? $homeData['data'] : $homeData;
-            $liveMatches = $data['live'] ?? [];
-            $upcomingMatches = $data['upcoming'] ?? [];
-            $finishedMatches = $data['recent'] ?? $data['finished'] ?? [];
+        // Track active visitor (skip for search crawlers)
+        if (!request()->attributes->get('is_search_crawler') && !app()->bound('crawler_read_only_mode')) {
+            \Illuminate\Support\Facades\Cache::put('active_site_visitor', now()->timestamp, 120);
         }
 
-        // Fallback to CricketLiveApiService only if empty
-        if (empty($liveMatches) && empty($upcomingMatches) && empty($finishedMatches)) {
-            $liveMatches = $apiService->getLiveMatches();
-            $upcomingMatches = $apiService->getUpcomingMatches();
-            $finishedMatches = $apiService->getRecentMatches();
+        // Direct Fast Real-Time Live Cricket Data backed strictly by Redis / cache
+        $homeData = $apiService->getHomeFromRedis();
+
+        // Also check static public/live-data/home.json if present as fallback or merge source
+        $staticHomeFile = public_path('live-data/home.json');
+        $staticHome = [];
+        if (file_exists($staticHomeFile)) {
+            $decoded = json_decode(@file_get_contents($staticHomeFile), true);
+            if (is_array($decoded)) {
+                $staticHome = $decoded;
+            }
         }
 
-        // 2. Exclude any match where ManagedMatch::where('is_covered', false) has skipped it
+        // Extra safeguard: sanitize and re-classify all source matches using strict bucket rules
+        $rawLive = array_merge($homeData['live'] ?? [], $staticHome['live'] ?? []);
+        $rawUpcoming = array_merge($homeData['upcoming'] ?? [], $staticHome['upcoming'] ?? []);
+        $rawFinished = array_merge(
+            $homeData['recent'] ?? ($homeData['finished'] ?? []),
+            $staticHome['recent'] ?? ($staticHome['finished'] ?? [])
+        );
+
+        $sanitized = CricketLiveApiService::sanitizeMatchBuckets($rawLive, $rawUpcoming, $rawFinished);
+        $liveMatches = $sanitized['live'];
+        $upcomingMatches = $sanitized['upcoming'];
+        $finishedMatches = $sanitized['finished'];
+
+        // Exclude any match where ManagedMatch::where('is_covered', false) has skipped it
         $skippedMatchIds = ManagedMatch::where('is_covered', false)
             ->pluck('match_id')
             ->map(fn ($id) => (int) $id)
@@ -69,10 +114,27 @@ class HomeLiveScores extends Component
         $upcomingMatches = $filterAndFormat($upcomingMatches);
         $finishedMatches = $filterAndFormat($finishedMatches);
 
+        // Pagination bounds calculation
+        $upcomingTotal = count($upcomingMatches);
+        $upcomingTotalPages = max(1, (int) ceil($upcomingTotal / $this->perPage));
+        if ($this->upcomingPage > $upcomingTotalPages) {
+            $this->upcomingPage = $upcomingTotalPages;
+        }
+
+        $finishedTotal = count($finishedMatches);
+        $finishedTotalPages = max(1, (int) ceil($finishedTotal / $this->perPage));
+        if ($this->finishedPage > $finishedTotalPages) {
+            $this->finishedPage = $finishedTotalPages;
+        }
+
+        // Paginated slices for upcoming and finished
+        $paginatedUpcomingMatches = array_slice($upcomingMatches, ($this->upcomingPage - 1) * $this->perPage, $this->perPage);
+        $paginatedFinishedMatches = array_slice($finishedMatches, ($this->finishedPage - 1) * $this->perPage, $this->perPage);
+
         // Selected list based on active tab
         $currentMatches = match ($this->activeTab) {
-            'upcoming' => $upcomingMatches,
-            'finished' => $finishedMatches,
+            'upcoming' => $paginatedUpcomingMatches,
+            'finished' => $paginatedFinishedMatches,
             default => $liveMatches,
         };
 
@@ -86,11 +148,18 @@ class HomeLiveScores extends Component
         return view('livewire.pages.home-live-scores', [
             'activeTab' => $this->activeTab,
             'liveCount' => count($liveMatches),
-            'upcomingCount' => count($upcomingMatches),
-            'finishedCount' => count($finishedMatches),
+            'upcomingCount' => $upcomingTotal,
+            'finishedCount' => $finishedTotal,
             'liveMatches' => $liveMatches,
             'upcomingMatches' => $upcomingMatches,
             'finishedMatches' => $finishedMatches,
+            'paginatedUpcomingMatches' => $paginatedUpcomingMatches,
+            'paginatedFinishedMatches' => $paginatedFinishedMatches,
+            'upcomingPage' => $this->upcomingPage,
+            'upcomingTotalPages' => $upcomingTotalPages,
+            'finishedPage' => $this->finishedPage,
+            'finishedTotalPages' => $finishedTotalPages,
+            'perPage' => $this->perPage,
             'matches' => $currentMatches,
             'seoData' => $seoData,
         ])->layout('layouts.app', [

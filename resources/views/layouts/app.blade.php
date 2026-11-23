@@ -11,9 +11,17 @@
             $pageDesc = $seo['description'] ?? \App\Support\SeoConfig::get('seo_home_description', \App\Support\SeoConfig::DEFAULTS['seo_home_description']);
             $pageKeywords = $seo['keywords'] ?? \App\Support\SeoConfig::get('seo_home_keywords', \App\Support\SeoConfig::DEFAULTS['seo_home_keywords']);
             $canonicalUrl = $seo['canonical'] ?? url()->current();
+            // Clean canonical URL stripping query strings like ?t=, ?_=, and ?autopoll=
+            if (!empty($canonicalUrl)) {
+                $canonicalUrl = strtok($canonicalUrl, '?');
+            }
             $robots = $seo['robots'] ?? 'index, follow';
             $ogType = $seo['og_type'] ?? 'website';
-            $ogImage = $seo['og_image'] ?? asset('icons/cricwire_favicons/android-chrome-512x512.png');
+            $defaultOgImage = file_exists(public_path('images/og-image.png')) ? asset('images/og-image.png') : asset('icons/cricwire_favicons/android-chrome-512x512.png');
+            $ogImage = $seo['og_image'] ?? \App\Support\SeoConfig::get('seo_og_default_image') ?? $defaultOgImage;
+            if ($ogImage && !str_starts_with($ogImage, 'http')) {
+                $ogImage = asset('storage/' . $ogImage);
+            }
             $siteName = \App\Support\SeoConfig::get('seo_org_name', 'Cricwire');
             $googleVerification = \App\Support\SeoConfig::get('google_site_verification');
             $bingVerification = \App\Support\SeoConfig::get('bing_site_verification');
@@ -43,14 +51,25 @@
         <meta property="og:title" content="{{ $pageTitle }}">
         <meta property="og:description" content="{{ $pageDesc }}">
         <meta property="og:image" content="{{ $ogImage }}">
+        <meta property="og:image:secure_url" content="{{ $ogImage }}">
+        <meta property="og:image:width" content="1200">
+        <meta property="og:image:height" content="630">
+        <meta property="og:image:type" content="image/png">
+        <meta property="og:image:alt" content="{{ $pageTitle }}">
         <meta property="og:site_name" content="{{ $siteName }}">
+        <meta property="og:locale" content="{{ str_replace('-', '_', app()->getLocale()) }}">
 
         <!-- Twitter Card -->
         <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:site" content="@cricwire">
+        <meta name="twitter:creator" content="@cricwire">
         <meta name="twitter:url" content="{{ $canonicalUrl }}">
         <meta name="twitter:title" content="{{ $pageTitle }}">
         <meta name="twitter:description" content="{{ $pageDesc }}">
         <meta name="twitter:image" content="{{ $ogImage }}">
+        <meta name="twitter:image:alt" content="{{ $pageTitle }}">
+
+        @stack('meta')
 
         <!-- CricWire Favicons & PWA -->
         <link rel="icon" type="image/x-icon" href="{{ asset('icons/cricwire_favicons/favicon.ico') }}">
@@ -59,8 +78,10 @@
         <link rel="apple-touch-icon" sizes="180x180" href="{{ asset('icons/cricwire_favicons/apple-touch-icon.png') }}">
         <link rel="manifest" href="/manifest.json">
         <meta name="theme-color" content="#020617">
+        <meta name="mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title" content="Cricwire">
 
         <!-- Tailwind CSS CDN fallback & Vite assets -->
         @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
@@ -117,6 +138,12 @@
             {{ $slot ?? '' }}
             @yield('content')
         </div>
+
+        <!-- Push Notification Permission Banner -->
+        <x-push-permission-banner />
+
+        <!-- Cricwire Push Messaging Helper -->
+        <script src="{{ asset('js/cricwire-push.js') }}" defer></script>
 
         @livewireScripts
 

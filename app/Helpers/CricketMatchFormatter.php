@@ -7,6 +7,48 @@ use App\Services\Cricket\CricketLiveApiService;
 class CricketMatchFormatter
 {
     /**
+     * Normalize over strings, strictly rolling over ball .6 to the completed whole over.
+     * e.g., 19.6 -> 20, 12.6 -> 13, 0.6 -> 1, 49.6 -> 50.
+     */
+    public static function normalizeOvers(string|float|int|null $overs): string
+    {
+        if ($overs === null || $overs === '') {
+            return '';
+        }
+        $str = trim((string) $overs);
+        $clean = trim(preg_replace('/\s*ov(?:ers)?\b/i', '', $str));
+        if (preg_match('/^(\d+)\.6$/', $clean, $matches)) {
+            return (string) ((int) $matches[1] + 1);
+        }
+        return $clean;
+    }
+
+    /**
+     * Normalize score strings containing overs in parentheses or suffix, rolling over .6 balls.
+     * e.g., "146/8 (19.6 ov)" -> "146/8 (20 ov)", "61/7 (12.6 ov)" -> "61/7 (13 ov)".
+     */
+    public static function normalizeScoreString(?string $score): string
+    {
+        if ($score === null || $score === '') {
+            return '';
+        }
+        // Match (X.6 ov) or (X.6)
+        $normalized = preg_replace_callback('/\((\d+)\.6(\s*ov)?\)/i', function ($matches) {
+            $next = (int) $matches[1] + 1;
+            $suffix = !empty($matches[2]) ? $matches[2] : ' ov';
+            return "({$next}{$suffix})";
+        }, $score);
+
+        // Also replace bare X.6 ov outside parentheses if present
+        $normalized = preg_replace_callback('/(?<=\s|^)(\d+)\.6\s*ov\b/i', function ($matches) {
+            $next = (int) $matches[1] + 1;
+            return "{$next} ov";
+        }, $normalized);
+
+        return $normalized;
+    }
+
+    /**
      * Normalize every match item so that ALL score, over, team, status, and date keys
      * are guaranteed to exist on every match array passed to views and components.
      */
@@ -40,25 +82,35 @@ class CricketMatchFormatter
         $overB = (string) ($m['team_b_over'] ?? $m['over_b'] ?? '');
 
         // If score string contains formatted overs e.g. "109/4 (9.6 ov)", separate them cleanly
+        // For combined scores with '&' (e.g. Test matches "434-9 d & 61-1" or "400/10 (101.2 ov) & 168/10 (55.3 ov)"),
+        // preserve the entire combined multi-innings score string without truncating it.
         $scoreA = $rawScoreA;
-        if (preg_match('/^(.*?)\s*\(([0-9.]+(?:\s*ov)?)\)$/i', trim($rawScoreA), $mA)) {
-            $scoreA = trim($mA[1]);
-            if ($overA === '') {
-                $overA = $mA[2];
+        if (!str_contains($rawScoreA, '&')) {
+            if (preg_match('/^(.*?)\s*\(([0-9.]+(?:\s*ov)?)\)$/i', trim($rawScoreA), $mA)) {
+                $scoreA = trim($mA[1]);
+                if ($overA === '') {
+                    $overA = $mA[2];
+                }
             }
         }
 
         $scoreB = $rawScoreB;
-        if (preg_match('/^(.*?)\s*\(([0-9.]+(?:\s*ov)?)\)$/i', trim($rawScoreB), $mB)) {
-            $scoreB = trim($mB[1]);
-            if ($overB === '') {
-                $overB = $mB[2];
+        if (!str_contains($rawScoreB, '&')) {
+            if (preg_match('/^(.*?)\s*\(([0-9.]+(?:\s*ov)?)\)$/i', trim($rawScoreB), $mB)) {
+                $scoreB = trim($mB[1]);
+                if ($overB === '') {
+                    $overB = $mB[2];
+                }
             }
         }
 
-        // Clean over strings so they don't have redundant "ov"
-        $cleanOverA = preg_replace('/\s*ov\b/i', '', $overA);
-        $cleanOverB = preg_replace('/\s*ov\b/i', '', $overB);
+        // Clean over strings and normalize .6 rollover
+        $cleanOverA = self::normalizeOvers(preg_replace('/\s*ov\b/i', '', $overA));
+        $cleanOverB = self::normalizeOvers(preg_replace('/\s*ov\b/i', '', $overB));
+        $scoreA = self::normalizeScoreString($scoreA);
+        $scoreB = self::normalizeScoreString($scoreB);
+        $rawScoreA = self::normalizeScoreString($rawScoreA);
+        $rawScoreB = self::normalizeScoreString($rawScoreB);
 
         // State / Status / Result
         $state = (string) ($m['state'] ?? $m['raw']['state'] ?? '');

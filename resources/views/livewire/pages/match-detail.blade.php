@@ -1,30 +1,31 @@
-<script src="{{ asset('js/match-detail-engine.js') }}"></script>
-
 <div 
     class="min-h-screen bg-slate-950 text-slate-100 pb-24 font-sans antialiased flex flex-col selection:bg-rose-500 selection:text-white transition-all duration-300"
     :class="{ 'ring-2 ring-amber-400': isFlashing }"
-    x-data="matchDetailEngine({ matchId: '{{ $matchId }}', pollSeconds: {{ (int) ($pollSeconds ?? 10) }} })"
+    x-data="matchDetailEngine({ matchId: '{{ $matchId }}', tab: '{{ $tab }}', isLive: {{ (!empty($isLive) && empty($isCompleted)) ? 'true' : 'false' }}, isFinished: {{ (!empty($isFinished) || !empty($isCompleted)) ? 'true' : 'false' }}, pollSeconds: {{ $pollSeconds ?? 10 }}, pollMs: {{ ($pollSeconds ?? 10) * 1000 }}, isLocal: @js(app()->environment('local')), allowPolling: {{ empty($isCompleted) ? 'true' : 'false' }}, live: { batsman: @js(array_values(array_slice($liveBatters ?? [], 0, 2))), bowler: @js(array_values(array_slice($liveBowlers ?? [], 0, 2))) } })"
 >
+    <script src="{{ asset('js/match-detail-engine.js') }}"></script>
+
     @php
-        // Unified Score Resolution (Never empty!)
-        $scoreA = $match['team_a_scores'] ?? $match['score_a'] ?? $match['team_a_score'] ?? $liveInfo['team_a_scores'] ?? $liveInfo['score_a'] ?? $liveInfo['team_a_score'] ?? '';
-        $scoreB = $match['team_b_scores'] ?? $match['score_b'] ?? $match['team_b_score'] ?? $liveInfo['team_b_scores'] ?? $liveInfo['score_b'] ?? $liveInfo['team_b_score'] ?? '';
-        $combinedScore = $match['score'] ?? $liveInfo['score'] ?? '';
+        // Unified Score Resolution (Normalized, Never empty!)
+        $scoreA = \App\Helpers\CricketMatchFormatter::normalizeScoreString($match['team_a_scores'] ?? $match['score_a'] ?? $match['team_a_score'] ?? $liveInfo['team_a_scores'] ?? $liveInfo['score_a'] ?? $liveInfo['team_a_score'] ?? '');
+        $scoreB = \App\Helpers\CricketMatchFormatter::normalizeScoreString($match['team_b_scores'] ?? $match['score_b'] ?? $match['team_b_score'] ?? $liveInfo['team_b_scores'] ?? $liveInfo['score_b'] ?? $liveInfo['team_b_score'] ?? '');
+        $combinedScore = \App\Helpers\CricketMatchFormatter::normalizeScoreString($match['score'] ?? $liveInfo['score'] ?? '');
 
         // Merge match detail with liveInfo fallback
         $teamAName = $match['team_a'] ?? $liveInfo['team_a'] ?? 'Team A';
         $teamAShort = $match['team_a_short'] ?? $liveInfo['team_a_short'] ?? substr($teamAName, 0, 3);
         $teamAImg = $match['team_a_img'] ?? $liveInfo['team_a_img'] ?? '';
         $teamAScores = $scoreA;
-        $teamAOver = $liveInfo['team_a_over'] ?? $match['team_a_over'] ?? '';
+        $teamAOver = \App\Helpers\CricketMatchFormatter::normalizeOvers($liveInfo['team_a_over'] ?? $match['team_a_over'] ?? '');
 
         $teamBName = $match['team_b'] ?? $liveInfo['team_b'] ?? 'Team B';
         $teamBShort = $match['team_b_short'] ?? $liveInfo['team_b_short'] ?? substr($teamBName, 0, 3);
         $teamBImg = $match['team_b_img'] ?? $liveInfo['team_b_img'] ?? '';
         $teamBScores = $scoreB;
-        $teamBOver = $liveInfo['team_b_over'] ?? $match['team_b_over'] ?? '';
+        $teamBOver = \App\Helpers\CricketMatchFormatter::normalizeOvers($liveInfo['team_b_over'] ?? $match['team_b_over'] ?? '');
 
         $series = $match['series'] ?? $liveInfo['series'] ?? $match['series_name'] ?? 'Cricket Series';
+        $seriesSlug = \App\Helpers\CricketSlugHelper::makeSeriesSlug($match);
         $matchs = $match['matchs'] ?? $liveInfo['matchs'] ?? $match['match_desc'] ?? 'Match';
         $venue = $match['venue'] ?? $liveInfo['venue'] ?? 'Venue info';
         $place = $match['place'] ?? $liveInfo['place'] ?? '';
@@ -35,7 +36,7 @@
         $referee = $match['referee'] ?? $liveInfo['referee'] ?? '';
         $manOfMatch = $match['man_of_match_player'] ?? $match['man_of_match'] ?? '';
         $result = $match['result'] ?? $liveInfo['result'] ?? $match['status'] ?? $match['state'] ?? '';
-        $needRunBall = $liveInfo['need_run_ball'] ?? $match['need_run_ball'] ?? '';
+        $needRunBall = $liveInfo['trail_lead'] ?? $match['trail_lead'] ?? $liveInfo['need_run_ball'] ?? $match['need_run_ball'] ?? '';
         $matchDate = $match['match_date'] ?? $liveInfo['match_date'] ?? 'Upcoming';
         $matchTime = $match['match_time'] ?? $liveInfo['match_time'] ?? '';
         $dateTimeRaw = $match['date_time'] ?? $liveInfo['date_time'] ?? null;
@@ -135,6 +136,20 @@
         $currInningWkts = (int) ($activeInningTeam['wicket'] ?? $activeInningData['wickets'] ?? 0);
         $currInningOverStr = (string) ($activeInningTeam['over'] ?? $activeInningData['overs'] ?? '0.0');
 
+        // Fallback: If active inning score/overs are empty, extract from scoreA / scoreB / combinedScore (e.g., "TAS 288/6 (89.6 ov)")
+        if ($currInningScore === 0 && ($currInningOverStr === '0.0' || empty($currInningOverStr))) {
+            $rawScoreToParse = $scoreA ?: ($scoreB ?: $combinedScore);
+            if (!empty($rawScoreToParse) && preg_match('/(\d+)(?:\/(\d+))?\s*(?:\(([\d\.]+)(?:\s*ov)?\))?/i', $rawScoreToParse, $mScore)) {
+                $currInningScore = (int) $mScore[1];
+                if (isset($mScore[2]) && $mScore[2] !== '') {
+                    $currInningWkts = (int) $mScore[2];
+                }
+                if (isset($mScore[3]) && $mScore[3] !== '') {
+                    $currInningOverStr = (string) $mScore[3];
+                }
+            }
+        }
+
         // Target and Requirement Calculation
         $targetVal = null;
         $runsNeededVal = null;
@@ -150,10 +165,10 @@
         $formatOvers = str_contains($matchTypeStr, 'T20') ? 20 : (str_contains($matchTypeStr, 'ODI') ? 50 : 50);
         $totalMaxBalls = $formatOvers * 6;
 
-        // Parse balls bowled from current over string (e.g., "4.4" => 4*6 + 4 = 28)
-        $overParts = explode('.', $currInningOverStr);
-        $compOvers = (int)($overParts[0] ?? 0);
-        $extraBalls = (int)($overParts[1] ?? 0);
+        // Parse balls bowled from current over string (e.g., "89.6 ov" => 89*6 + 6 = 540)
+        preg_match('/(\d+)(?:\.(\d+))?/', $currInningOverStr, $mOvers);
+        $compOvers = (int) ($mOvers[1] ?? 0);
+        $extraBalls = (int) ($mOvers[2] ?? 0);
         $ballsBowled = ($compOvers * 6) + $extraBalls;
 
         if ($ballsBowled > 0) {
@@ -162,27 +177,41 @@
             $crrVal = '0.00';
         }
 
-        if ($currentInningNum >= 2) {
-            // Target from 1st inning or liveInfo
+        $isSecondInnings = (count($scorecardData) >= 2) || (!empty($scoreB) && !empty($scoreA)) || ((int)($liveInfo['current_inning'] ?? $match['current_inning'] ?? 1) >= 2) || preg_match('/need\s+(\d+)\s+runs/i', (string)($needRunBall ?: ($liveInfo['need_run_ball'] ?? '')));
+
+        if ($isSecondInnings || $currentInningNum >= 2) {
+            // Target from 1st inning or liveInfo / match
             if (!empty($liveInfo['target']) && is_numeric($liveInfo['target'])) {
                 $targetVal = (int) $liveInfo['target'];
+            } elseif (!empty($match['target']) && is_numeric($match['target'])) {
+                $targetVal = (int) $match['target'];
+            } elseif (!empty($scorecardData[0]['score']) && preg_match('/^(\d+)/', (string)$scorecardData[0]['score'], $mInn1)) {
+                $targetVal = ((int)$mInn1[1]) + 1;
+            } elseif (!empty($scoreA) && preg_match('/^(\d+)/', (string)$scoreA, $mScA)) {
+                $targetVal = ((int)$mScA[1]) + 1;
             } elseif (isset($scorecardData['1']['team']['score'])) {
                 $targetVal = ((int) $scorecardData['1']['team']['score']) + 1;
             } elseif (!empty($liveInfo['team_a_score']['1']['score'])) {
                 $targetVal = ((int) $liveInfo['team_a_score']['1']['score']) + 1;
             }
 
-            // Fallback: parse target from need_run_ball string (e.g., "India NEED 115 RUNS IN 42.2 OVERS TO WIN")
-            $needRunBallText = $needRunBall ?: ($liveInfo['need_run_ball'] ?? '');
-            if (!$targetVal && preg_match('/NEED\s+(\d+)\s+RUNS/i', $needRunBallText, $mNeed)) {
+            // Fallback: parse target from need_run_ball / status string (e.g., "Zimbabwe Women need 81 runs in 36 balls")
+            $needRunBallText = $needRunBall ?: ($liveInfo['need_run_ball'] ?? ($match['status_note'] ?? ($match['status'] ?? '')));
+            if (preg_match('/need\s+(\d+)\s+runs/i', $needRunBallText, $mNeed)) {
                 $runsNeededVal = (int) $mNeed[1];
-                $targetVal = $currInningScore + $runsNeededVal;
+                if (!$targetVal && $currInningScore > 0) {
+                    $targetVal = $currInningScore + $runsNeededVal;
+                }
             }
 
             if ($targetVal) {
-                $runsNeededVal = max(0, $targetVal - $currInningScore);
+                if ($runsNeededVal === null) {
+                    $runsNeededVal = max(0, $targetVal - $currInningScore);
+                }
                 $ballsRemVal = max(0, $totalMaxBalls - $ballsBowled);
-                if (preg_match('/IN\s+([\d\.]+)\s+OVERS/i', $needRunBallText, $mOv)) {
+                if (preg_match('/in\s+(\d+)\s+balls/i', $needRunBallText, $mBalls)) {
+                    $ballsRemVal = (int) $mBalls[1];
+                } elseif (preg_match('/in\s+([\d\.]+)\s+ov/i', $needRunBallText, $mOv)) {
                     $ovParts = explode('.', $mOv[1]);
                     $ballsRemVal = (((int)($ovParts[0] ?? 0)) * 6) + ((int)($ovParts[1] ?? 0));
                 }
@@ -202,8 +231,8 @@
         }
 
         // Live Batters (Striker and Non-Striker)
-        $liveBatters = $match['live_batters'] ?? [];
-        $liveBowlers = [];
+        $liveBatters = !empty($liveBatters) ? $liveBatters : ($match['live_batters'] ?? $match['batters'] ?? []);
+        $liveBowlers = !empty($liveBowlers) ? $liveBowlers : ($match['live_bowlers'] ?? $match['bowler'] ?? []);
         $lastWicket = null;
 
         if (empty($liveBatters) && $activeInningData) {
@@ -250,7 +279,7 @@
             }
 
             // Bowlers: Pick only active bowler (1 or at most 2 for live line tab)
-            $allBowlers = $activeInningData['bowlers'] ?? $activeInningData['bolwer'] ?? $activeInningData['bowler'] ?? [];
+            $allBowlers = $activeInningData['bowlers'] ?? $activeInningData['bowler'] ?? $activeInningData['bolwer'] ?? [];
             $liveBowlers = $allBowlers;
         }
 
@@ -303,7 +332,8 @@
             's_min' => $sessionMin,
             's_max' => $sessionMax,
             'batsman' => array_values(array_slice($liveBatters, 0, 2)),
-            'bolwer' => array_values($activeBowlerList),
+            'batters' => array_values(array_slice($liveBatters, 0, 2)),
+            'bowler' => array_values($activeBowlerList),
             'recent_balls' => array_values(array_slice($allCommentaryItems, 0, 12)),
             'last_wicket' => $lastWicket,
         ];
@@ -377,13 +407,30 @@
             <div class="flex items-center space-x-2 truncate">
                 <a href="/" wire:navigate class="hover:text-amber-400 transition shrink-0">Home</a>
                 <span>/</span>
-                <a href="{{ route('schedule') }}" wire:navigate class="hover:text-amber-400 transition truncate hidden sm:inline">{{ $series }}</a>
+                <a href="{{ route('series.detail', ['seriesSlug' => $seriesSlug, 'tab' => 'matches']) }}" wire:navigate class="hover:text-amber-400 transition truncate hidden sm:inline">{{ $series }}</a>
                 <span class="hidden sm:inline">/</span>
                 <span class="text-amber-400 font-semibold truncate">{{ $teamAShort }} vs {{ $teamBShort }} ({{ strtoupper($tab) }})</span>
             </div>
-            <div class="flex items-center space-x-1.5 text-[11px] text-slate-400 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800 shrink-0">
-                <span class="w-2 h-2 rounded-full {{ $isLive ? 'bg-rose-500 animate-ping' : 'bg-emerald-400' }}"></span>
-                <span class="font-mono">{{ $isLive ? 'LIVE FEED' : 'IST (UTC+5:30)' }}</span>
+            <div class="flex items-center space-x-2">
+                <!-- User Inactivity Auto-Pause Pill -->
+                <button 
+                    type="button" 
+                    x-show="isInactivePaused" 
+                    @click="resumeFromInactivity()" 
+                    x-cloak 
+                    class="flex items-center space-x-1.5 text-[11px] font-semibold text-amber-300 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 px-2.5 py-1 rounded-lg transition active:scale-95 shadow-sm animate-pulse"
+                >
+                    <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                    <span>Live updates paused (Inactive) — Tap to resume</span>
+                </button>
+
+                <div class="flex items-center space-x-1.5 text-[11px] text-slate-400 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800 shrink-0">
+                    <span class="w-2 h-2 rounded-full {{ $isLive ? 'bg-rose-500 animate-ping' : 'bg-emerald-400' }}"></span>
+                    <span class="font-mono" x-show="!live.match_id">{{ $isLive ? 'LIVE FEED' : 'IST (UTC+5:30)' }}</span>
+                    <span class="font-mono text-emerald-400 font-semibold" x-show="live.match_id" x-cloak>
+                        ● Live • Updated: <span x-text="lastUpdatedTimeStr">--:--:--</span> (<span x-text="lastUpdatedAgo">just now</span>)
+                    </span>
+                </div>
             </div>
         </div>
     </nav>
@@ -399,71 +446,110 @@
         <!-- LIVE MATCH SCREEN (CRICKET LINE GURU STYLE)-->
         <!-- ========================================== -->
         <div class="p-3 space-y-3">
-            <!-- 1. Top Matte Black Live Box -->
-            <div class="bg-black rounded-2xl p-4 border border-slate-800 text-center relative shadow-2xl overflow-hidden">
-                <!-- Sound Toggle on Top-Left -->
-                <button 
-                    type="button" 
-                    @click="soundEnabled = !soundEnabled" 
-                    class="absolute top-3 left-3 p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white transition active:scale-95"
-                    aria-label="Toggle Commentary Sound"
-                >
-                    <span x-show="soundEnabled" class="text-xs">🔊</span>
-                    <span x-show="!soundEnabled" class="text-xs opacity-50">🔇</span>
-                </button>
+            <!-- 1. Top Matte Black Live Box (TV Broadcast Scoreboard Style) -->
+            <div 
+                class="bg-[#050811] rounded-2xl border p-2.5 sm:p-4 shadow-xl relative overflow-hidden transition-all duration-300"
+                :class="{
+                    'border-slate-800/90': !isFlashing,
+                    'border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.6)]': isFlashing && flashColor === 'blue',
+                    'border-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.6)]': isFlashing && flashColor === 'emerald',
+                    'border-rose-500 shadow-[0_0_30px_rgba(244,63,94,0.6)]': isFlashing && flashColor === 'red',
+                    'border-amber-400 shadow-[0_0_30px_rgba(251,191,36,0.6)]': isFlashing && flashColor === 'amber'
+                }"
+            >
+                <!-- Top Row: Sound Toggle, Match Title, Live Pill -->
+                <div class="flex items-center justify-between gap-2 mb-2 sm:mb-3">
+                    <!-- Left: Compact Sound Toggle -->
+                    <button 
+                        type="button" 
+                        @click="soundEnabled = !soundEnabled" 
+                        class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white transition active:scale-95 flex items-center justify-center shrink-0"
+                        aria-label="Toggle Commentary Sound"
+                    >
+                        <span x-show="soundEnabled" class="text-xs">🔊</span>
+                        <span x-show="!soundEnabled" class="text-xs opacity-50">🔇</span>
+                    </button>
 
-                <!-- Live Badge on Top-Right -->
-                <div class="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/20 text-rose-400 border border-rose-500/30">
-                    <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
-                    <span>Live</span>
+                    <!-- Center: Crisp Compact Match Title -->
+                    <div class="text-[10px] sm:text-xs font-bold tracking-wider text-slate-400 truncate uppercase text-center flex-1 px-1">
+                        {{ $matchs }} • <a href="{{ route('series.detail', ['seriesSlug' => $seriesSlug, 'tab' => 'matches']) }}" wire:navigate class="hover:text-amber-400 transition underline-offset-2 hover:underline">{{ $series }}</a>
+                    </div>
+
+                    <!-- Right: Sleek TV-style LIVE pill -->
+                    <div class="px-2 py-0.5 rounded-full bg-rose-950/90 border border-rose-500/40 text-rose-400 text-[10px] sm:text-xs font-black tracking-wider flex items-center gap-1 shrink-0">
+                        <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
+                        <span>LIVE</span>
+                    </div>
                 </div>
 
-                <!-- Match Label -->
-                <div class="text-[10px] uppercase font-bold tracking-widest text-slate-500 mt-1 mb-2">
-                    {{ $matchs }} • {{ $series }}
-                </div>
-
-                <!-- Large Centered Ball Indicator -->
-                <div class="py-2 flex items-center justify-center">
-                    <div class="w-16 h-16 rounded-full bg-slate-900 border-2 border-amber-400/80 flex items-center justify-center shadow-[0_0_20px_rgba(245,158,11,0.25)]">
-                        <span class="text-3xl font-black font-mono text-white tracking-tighter" x-text="live.ball_event || live.last_ball_event || live.current_ball || '{{ $currentBall }}'">
+                <!-- TV-Broadcast Center Event Pill & Status -->
+                <div class="py-1 sm:py-2 flex flex-col items-center justify-center">
+                    <div 
+                        class="w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-slate-950 border-2 transition-all duration-300 flex items-center justify-center mx-auto"
+                        :class="{
+                            'border-amber-400/80 shadow-[0_0_15px_rgba(251,191,36,0.25)]': !isFlashing,
+                            'border-blue-400 ring-4 ring-blue-500/70 shadow-[0_0_25px_rgba(59,130,246,0.8)] scale-110 animate-bounce': isFlashing && flashColor === 'blue',
+                            'border-emerald-400 ring-4 ring-emerald-500/70 shadow-[0_0_25px_rgba(16,185,129,0.8)] scale-110 animate-bounce': isFlashing && flashColor === 'emerald',
+                            'border-rose-500 ring-4 ring-rose-500/70 shadow-[0_0_25px_rgba(244,63,94,0.8)] scale-110 animate-bounce': isFlashing && flashColor === 'red',
+                            'border-amber-400 ring-4 ring-amber-500/70 shadow-[0_0_25px_rgba(251,191,36,0.8)] scale-110 animate-pulse': isFlashing && flashColor === 'amber'
+                        }"
+                    >
+                        <span class="text-base sm:text-xl font-black font-mono text-white leading-none tracking-tighter" x-text="live.ball_event || live.last_ball_event || live.current_ball || '{{ $currentBall }}'">
                             {{ $currentBall }}
                         </span>
                     </div>
-                </div>
 
-                <!-- Live Ball Outcome / Event Label -->
-                <div class="text-xs font-bold text-amber-400 mt-1 mb-3 animate-pulse">
-                    @if($isTossPending && $isUpcoming)
-                        Toss Pending
-                    @else
-                        <span x-text="live.need_run_ball || '{{ $needRunBall ?: 'Ball in Progress' }}'">{{ $needRunBall ?: 'Ball in Progress' }}</span>
-                    @endif
-                </div>
-
-                <!-- Bottom Score Bar inside the box -->
-                <div class="bg-slate-950/90 rounded-xl p-2.5 border border-slate-800/90 flex items-center justify-between text-xs font-mono">
-                    <div class="text-left">
-                        <span class="font-bold text-slate-200 block text-xs">{{ $teamAShort }}</span>
-                        <span class="text-sm font-black text-white" x-text="live.score_a || live.team_a_scores || live.team_a_score || '{{ $scoreA ?: ($combinedScore ?: 'Yet to Bat') }}'">{{ $scoreA ?: ($combinedScore ?: 'Yet to Bat') }}</span>
-                        <span class="text-[10px] text-slate-400" x-show="live.team_a_over || '{{ $teamAOver }}'" x-text="'(' + (live.team_a_over || '{{ $teamAOver }}') + ')'">@if($teamAOver)({{ $teamAOver }})@endif</span>
+                    <!-- Status text right below -->
+                    <div class="text-[11px] sm:text-xs font-bold text-amber-400 mt-1.5 text-center truncate max-w-full px-2">
+                        @if($isTossPending && $isUpcoming)
+                            Toss Pending
+                        @else
+                            <span x-text="live.need_run_ball || '{{ $needRunBall ?: 'Ball in Progress' }}'">{{ $needRunBall ?: 'Ball in Progress' }}</span>
+                        @endif
                     </div>
-                    <div class="text-center px-2">
-                        <span class="text-slate-600 font-bold font-sans text-xs block">VS</span>
+                </div>
+
+                <!-- TV Score Strip (Bottom Score Bar Inside Card) -->
+                <div class="mt-2.5 sm:mt-3 bg-slate-900/90 border border-slate-800/80 rounded-xl px-3 py-2 sm:px-4 sm:py-2.5 flex items-center justify-between gap-2">
+                    <!-- Left Team (Team A) -->
+                    <div class="text-left min-w-0">
+                        <div class="flex items-center gap-1.5 truncate">
+                            <span class="text-[11px] sm:text-xs font-bold text-slate-300 uppercase truncate">{{ $teamAShort }}</span>
+                            <span class="text-[10px] text-slate-400 font-medium truncate hidden sm:inline" title="{{ $teamAName }}">({{ $teamAName }})</span>
+                        </div>
+                        <span class="text-[9px] text-slate-400 font-medium block truncate max-w-[120px] sm:hidden" title="{{ $teamAName }}">{{ $teamAName }}</span>
+                        <div class="text-sm sm:text-base font-black text-white tracking-tight flex items-center gap-1 flex-wrap">
+                            <span x-text="live.score_a || live.team_a_scores || live.team_a_score || '{{ $scoreA ?: ($combinedScore ?: 'Yet to Bat') }}'">{{ $scoreA ?: ($combinedScore ?: 'Yet to Bat') }}</span>
+                            <span class="text-[10px] sm:text-xs font-normal text-slate-400" x-show="live.team_a_over || '{{ $teamAOver }}'" x-text="'(' + (live.team_a_over || '{{ $teamAOver }}') + ' ov)'">@if($teamAOver)({{ $teamAOver }} ov)@endif</span>
+                        </div>
+                    </div>
+
+                    <!-- Center Divider -->
+                    <div class="text-center px-1 shrink-0">
+                        <span class="text-[10px] font-black text-slate-500 px-1.5 py-0.5 rounded bg-slate-950 border border-slate-800">VS</span>
                         <template x-if="!(live.score_a || live.team_a_scores) && !(live.score_b || live.team_b_scores) && (live.score || '{{ $combinedScore }}')">
-                            <span class="inline-block px-2 py-0.5 mt-1 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-bold" x-text="live.score || '{{ $combinedScore }}'">{{ $combinedScore }}</span>
+                            <span class="block px-2 py-0.5 mt-1 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-bold" x-text="live.score || '{{ $combinedScore }}'">{{ $combinedScore }}</span>
                         </template>
                     </div>
-                    <div class="text-right">
-                        <span class="font-bold text-slate-200 block text-xs">{{ $teamBShort }}</span>
-                        <span class="text-sm font-black text-rose-400" x-text="live.score_b || live.team_b_scores || live.team_b_score || '{{ $scoreB ?: 'Yet to Bat' }}'">{{ $scoreB ?: 'Yet to Bat' }}</span>
-                        <span class="text-[10px] text-slate-400" x-show="live.team_b_over || '{{ $teamBOver }}'" x-text="'(' + (live.team_b_over || '{{ $teamBOver }}') + ')'">@if($teamBOver)({{ $teamBOver }})@endif</span>
+
+                    <!-- Right Team (Team B) -->
+                    <div class="text-right min-w-0">
+                        <div class="flex items-center justify-end gap-1.5 truncate">
+                            <span class="text-[10px] text-slate-400 font-medium truncate hidden sm:inline" title="{{ $teamBName }}">({{ $teamBName }})</span>
+                            <span class="text-[11px] sm:text-xs font-bold text-slate-300 uppercase truncate text-right">{{ $teamBShort }}</span>
+                        </div>
+                        <span class="text-[9px] text-slate-400 font-medium block truncate max-w-[120px] sm:hidden text-right ml-auto" title="{{ $teamBName }}">{{ $teamBName }}</span>
+                        <div class="text-sm sm:text-base font-black tracking-tight flex items-center justify-end gap-1 flex-wrap"
+                             :class="(live.score_b || live.team_b_scores || live.team_b_score || '{{ $scoreB }}') ? 'text-amber-400' : 'text-rose-400 text-xs sm:text-sm font-extrabold'">
+                            <span x-text="live.score_b || live.team_b_scores || live.team_b_score || '{{ $scoreB ?: 'Yet to Bat' }}'">{{ $scoreB ?: 'Yet to Bat' }}</span>
+                            <span class="text-[10px] sm:text-xs font-normal text-slate-400" x-show="live.team_b_over || '{{ $teamBOver }}'" x-text="'(' + (live.team_b_over || '{{ $teamBOver }}') + ' ov)'">@if($teamBOver)({{ $teamBOver }} ov)@endif</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- 2. Match Requirement Grid (4-Column Clean Stat Bar) -->
-            @if($currentInningNum >= 2 && $targetVal)
+            @if(($isSecondInnings || $currentInningNum >= 2) && $targetVal)
                 <div class="grid grid-cols-4 gap-2 text-center bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 shadow-md">
                     <div class="border-r border-slate-800/80 pr-1">
                         <span class="text-[9px] uppercase font-semibold text-slate-400 block">Run Needed</span>
@@ -506,23 +592,6 @@
             <!-- 3. Safe Market Rates & Session Cards (Safe Mode Guard) -->
             @if(\App\Helpers\SystemSetting::isMarketRatesEnabled())
                 <div class="space-y-2">
-                    <!-- Fav Team Row -->
-                    <div x-show="(live.fav_team && live.fav_team !== 'Fav') || '{{ $favTeam }}' !== 'Fav'" class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex items-center justify-between shadow-md">
-                        <div class="flex items-center space-x-2">
-                            <span class="text-xs font-bold text-slate-300">Fav Team:</span>
-                            <span class="px-2 py-0.5 rounded bg-slate-800 text-amber-300 font-bold text-xs border border-amber-500/30" x-text="live.fav_team || '{{ $favTeam }}'">
-                                {{ $favTeam }}
-                            </span>
-                        </div>
-                        <div class="flex items-center space-x-2">
-                            <div class="bg-rose-600 text-white font-mono font-black text-xs px-3 py-1.5 rounded-lg shadow-sm text-center min-w-[54px]" title="Min Rate (Back)" x-text="live.min_rate || '{{ $rateMin }}'">
-                                {{ $rateMin }}
-                            </div>
-                            <div class="bg-emerald-600 text-white font-mono font-black text-xs px-3 py-1.5 rounded-lg shadow-sm text-center min-w-[54px]" title="Max Rate (Lay)" x-text="live.max_rate || '{{ $rateMax }}'">
-                                {{ $rateMax }}
-                            </div>
-                        </div>
-                    </div>
 
                     <!-- Dynamic Session Row (Lambi / Over runs) -->
                     <div x-show="live.s_ovr || '{{ $sessionOver }}'" class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 flex items-center justify-between shadow-md">
@@ -566,7 +635,7 @@
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-800/50">
-                                <template x-for="(batter, idx) in (live.batsman || @js(array_values(array_slice($liveBatters, 0, 2))))" :key="idx">
+                                <template x-for="(batter, idx) in ((live.batsman && live.batsman.length) ? live.batsman : @js(array_values(array_slice($liveBatters, 0, 2))))" :key="idx">
                                     <tr :class="idx === 0 ? 'bg-amber-500/5' : ''">
                                         <td class="py-2 font-bold text-white flex items-center gap-1.5">
                                             <span x-text="batter.name || 'Batter'"></span>
@@ -608,19 +677,19 @@
                     @endif
                 </div>
 
-                <!-- Bowler Table (Live Line: Current Bolwer from API) -->
+                <!-- Bowler Table (Live Line: Current & Previous Bowlers) -->
                 @php
                     $activeBowlerList = [];
-                    if (!empty($liveBowler) && is_array($liveBowler) && !empty($liveBowler['name']) && $liveBowler['name'] !== '-') {
-                        $activeBowlerList[] = $liveBowler;
-                    } elseif (!empty($liveBowlers) && is_array($liveBowlers)) {
+                    if (!empty($liveBowlers) && is_array($liveBowlers)) {
                         $activeBowlerList = array_slice($liveBowlers, 0, 2);
+                    } elseif (!empty($liveBowler) && is_array($liveBowler) && !empty($liveBowler['name']) && $liveBowler['name'] !== '-') {
+                        $activeBowlerList[] = $liveBowler;
                     }
                 @endphp
                 <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-md">
                     <div class="text-[11px] font-bold text-cyan-400 uppercase tracking-wider mb-2 flex items-center justify-between">
-                        <span>Current Bowler</span>
-                        <span class="text-[9px] font-normal text-slate-500">● Bowling</span>
+                        <span>Current & Previous Bowler</span>
+                        <span class="text-[9px] font-normal text-slate-500">● Live Bowling Figures</span>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-xs">
@@ -635,12 +704,15 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <template x-for="(bowler, bIdx) in (live.bolwer && live.bolwer.length ? live.bolwer : (live.bowler && live.bowler.length ? live.bowler : (live.bolwer && live.bolwer.name ? [live.bolwer] : (live.bowler && live.bowler.name ? [live.bowler] : @js($activeBowlerList)))))" :key="bIdx">
+                                <template x-for="(bowler, bIdx) in (activeBowlers.length ? activeBowlers : @js(array_values(array_slice($activeBowlerList, 0, 2))))" :key="bIdx">
                                     <tr>
                                         <td class="py-2 font-bold text-white flex items-center gap-1.5">
                                             <span x-text="bowler.name ? bowler.name.trim() : 'Bowler'"></span>
                                             <template x-if="bIdx === 0">
-                                                <span class="w-1.5 h-1.5 rounded-full bg-cyan-400" title="Current bowler"></span>
+                                                <span class="px-1.5 py-0.5 rounded text-[9px] font-black bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">Current</span>
+                                            </template>
+                                            <template x-if="bIdx > 0">
+                                                <span class="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-slate-800 text-slate-400 border border-slate-700/50">Previous</span>
                                             </template>
                                         </td>
                                         <td class="py-2 text-right font-mono text-slate-300" x-text="bowler.overs ?? (bowler.over ?? '0.0')"></td>
@@ -650,7 +722,7 @@
                                         <td class="py-2 text-right font-mono text-cyan-300" x-text="bowler.economy || '0.00'"></td>
                                     </tr>
                                 </template>
-                                <template x-if="!(live.bolwer && live.bolwer.length) && !{{ count($activeBowlerList) }}">
+                                <template x-if="activeBowlers.length === 0 && !{{ count($activeBowlerList) }}">
                                     <tr>
                                         <td colspan="6" class="py-3 text-center text-slate-500 text-xs">No active bowling figures.</td>
                                     </tr>
@@ -673,7 +745,11 @@
                     <h1 class="text-base sm:text-lg font-black text-white">
                         {{ $match['team_a'] ?? $teamAName ?? 'Team A' }} vs {{ $match['team_b'] ?? $teamBName ?? 'Team B' }}, {{ $match['match_stage'] ?? $matchs ?? 'Match' }}
                     </h1>
-                    @if($isTossPending && $isUpcoming)
+                    @if(!empty($managedMatch?->toss_fetched) || (!empty($toss) && !$isTossPending))
+                        <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-black uppercase tracking-wider">
+                            <span>🪙 {{ $managedMatch?->toss_text ?: $toss }}</span>
+                        </div>
+                    @elseif($isTossPending && $isUpcoming)
                         <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-black uppercase tracking-wider">
                             <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
                             <span>🪙 Toss Pending</span>
@@ -685,6 +761,19 @@
                         </div>
                     @endif
                 </div>
+
+                @if(!empty($managedMatch?->toss_fetched) && $isUpcoming)
+                    <!-- Prominent Toss Banner with IST Start Time & Countdown -->
+                    <div class="p-3 rounded-xl bg-gradient-to-r from-amber-500/15 via-emerald-500/15 to-sky-500/15 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-md">
+                        <div class="flex items-center space-x-2 text-xs sm:text-sm font-bold text-amber-300">
+                            <span class="text-base">🪙</span>
+                            <span>{{ $managedMatch->toss_text }}</span>
+                        </div>
+                        <div class="flex items-center space-x-2 text-xs font-semibold text-slate-300">
+                            <span>⏰ Match starts at {{ $managedMatch->start_time_ist ? $managedMatch->start_time_ist->timezone('Asia/Kolkata')->format('h:i A') . ' IST' : ($match['match_time'] ?? 'soon') }}</span>
+                        </div>
+                    </div>
+                @endif
 
                 <div class="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                     <span>Date & Time: <strong class="text-slate-200">{{ $match['match_date'] ?? $matchDate ?? 'Wed, 11 Nov 2026' }} ● {{ $match['match_time'] ?? $matchTime ?? '01:40 PM' }}</strong></span>
@@ -1042,8 +1131,12 @@
                 $tabDefinitions['info'] = 'Info';
             @endphp
             @foreach($tabDefinitions as $tKey => $tLabel)
-                <button wire:click="setTab('{{ $tKey }}')" 
-                        class="shrink-0 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold uppercase transition {{ $tab === $tKey ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20' : 'text-slate-400 hover:text-white hover:bg-slate-800/60' }}">
+                <button type="button" 
+                        wire:key="match-subtab-{{ $tKey }}"
+                        wire:click="setTab('{{ $tKey }}')"
+                        @click="activeTab = '{{ $tKey }}'" 
+                        class="shrink-0 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold uppercase transition cursor-pointer"
+                        :class="activeTab === '{{ $tKey }}' ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20 font-black' : 'text-slate-400 hover:text-white hover:bg-slate-800/60 font-semibold'">
                     {{ $tLabel }}
                 </button>
             @endforeach
@@ -1053,42 +1146,105 @@
     <!-- Tab Content -->
     <main class="flex-1 p-3.5 space-y-3.5">
         @if($tab === 'live-line')
-            <!-- Ball-by-ball Over Bubbles -->
-            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-md">
-                <div class="flex items-center justify-between text-[11px] font-semibold text-slate-400 mb-2">
-                    <span>Recent Over: <strong class="text-white font-bold">This Over</strong></span>
-                    <span class="text-slate-500 font-mono">Ball-by-Ball Live</span>
+            <!-- Ball-by-ball Over Bubbles (Recent Overs & Live Ball Strip) -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-md space-y-3">
+                <div class="flex items-center justify-between text-[11px] font-semibold text-slate-400">
+                    <span class="flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span>Recent Overs: <strong class="text-white font-bold">Ball-by-Ball</strong></span>
+                    </span>
+                    <span class="text-slate-500 font-mono text-[10px] uppercase">Live Over History</span>
                 </div>
-                <div class="flex items-center gap-2 overflow-x-auto py-1">
-                    <template x-for="(cBall, bIndex) in (live.recent_balls && live.recent_balls.length ? live.recent_balls : @js(array_values(array_slice($allCommentaryItems, 0, 8))))" :key="bIndex">
-                        <span class="w-8 h-8 rounded-full border font-mono font-bold flex items-center justify-center shrink-0 shadow-sm text-xs"
-                            :class="{
-                                'bg-rose-600 border-rose-500 text-white animate-pulse shadow-sm shadow-rose-600/50': (cBall.wicket && cBall.wicket != '0'),
-                                'bg-cyan-500/20 border-cyan-400 text-cyan-300 text-[10px] lowercase': ((cBall.wides && cBall.wides != '0') || (cBall.noballs && cBall.noballs != '0')),
-                                'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-sm shadow-emerald-500/20': (String(cBall.runs) === '4'),
-                                'bg-amber-500/20 border-amber-400 text-amber-300 shadow-sm shadow-amber-500/30': (String(cBall.runs) === '6'),
-                                'bg-slate-900 border-slate-700/60 text-slate-400': (String(cBall.runs) === '0' && !cBall.wicket && !cBall.wides && !cBall.noballs),
-                                'bg-slate-800/80 border-slate-700/80 text-slate-200': (String(cBall.runs) !== '4' && String(cBall.runs) !== '6' && String(cBall.runs) !== '0' && !cBall.wicket && !cBall.wides && !cBall.noballs)
-                            }"
-                            x-text="(cBall.wicket && cBall.wicket != '0') ? 'W' : ((cBall.wides && cBall.wides != '0') ? 'wd' : ((cBall.noballs && cBall.noballs != '0') ? 'nb' : (cBall.runs ?? '•')))"
-                            :title="(cBall.overs || '') + ' ov'">
-                        </span>
-                    </template>
-                    <template x-if="!(live.recent_balls && live.recent_balls.length) && !{{ count($allCommentaryItems) }}">
-                        <span class="w-8 h-8 rounded-full bg-slate-900 border border-slate-700/60 text-slate-300 font-mono font-bold text-xs flex items-center justify-center shrink-0 shadow-sm" x-text="live.ball_event || live.current_ball || '{{ $currentBall }}'">
-                            {{ $currentBall }}
-                        </span>
-                    </template>
-                </div>
+
+                @if(!empty($recentOvers))
+                    <!-- Grouped Over-by-Over History List (Latest First) -->
+                    <div class="space-y-2">
+                        @foreach(array_slice($recentOvers, 0, 4) as $oData)
+                            <div class="flex items-center gap-2 overflow-x-auto py-1 border-b border-slate-800/40 pb-2 last:border-b-0 last:pb-0 no-scrollbar">
+                                <div class="shrink-0 flex items-center gap-1.5 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 text-xs">
+                                    <span class="font-bold text-amber-400 font-mono">Ov {{ $oData['over_number'] }}:</span>
+                                    @if(!empty($oData['bowler']))
+                                        <span class="text-slate-400 text-[10px] truncate max-w-[70px]">{{ $oData['bowler'] }}</span>
+                                    @endif
+                                    <span class="font-black text-slate-300 text-[10px] font-mono bg-slate-900 px-1 rounded">{{ $oData['runs_in_over'] ?? 0 }}r</span>
+                                </div>
+                                <div class="flex items-center gap-1.5 shrink-0">
+                                    @foreach($oData['balls'] as $b)
+                                        @php
+                                            $bLabel = is_array($b) ? ($b['label'] ?? '') : (string)$b;
+                                            $bRuns = is_array($b) ? ($b['runs'] ?? 0) : (is_numeric($b) ? (int)$b : 0);
+                                            $isW = is_array($b) ? (!empty($b['wicket']) || $bLabel === 'W') : ($bLabel === 'W');
+                                            $isWd = is_array($b) ? ($bLabel === 'wd') : ($bLabel === 'wd');
+                                            $isNb = is_array($b) ? ($bLabel === 'nb') : ($bLabel === 'nb');
+                                        @endphp
+                                        <span class="w-7 h-7 sm:w-8 sm:h-8 rounded-full border font-mono font-bold flex items-center justify-center shrink-0 shadow-sm text-xs
+                                            {{ $isW ? 'bg-rose-600 border-rose-500 text-white animate-pulse shadow-sm shadow-rose-600/50' : '' }}
+                                            {{ ($isWd || $isNb) ? 'bg-amber-500/20 border-amber-400 text-amber-300 text-[10px] lowercase' : '' }}
+                                            {{ (!$isW && !$isWd && !$isNb && (string)$bLabel === '6') ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-sm shadow-emerald-500/30' : '' }}
+                                            {{ (!$isW && !$isWd && !$isNb && (string)$bLabel === '4') ? 'bg-sky-500/20 border-sky-400 text-sky-300 shadow-sm shadow-sky-500/20' : '' }}
+                                            {{ (!$isW && !$isWd && !$isNb && ((string)$bLabel === '0' || $bLabel === '•')) ? 'bg-slate-900 border-slate-700/60 text-slate-400' : '' }}
+                                            {{ (!$isW && !$isWd && !$isNb && in_array((string)$bLabel, ['1','2','3','5'], true)) ? 'bg-slate-800/80 border-slate-700/80 text-slate-200' : '' }}
+                                        ">
+                                            {{ $bLabel ?: '•' }}
+                                        </span>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @else
+                    <!-- Fallback: Dynamic Ball-by-Ball Strip from Realtime Live / Commentary Items -->
+                    <div class="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar">
+                        <template x-for="(cBall, bIndex) in (live.recent_balls && live.recent_balls.length ? live.recent_balls : @js(array_values(array_slice($allCommentaryItems, 0, 12))))" :key="bIndex">
+                            <span class="w-7 h-7 sm:w-8 sm:h-8 rounded-full border font-mono font-bold flex items-center justify-center shrink-0 shadow-sm text-xs"
+                                :class="{
+                                    'bg-rose-600 border-rose-500 text-white animate-pulse shadow-sm shadow-rose-600/50': (cBall.wicket && cBall.wicket != '0'),
+                                    'bg-amber-500/20 border-amber-400 text-amber-300 text-[10px] lowercase': ((cBall.wides && cBall.wides != '0') || (cBall.noballs && cBall.noballs != '0')),
+                                    'bg-sky-500/20 border-sky-400 text-sky-300 shadow-sm shadow-sky-500/20': (String(cBall.runs) === '4'),
+                                    'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-sm shadow-emerald-500/30': (String(cBall.runs) === '6'),
+                                    'bg-slate-900 border-slate-700/60 text-slate-400': (String(cBall.runs) === '0' && !cBall.wicket && !cBall.wides && !cBall.noballs),
+                                    'bg-slate-800/80 border-slate-700/80 text-slate-200': (String(cBall.runs) !== '4' && String(cBall.runs) !== '6' && String(cBall.runs) !== '0' && !cBall.wicket && !cBall.wides && !cBall.noballs)
+                                }"
+                                x-text="(cBall.wicket && cBall.wicket != '0') ? 'W' : ((cBall.wides && cBall.wides != '0') ? 'wd' : ((cBall.noballs && cBall.noballs != '0') ? 'nb' : (cBall.runs ?? '•')))"
+                                :title="(cBall.overs || '') + ' ov'">
+                            </span>
+                        </template>
+                        <template x-if="!(live.recent_balls && live.recent_balls.length) && !{{ count($allCommentaryItems) }}">
+                            <span class="w-8 h-8 rounded-full bg-slate-900 border border-slate-700/60 text-slate-300 font-mono font-bold text-xs flex items-center justify-center shrink-0 shadow-sm" x-text="live.ball_event || live.current_ball || '{{ $currentBall }}'">
+                                {{ $currentBall }}
+                            </span>
+                        </template>
+                    </div>
+                @endif
             </div>
 
         @elseif($tab === 'scorecard')
             <!-- SCORECARD TAB -->
             <div class="space-y-4">
-                @forelse($scorecardData as $inKey => $inning)
+                @php
+                    // Ensure all innings (e.g. 1, 2, 3, 4 for 4-innings Test matches) are iterated properly
+                    $resolvedScorecard = [];
+                    if (!empty($scorecardData) && is_array($scorecardData)) {
+                        // Check if scorecardData has a nested 'innings' key
+                        $inningsSource = isset($scorecardData['innings']) && is_array($scorecardData['innings'])
+                            ? $scorecardData['innings']
+                            : $scorecardData;
+
+                        // Normalize numeric or 1-based / 0-based keys into an array with continuous 1-based indexing for display
+                        $idx = 1;
+                        foreach ($inningsSource as $key => $inn) {
+                            if (!is_array($inn)) continue;
+                            // Skip non-inning associative metadata
+                            if (in_array((string)$key, ['match_header', 'match_id', 'raw'], true)) continue;
+                            $resolvedScorecard[$idx] = $inn;
+                            $idx++;
+                        }
+                    }
+                @endphp
+                @forelse($resolvedScorecard as $inKey => $inning)
                     @php
                         $inTeam = $inning['team'] ?? [];
-                        $inTeamName = $inning['bat_team'] ?? $inTeam['name'] ?? $inTeam['short_name'] ?? $inning['bat_team_short'] ?? "Inning {$inKey}";
+                        $inTeamName = $inning['bat_team'] ?? $inTeam['name'] ?? $inTeam['short_name'] ?? $inning['bat_team_short'] ?? "Innings {$inKey}";
                         $inScore = $inTeam['score'] ?? $inning['score'] ?? 0;
                         $inWkts = $inTeam['wicket'] ?? $inning['wickets'] ?? 0;
                         $inOver = $inTeam['over'] ?? $inning['overs'] ?? '0.0';
@@ -1097,17 +1253,20 @@
                         $inBowlers = $inning['bowlers'] ?? $inning['bolwer'] ?? $inning['bowler'] ?? [];
                         $inFallWickets = $inning['fall_of_wickets'] ?? $inning['fallwicket'] ?? [];
                         $inPartnerships = $inning['partnerships'] ?? $inning['partnership'] ?? [];
+                        $isDeclared = !empty($inTeam['test_declare']) || !empty($inTeam['is_declared']) || !empty($inning['is_declared']) || !empty($inning['is_declare']);
                     @endphp
                     <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-md space-y-3.5">
                         <div class="flex items-center justify-between pb-2.5 border-b border-slate-800">
                             <h3 class="text-xs sm:text-sm font-black text-white uppercase tracking-wide flex items-center gap-2">
-                                @if(!empty($inTeam['flag']))
-                                    <img src="{{ $inTeam['flag'] }}" class="w-5 h-5 rounded-full object-cover" onerror="this.style.display='none'">
+                                @if(!empty($inTeam['flag']) || !empty($inTeam['team_image_url']))
+                                    <img src="{{ $inTeam['flag'] ?? $inTeam['team_image_url'] }}" class="w-5 h-5 rounded-full object-cover" onerror="this.style.display='none'">
                                 @endif
                                 <span>{{ $inTeamName }}</span>
                                 <span class="text-slate-500">•</span>
+                                <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Innings {{ $inKey }}</span>
+                                <span class="text-slate-500">•</span>
                                 <span class="text-amber-400 font-mono">{{ is_numeric($inScore) ? "{$inScore}/{$inWkts}" : $inScore }}</span>
-                                @if(!empty($inTeam['test_declare']) || !empty($inning['is_declared']))
+                                @if($isDeclared)
                                     <span class="text-[9px] text-rose-400 font-bold uppercase px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/30">d</span>
                                 @endif
                             </h3>
@@ -1279,6 +1438,17 @@
         @elseif($tab === 'commentary')
             <!-- COMMENTARY TAB -->
             <div class="space-y-3">
+                @if(!empty($isCompleted) || !empty($commentaryUnavailable))
+                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-8 text-center shadow-lg">
+                        <div class="w-12 h-12 rounded-full bg-slate-800/80 border border-slate-700/60 flex items-center justify-center mx-auto mb-3 text-slate-400 text-xl">
+                            🎙️
+                        </div>
+                        <h4 class="text-sm font-bold text-slate-300">Commentary not available</h4>
+                        <p class="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                            Commentary is disabled for completed matches. You can check the complete innings details in the Scorecard tab.
+                        </p>
+                    </div>
+                @else
                 <!-- Full Squad in Commentary Tab (Text-Only Names, No Table / No Photos) -->
                 <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 mb-4 text-xs">
                     <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800 text-slate-400 font-black uppercase text-[11px]">
@@ -1342,6 +1512,7 @@
                         @endforelse
                     </div>
                 </div>
+                @endif
             </div>
 
         @elseif($tab === 'squad')
@@ -1372,7 +1543,7 @@
                     </div>
 
                     <div class="text-center text-[11px] font-bold text-slate-400 uppercase tracking-widest">
-                        Playing XI
+                        Squads & Playing XI
                     </div>
 
                     <!-- Comparative Playing XI Grid -->
@@ -1951,7 +2122,7 @@
                     <div class="space-y-2">
                         <!-- Telegram Button -->
                         <a 
-                            href="{{ $socialLinks['telegram']['url'] ?? 'https://t.me/cricwire' }}" 
+                            href="{{ $socialLinks['telegram']['url'] ?? 'https://t.me/cricwireofficial' }}" 
                             target="_blank" 
                             rel="noopener noreferrer" 
                             class="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-sky-500/10 via-sky-500/5 to-transparent border border-sky-500/30 hover:border-sky-400 text-slate-200 hover:text-white transition group shadow-sm"
@@ -1970,7 +2141,7 @@
 
                         <!-- YouTube Button -->
                         <a 
-                            href="{{ $socialLinks['youtube']['url'] ?? 'https://youtube.com/@cricwire' }}" 
+                            href="{{ $socialLinks['youtube']['url'] ?? 'https://www.youtube.com/@cricwire.official' }}" 
                             target="_blank" 
                             rel="noopener noreferrer" 
                             class="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-red-500/10 via-red-500/5 to-transparent border border-red-500/30 hover:border-red-400 text-slate-200 hover:text-white transition group shadow-sm"
@@ -1989,7 +2160,7 @@
 
                         <!-- Instagram Button -->
                         <a 
-                            href="{{ $socialLinks['instagram']['url'] ?? 'https://instagram.com/cricwire' }}" 
+                            href="{{ $socialLinks['instagram']['url'] ?? 'https://instagram.com/cricwire.in' }}" 
                             target="_blank" 
                             rel="noopener noreferrer" 
                             class="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-pink-500/10 via-pink-500/5 to-transparent border border-pink-500/30 hover:border-pink-400 text-slate-200 hover:text-white transition group shadow-sm"

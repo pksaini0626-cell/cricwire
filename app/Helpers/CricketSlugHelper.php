@@ -7,12 +7,16 @@ use Illuminate\Support\Str;
 class CricketSlugHelper
 {
     /**
-     * Generate series slug dynamically from API match data.
+     * Generate series slug dynamically from API match data or string.
      */
-    public static function makeSeriesSlug(array $match): string
+    public static function makeSeriesSlug(array|string $matchOrName): string
     {
-        $series = $match['series_name'] ?? $match['series'] ?? $match['tournament'] ?? $match['series_title'] ?? 'cricket-tournament';
-        $season = $match['season'] ?? $match['year'] ?? '';
+        if (is_string($matchOrName)) {
+            return Str::slug(trim($matchOrName)) ?: 'cricket-tournament';
+        }
+
+        $series = $matchOrName['series_name'] ?? $matchOrName['series'] ?? $matchOrName['tournament'] ?? $matchOrName['series_title'] ?? 'cricket-tournament';
+        $season = $matchOrName['season'] ?? $matchOrName['year'] ?? '';
         $raw = trim("{$series} {$season}");
         return Str::slug($raw) ?: 'cricket-match-series';
     }

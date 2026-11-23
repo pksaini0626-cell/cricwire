@@ -17,11 +17,24 @@ class NewsIngestionService
     protected ?int $lastHttpStatus = null;
 
     /**
+     * Last error message or status summary from an API call attempt.
+     */
+    protected ?string $lastErrorMessage = null;
+
+    /**
      * Get the last HTTP status code from an API call attempt.
      */
     public function getLastHttpStatus(): ?int
     {
         return $this->lastHttpStatus;
+    }
+
+    /**
+     * Get the last error message from an API call attempt.
+     */
+    public function getLastErrorMessage(): ?string
+    {
+        return $this->lastErrorMessage;
     }
 
     /**
@@ -66,68 +79,118 @@ class NewsIngestionService
     public function fetchFromProvider(NewsApiConfig $config): array
     {
         $this->lastHttpStatus = null;
+        $this->lastErrorMessage = null;
 
         $headers = [
-            'Accept' => 'application/json',
+            'Accept' => 'application/json, application/xml, text/xml, */*',
         ];
 
-        // Format authentication headers
-        if (!empty($config->api_key_value)) {
-            $apiKey = trim((string) $config->api_key_value);
-            $headerKey = !empty($config->api_key_header) ? trim($config->api_key_header) : 'x-rapidapi-key';
+        // Format authentication headers based on auth_type
+        $authType = $config->auth_type ?? 'none';
+        $apiKey = !empty($config->api_key_value) ? trim((string) $config->api_key_value) : '';
+        $headerKey = !empty($config->api_key_header) ? trim((string) $config->api_key_header) : 'x-rapidapi-key';
 
-            if ($config->auth_type === 'bearer') {
-                $headers['Authorization'] = 'Bearer ' . $apiKey;
-            } elseif ($config->auth_type !== 'query_param') {
-                // Default / header auth
-                $headers[$headerKey] = $apiKey;
-            }
+        if ($authType === 'bearer' && !empty($apiKey)) {
+            $headers['Authorization'] = 'Bearer ' . $apiKey;
+        } elseif ($authType === 'header' && !empty($apiKey)) {
+            $headers[$headerKey] = $apiKey;
         }
 
         // Additional headers configured in DB (e.g. x-rapidapi-host)
-        if (!empty($config->additional_headers) && is_array($config->additional_headers)) {
-            foreach ($config->additional_headers as $hName => $hVal) {
-                if (!empty($hName)) {
-                    $headers[trim((string) $hName)] = trim((string) $hVal);
+        if (!empty($config->additional_headers)) {
+            $additionalHeaders = is_array($config->additional_headers)
+                ? $config->additional_headers
+                : json_decode((string) $config->additional_headers, true);
+
+            if (is_array($additionalHeaders)) {
+                foreach ($additionalHeaders as $hName => $hVal) {
+                    if (!empty($hName)) {
+                        $headers[trim((string) $hName)] = trim((string) $hVal);
+                    }
                 }
             }
         }
 
         $queryParams = [];
-        if ($config->auth_type === 'query_param' && !empty($config->api_key_value)) {
-            $paramKey = !empty($config->api_key_header) ? trim($config->api_key_header) : 'api_key';
-            $queryParams[$paramKey] = trim((string) $config->api_key_value);
+        if ($authType === 'query_param' && !empty($apiKey)) {
+            $paramKey = !empty($config->api_key_header) ? trim((string) $config->api_key_header) : 'api_key';
+            $queryParams[$paramKey] = $apiKey;
         }
 
         try {
-            $response = Http::withHeaders($headers)
-                ->timeout(15)
-                ->get($config->endpoint_url, $queryParams);
+            $client = Http::withHeaders($headers)->timeout(15);
+
+            if ($authType === 'bearer' && !empty($apiKey)) {
+                $client = $client->withToken($apiKey);
+            }
+
+            $response = $client->get($config->endpoint_url, $queryParams);
 
             $this->lastHttpStatus = $response->status();
 
-            Log::info("News API Attempt [{$config->name}]", [
-                'status' => $response->status(),
-                'body_snippet' => substr($response->body(), 0, 500),
-            ]);
-
             if (!$response->successful()) {
+                $status = $response->status();
+                $bodySnippet = substr($response->body(), 0, 500);
+
+                Log::warning("News API Provider [{$config->name}] returned HTTP {$status}", [
+                    'status' => $status,
+                    'body_snippet' => $bodySnippet,
+                ]);
+
+                // Try to extract user-friendly error message if json
+                $errorMsg = "HTTP {$status}";
+                $errJson = $response->json();
+                if (is_array($errJson)) {
+                    $msg = $errJson['message'] ?? $errJson['error'] ?? $errJson['detail'] ?? null;
+                    if ($msg) {
+                        $errorMsg .= ': ' . $this->sanitizeString($msg);
+                    }
+                }
+                $this->lastErrorMessage = $errorMsg;
+
                 return [];
+            }
+
+            $body = trim($response->body());
+
+            // Auto-detect XML / RSS feeds (e.g. ESPNcricinfo, NDTV, BBC, etc.)
+            if (Str::startsWith($body, ['<?xml', '<rss', '<feed']) || str_contains(substr($body, 0, 100), '<rss')) {
+                $articles = $this->parseXmlFeed($body);
+                if (empty($articles)) {
+                    Log::warning("News API [{$config->name}] RSS/XML parsed 0 articles", [
+                        'status' => $response->status(),
+                    ]);
+                    $this->lastErrorMessage = 'Feed contained no readable news items.';
+                }
+                return $articles;
             }
 
             $json = $response->json();
             $rawItems = [];
 
-            if (isset($json['data']) && is_array($json['data'])) {
-                $rawItems = $json['data']['news'] ?? $json['data'];
-            } elseif (isset($json['news']) && is_array($json['news'])) {
-                $rawItems = $json['news'];
-            } elseif (isset($json['articles']) && is_array($json['articles'])) {
-                $rawItems = $json['articles'];
-            } elseif (isset($json['storyList']) && is_array($json['storyList'])) {
-                $rawItems = $json['storyList'];
-            } elseif (is_array($json) && array_is_list($json)) {
-                $rawItems = $json;
+            if (is_array($json)) {
+                $rawItems = $json['data']['news'] 
+                    ?? $json['data']['articles'] 
+                    ?? $json['data'] 
+                    ?? $json['news'] 
+                    ?? $json['articles'] 
+                    ?? $json['storyList'] 
+                    ?? $json;
+            }
+
+            if (!is_array($rawItems) || !array_is_list($rawItems)) {
+                // If it's an associative array or unexpected structure, check if wrapped
+                if (is_array($rawItems)) {
+                    // Check if values inside are articles
+                    $firstVal = reset($rawItems);
+                    if (is_array($firstVal) && (isset($firstVal['title']) || isset($firstVal['headline']))) {
+                        $rawItems = array_values($rawItems);
+                    } else {
+                        $rawItems = [];
+                    }
+                } else {
+                    $rawItems = [];
+                }
             }
 
             $articles = [];
@@ -161,16 +224,97 @@ class NewsIngestionService
                 ];
             }
 
-            return array_values(array_filter($articles, fn ($a) => !empty($a['title'])));
+            $cleanArticles = array_values(array_filter($articles, fn ($a) => !empty($a['title'])));
+
+            if (empty($cleanArticles)) {
+                Log::warning("News API [{$config->name}] returned 0 parsed articles", [
+                    'status' => $response->status(),
+                    'raw_items_count' => count($rawItems),
+                    'body_snippet' => substr($response->body(), 0, 500),
+                ]);
+                $this->lastErrorMessage = 'Provider responded successfully (200 OK) but no news articles were matched.';
+            }
+
+            return $cleanArticles;
         } catch (Exception $e) {
             $this->lastHttpStatus = 0;
+            $this->lastErrorMessage = $e->getMessage();
 
             Log::error("NewsIngestionService: Exception calling provider [{$config->name}]", [
                 'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return [];
         }
+    }
+
+    /**
+     * Parse RSS/Atom/XML feeds into normalized articles.
+     */
+    protected function parseXmlFeed(string $xmlContent): array
+    {
+        $articles = [];
+
+        try {
+            // Suppress XML errors and handle gracefully
+            libxml_use_internal_errors(true);
+            $xml = simplexml_load_string($xmlContent, 'SimpleXMLElement', LIBXML_NOCDATA);
+
+            if ($xml === false) {
+                return [];
+            }
+
+            // Register namespaces for media/enclosures if present
+            $namespaces = $xml->getNamespaces(true);
+
+            // Channel items (RSS 2.0)
+            $items = $xml->channel->item ?? $xml->item ?? $xml->entry ?? [];
+
+            foreach ($items as $item) {
+                $title = $this->sanitizeString((string) ($item->title ?? ''));
+                if (empty($title)) {
+                    continue;
+                }
+
+                $summary = $this->sanitizeString((string) ($item->description ?? $item->summary ?? ''));
+                $sourceUrl = $this->sanitizeString((string) ($item->link ?? ''));
+
+                if (empty($sourceUrl) && isset($item->link['href'])) {
+                    $sourceUrl = (string) $item->link['href'];
+                }
+
+                $image = null;
+
+                // Check enclosure
+                if (isset($item->enclosure) && isset($item->enclosure['url'])) {
+                    $image = (string) $item->enclosure['url'];
+                }
+
+                // Check media:content or media:thumbnail
+                if (empty($image) && isset($namespaces['media'])) {
+                    $media = $item->children($namespaces['media']);
+                    if (isset($media->content) && isset($media->content->attributes()->url)) {
+                        $image = (string) $media->content->attributes()->url;
+                    } elseif (isset($media->thumbnail) && isset($media->thumbnail->attributes()->url)) {
+                        $image = (string) $media->thumbnail->attributes()->url;
+                    }
+                }
+
+                $articles[] = [
+                    'id' => md5($title . $sourceUrl),
+                    'title' => $title,
+                    'summary' => !empty($summary) ? strip_tags($summary) : null,
+                    'image' => !empty($image) ? trim($image) : null,
+                    'source_url' => !empty($sourceUrl) ? trim($sourceUrl) : null,
+                    'raw_content' => !empty($summary) ? $summary : null,
+                ];
+            }
+        } catch (Exception $e) {
+            Log::error('NewsIngestionService: Failed parsing XML feed: ' . $e->getMessage());
+        }
+
+        return $articles;
     }
 
     /**

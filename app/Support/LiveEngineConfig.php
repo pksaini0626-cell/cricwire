@@ -76,14 +76,14 @@ class LiveEngineConfig
             'telegram' => [
                 'name' => 'Telegram',
                 'icon' => 'telegram',
-                'url' => (string) self::get('social_telegram_url', 'https://t.me/cricwire'),
+                'url' => (string) self::get('social_telegram_url', 'https://t.me/cricwireofficial'),
                 'enabled' => filter_var(self::get('social_telegram_enabled', '1'), FILTER_VALIDATE_BOOLEAN),
                 'color' => 'from-sky-500 to-blue-600',
             ],
             'instagram' => [
                 'name' => 'Instagram',
                 'icon' => 'instagram',
-                'url' => (string) self::get('social_instagram_url', 'https://instagram.com/cricwire'),
+                'url' => (string) self::get('social_instagram_url', 'https://instagram.com/cricwire.in'),
                 'enabled' => filter_var(self::get('social_instagram_enabled', '0'), FILTER_VALIDATE_BOOLEAN),
                 'color' => 'from-pink-500 via-rose-500 to-yellow-500',
             ],
@@ -97,7 +97,7 @@ class LiveEngineConfig
             'youtube' => [
                 'name' => 'YouTube',
                 'icon' => 'youtube',
-                'url' => (string) self::get('social_youtube_url', 'https://youtube.com/@cricwire'),
+                'url' => (string) self::get('social_youtube_url', 'https://www.youtube.com/@cricwire.official'),
                 'enabled' => filter_var(self::get('social_youtube_enabled', '0'), FILTER_VALIDATE_BOOLEAN),
                 'color' => 'from-red-600 to-rose-700',
             ],

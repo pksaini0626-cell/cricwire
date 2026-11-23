@@ -3,8 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Helpers\CricketSlugHelper;
+use App\Models\ManagedMatch;
 use App\Models\NewsArticle;
-use App\Services\Cricket\RapidApiCricketService;
+use App\Services\Cricket\CricketLiveApiService;
 use App\Support\SeoConfig;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
@@ -41,30 +42,46 @@ class SitemapController extends Controller
 
     /**
      * Live & Upcoming Dynamic Cricket Matches XML Sitemap.
-     * GET /sitemap-matches.xml
+     * GET /sitemap-matches.xml (0 upstream API calls, strictly managed_matches & cached Redis/JSON data)
      */
-    public function matches(RapidApiCricketService $cricketService): Response
+    public function matches(CricketLiveApiService $cricketService): Response
     {
         $xml = Cache::remember('sitemap:matches', self::CACHE_TTL, function () use ($cricketService) {
             $matchesList = [];
 
-            // 1. Fetch cached home matches
+            // 1. Fetch from managed_matches table (covered and non-skipped)
             try {
-                $homeData = $cricketService->getHomeMatches(false);
-                $matchesList = is_array($homeData) ? $homeData : ($homeData['data'] ?? []);
-            } catch (\Throwable $e) {
-                $matchesList = [];
-            }
+                $managed = ManagedMatch::where('is_covered', true)
+                    ->where('series_skipped', false)
+                    ->get();
 
-            // 2. Fetch cached schedule data (upcoming & recent)
-            try {
-                $schedule = $cricketService->getSchedule(false);
-                if (!empty($schedule['upcoming']) && is_array($schedule['upcoming'])) {
-                    $matchesList = array_merge($matchesList, $schedule['upcoming']);
+                foreach ($managed as $mm) {
+                    $matchesList[] = [
+                        'match_id' => $mm->match_id,
+                        'id' => $mm->match_id,
+                        'series' => $mm->series_name,
+                        'series_name' => $mm->series_name,
+                        'team_a' => $mm->team_a,
+                        'team_b' => $mm->team_b,
+                        'match_desc' => $mm->match_desc,
+                        'match_status' => $mm->state ?? 'scheduled',
+                        'status' => $mm->state ?? 'scheduled',
+                    ];
                 }
-            } catch (\Throwable $e) {
-                // Ignore fallback
-            }
+            } catch (\Throwable $e) {}
+
+            // 2. Fetch cached home matches from Redis/JSON (0 upstream calls)
+            try {
+                $homeData = $cricketService->getHomeFromRedis();
+                $allHome = array_merge(
+                    $homeData['live'] ?? [],
+                    $homeData['upcoming'] ?? [],
+                    $homeData['recent'] ?? []
+                );
+                if (!empty($allHome)) {
+                    $matchesList = array_merge($matchesList, $allHome);
+                }
+            } catch (\Throwable $e) {}
 
             $uniqueMatches = [];
             $seenIds = [];

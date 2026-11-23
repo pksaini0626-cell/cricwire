@@ -12,6 +12,8 @@ class NewsArticle extends Model
     protected $fillable = [
         'author_id',
         'series_id',
+        'series_slug',
+        'series_name',
         'match_id',
         'title',
         'slug',

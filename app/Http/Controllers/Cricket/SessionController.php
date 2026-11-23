@@ -16,6 +16,14 @@ class SessionController extends Controller
     protected const TRACKER_TTL = 86400; // 24 hours
 
     /**
+     * Record a tick update for live session and fancy data.
+     */
+    public static function recordLiveSessionTick(string|int $matchId, array $fancyData = [], array $matchPayload = []): array
+    {
+        return self::updateMinMaxFromFancy($matchId, $fancyData, $matchPayload);
+    }
+
+    /**
      * HTTP API Endpoint: Return complete structured session data for a match.
      *
      * @param string|int $matchId
@@ -24,7 +32,7 @@ class SessionController extends Controller
      */
     public function show(string|int $matchId, RapidApiCricketService $service): JsonResponse
     {
-        $rawDetail = $service->getMatchDetail($matchId);
+        $rawDetail = $service->getMatchDetail($matchId, false);
         $match = $rawDetail['data'] ?? $rawDetail ?? [];
 
         $table = self::getMatchSessionTable($matchId, $service, $match);

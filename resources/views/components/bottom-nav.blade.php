@@ -9,6 +9,7 @@
         $currentRoute === 'more' || $currentPath === 'more' || $currentPath === 'profile' => 'more',
         $currentRoute === 'polls' || $currentPath === 'polls' => 'polls',
         $currentRoute === 'news.index' || str_starts_with($currentPath, 'cricket-news') => 'news',
+        $currentRoute === 'series.index' || $currentRoute === 'series.detail' || str_starts_with($currentPath, 'cricket-series') => 'series',
         $currentRoute === 'schedule' || str_starts_with($currentPath, 'cricket-schedule') => 'schedule',
         default => 'live',
     };

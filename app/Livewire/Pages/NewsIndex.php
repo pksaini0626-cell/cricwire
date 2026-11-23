@@ -63,7 +63,7 @@ class NewsIndex extends Component
             'canonical' => route('news.index'),
             'robots' => 'index, follow',
             'og_type' => 'website',
-            'og_image' => asset('icons/cricwire_favicons/android-chrome-512x512.png'),
+            'og_image' => file_exists(public_path('images/og-image.png')) ? asset('images/og-image.png') : asset('icons/cricwire_favicons/android-chrome-512x512.png'),
             'schemas' => [
                 [
                     '@context' => 'https://schema.org',

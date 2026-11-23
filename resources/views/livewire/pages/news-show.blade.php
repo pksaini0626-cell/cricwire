@@ -1,3 +1,31 @@
+@php
+    $ogImage = !empty($article->featured_image)
+        ? (\Illuminate\Support\Str::startsWith($article->featured_image, 'http')
+            ? $article->featured_image
+            : asset('storage/' . ltrim($article->featured_image, '/')))
+        : (file_exists(public_path('images/cricwire-default-og.jpg'))
+            ? asset('images/cricwire-default-og.jpg')
+            : asset('images/og-image.png'));
+@endphp
+
+@push('meta')
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="Cricwire" />
+    <meta property="og:title" content="{{ $article->seo_meta_title ?? $article->title }}" />
+    <meta property="og:description" content="{{ \Illuminate\Support\Str::limit(strip_tags($article->seo_meta_description ?? $article->summary ?? $article->content), 160) }}" />
+    <meta property="og:url" content="{{ url()->current() }}" />
+    <meta property="og:image" content="{{ $ogImage }}" />
+    <meta property="og:image:secure_url" content="{{ $ogImage }}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="{{ $article->title }}" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="{{ $article->seo_meta_title ?? $article->title }}" />
+    <meta name="twitter:description" content="{{ \Illuminate\Support\Str::limit(strip_tags($article->seo_meta_description ?? $article->summary ?? $article->content), 160) }}" />
+    <meta name="twitter:image" content="{{ $ogImage }}" />
+@endpush
+
 <div class="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased selection:bg-amber-500 selection:text-black pb-24 flex flex-col">
     <!-- Top Global Header -->
     <x-header />
@@ -130,6 +158,9 @@
                     @endif
                 </div>
 
+                <!-- Top Social Share Bar (Under Headline & Byline) -->
+                <x-news-social-share-bar :article="$article" />
+
                 <!-- Featured Hero Image -->
                 @if($imageUrl)
                     <div class="relative w-full h-72 sm:h-96 rounded-2xl overflow-hidden bg-slate-900 border border-white/10 shadow-2xl">
@@ -185,6 +216,9 @@
                 <div class="pt-4">
                     <x-ad-slot slot="news_in_feed" />
                 </div>
+
+                <!-- Bottom Social Share Bar (Under Article Body) -->
+                <x-news-social-share-bar :article="$article" />
 
                 <!-- Editorial Disclaimer Box -->
                 <div class="p-4 sm:p-5 rounded-2xl bg-slate-900/70 border border-slate-800 text-slate-300 text-xs sm:text-sm leading-relaxed space-y-2">

@@ -1,13 +1,47 @@
 <div 
     class="min-h-screen bg-slate-950 text-slate-100 pb-24 md:pb-0 font-sans antialiased relative selection:bg-amber-500 selection:text-black flex flex-col justify-between"
     x-data="{
-        pushAlerts: JSON.parse(localStorage.getItem('user_push_alerts') ?? 'true'),
+        pushAlerts: false,
+        loadingPush: false,
         showUpgradeModal: false,
         showDeleteModal: false,
         selectedPlan: '3_months',
-        togglePush() {
-            this.pushAlerts = !this.pushAlerts;
-            localStorage.setItem('user_push_alerts', JSON.stringify(this.pushAlerts));
+        init() {
+            if ('Notification' in window && Notification.permission === 'granted' && localStorage.getItem('cricwire_fcm_token')) {
+                this.pushAlerts = true;
+            } else {
+                this.pushAlerts = false;
+            }
+
+            window.addEventListener('cricwire:push-status-changed', (e) => {
+                if (e.detail && typeof e.detail.isSubscribed !== 'undefined') {
+                    this.pushAlerts = e.detail.isSubscribed;
+                }
+            });
+        },
+        async togglePush() {
+            if (this.loadingPush) return;
+            this.loadingPush = true;
+            try {
+                if (!this.pushAlerts) {
+                    if (window.CricwirePush) {
+                        const success = await window.CricwirePush.subscribe();
+                        if (success) {
+                            this.pushAlerts = true;
+                        }
+                    }
+                } else {
+                    if (window.CricwirePush) {
+                        await window.CricwirePush.unsubscribe();
+                        this.pushAlerts = false;
+                    }
+                }
+            } catch (err) {
+                console.error('Error toggling push notifications:', err);
+                alert('Could not update notification preferences. Please check your browser notification permissions.');
+            } finally {
+                this.loadingPush = false;
+            }
         },
         shareApp() {
             const shareData = {

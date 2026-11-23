@@ -272,12 +272,16 @@ class CricketSeoService
     {
         $appUrl = config('app.url', 'https://cricwire.in');
         $canonicalUrl = route('news.show', $article->slug);
-        $imageUrl = $article->image_url 
-            ? (str_starts_with($article->image_url, 'http') ? $article->image_url : asset('storage/' . $article->image_url))
-            : self::resolveOgImage(SeoConfig::get('seo_og_default_image'));
+        $imageUrl = !empty($article->featured_image)
+            ? (Str::startsWith($article->featured_image, 'http')
+                ? $article->featured_image
+                : asset('storage/' . ltrim($article->featured_image, '/')))
+            : (file_exists(public_path('images/cricwire-default-og.jpg'))
+                ? asset('images/cricwire-default-og.jpg')
+                : self::resolveOgImage(SeoConfig::get('seo_og_default_image')));
 
-        $metaTitle = $article->meta_title ?: $article->title . ' - Cricwire News';
-        $metaDescription = $article->meta_description ?: Str::limit(strip_tags($article->content ?? $article->summary ?? ''), 160);
+        $metaTitle = $article->seo_meta_title ?: ($article->title . ' | Cricwire News');
+        $metaDescription = Str::limit(strip_tags($article->seo_meta_description ?: ($article->summary ?: $article->content)), 160);
 
         $orgName = SeoConfig::get('seo_org_name', 'Cricwire');
         $orgLogo = self::resolveOrgLogo();
@@ -404,6 +408,9 @@ class CricketSeoService
         if ($path) {
             return str_starts_with($path, 'http') ? $path : asset('storage/' . $path);
         }
+        if (file_exists(public_path('images/og-image.png'))) {
+            return asset('images/og-image.png');
+        }
         return asset('icons/cricwire_favicons/android-chrome-512x512.png');
     }
 
@@ -432,10 +439,10 @@ class CricketSeoService
             }
         }
         return !empty($result) ? $result : [
-            'https://t.me/cricwire',
-            'https://instagram.com/cricwire',
+            'https://t.me/cricwireofficial',
+            'https://instagram.com/cricwire.in',
             'https://x.com/cricwire',
-            'https://youtube.com/@cricwire',
+            'https://www.youtube.com/@cricwire.official',
         ];
     }
 
@@ -446,7 +453,7 @@ class CricketSeoService
         }
 
         try {
-            return Carbon::parse($dateStr);
+            return Carbon::parse($dateStr)->timezone('Asia/Kolkata');
         } catch (\Throwable $e) {
             return null;
         }

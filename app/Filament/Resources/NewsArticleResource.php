@@ -70,23 +70,70 @@ class NewsArticleResource extends Resource
                             ->rows(2)
                             ->nullable()
                             ->columnSpanFull(),
+                    ])->columns(2),
 
+                Forms\Components\Section::make('Article Full Content')
+                    ->description('Write, rewrite, format headings, embed inline images, and insert CTAs just like WordPress.')
+                    ->schema([
                         Forms\Components\RichEditor::make('content')
                             ->label('Article Full Content')
+                            ->required()
+                            ->columnSpanFull()
+                            ->fileAttachmentsDisk('public')
+                            ->fileAttachmentsDirectory('news-content')
+                            ->fileAttachmentsVisibility('public')
                             ->toolbarButtons([
+                                'attachFiles',
+                                'blockquote',
+                                'bold',
+                                'bulletList',
+                                'codeBlock',
                                 'h2',
                                 'h3',
-                                'bold',
                                 'italic',
                                 'link',
-                                'bulletList',
-                                'blockquote',
-                                'undo',
+                                'orderedList',
                                 'redo',
+                                'strike',
+                                'underline',
+                                'undo',
                             ])
-                            ->nullable()
-                            ->columnSpanFull(),
-                    ])->columns(2),
+                            ->extraInputAttributes([
+                                'style' => 'min-height: 450px; font-size: 16px; line-height: 1.75;',
+                            ]),
+
+                        // Quick WordPress-style Custom CTA / Shortcode Inserter Helper
+                        Forms\Components\Actions::make([
+                            Forms\Components\Actions\Action::make('insertTelegramCta')
+                                ->label('➕ Insert Telegram Channel CTA')
+                                ->icon('heroicon-o-paper-airplane')
+                                ->color('info')
+                                ->size('sm')
+                                ->action(function (Forms\Get $get, Forms\Set $set) {
+                                    $current = $get('content') ?? '';
+                                    $ctaHtml = '<div style="margin: 24px 0; padding: 16px 20px; border-radius: 12px; background: rgba(14, 165, 233, 0.12); border: 1px solid rgba(14, 165, 233, 0.35);">'
+                                        . '<p style="margin: 0; font-weight: 700; color: #38bdf8;">📢 Join Cricwire Official on Telegram!</p>'
+                                        . '<p style="margin: 6px 0 0 0; font-size: 14px;">Get fastest ball-by-ball updates, toss alerts & breaking cricket news: <a href="https://t.me/cricwireofficial" target="_blank" rel="noopener noreferrer"><strong>Join @cricwireofficial →</strong></a></p>'
+                                        . '</div><p></p>';
+                                    $set('content', $current . $ctaHtml);
+                                }),
+
+                            Forms\Components\Actions\Action::make('insertLiveScoreCta')
+                                ->label('🏏 Insert Live Score CTA')
+                                ->icon('heroicon-o-bolt')
+                                ->color('warning')
+                                ->size('sm')
+                                ->action(function (Forms\Get $get, Forms\Set $set) {
+                                    $current = $get('content') ?? '';
+                                    $ctaHtml = '<div style="margin: 24px 0; padding: 16px 20px; border-radius: 12px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35);">'
+                                        . '<p style="margin: 0; font-weight: 700; color: #fbbf24;">⚡ Catch Ball-by-Ball Live Cricket Scores</p>'
+                                        . '<p style="margin: 6px 0 0 0; font-size: 14px;">Follow live match commentary, session stats & full scorecards on <a href="/"><strong>Cricwire Live Match Center →</strong></a></p>'
+                                        . '</div><p></p>';
+                                    $set('content', $current . $ctaHtml);
+                                }),
+                        ]),
+                    ])
+                    ->columnSpanFull(),
 
                 Forms\Components\Section::make('Publishing & Workflow')
                     ->schema([
@@ -116,6 +163,13 @@ class NewsArticleResource extends Resource
                             ->default(false)
                             ->helperText('Featured articles are prominently showcased on upcoming match screens and high-priority sections.'),
 
+                        Forms\Components\Toggle::make('send_push_notification')
+                            ->label('🔔 Send Breaking News Push to All Users')
+                            ->helperText('Dispatches push notification broadcast to all subscribers on publish')
+                            ->default(false)
+                            ->dehydrated(false)
+                            ->visible(fn (Get $get) => $get('status') === 'published'),
+
                         Forms\Components\TextInput::make('source_name')
                             ->label('Source Provider')
                             ->default('CricWire News Agency')
@@ -129,6 +183,24 @@ class NewsArticleResource extends Resource
                             ->placeholder('https://...')
                             ->maxLength(500)
                             ->nullable(),
+
+                        Forms\Components\Select::make('series_slug')
+                            ->label('Related Cricket Series (Optional)')
+                            ->options(fn () => \App\Models\SkippedSeries::where('is_skipped', false)
+                                ->orderBy('series_name')
+                                ->pluck('series_name', 'series_name')
+                                ->mapWithKeys(fn ($name) => [\Illuminate\Support\Str::slug($name) => $name])
+                                ->toArray())
+                            ->searchable()
+                            ->nullable()
+                            ->live()
+                            ->afterStateUpdated(fn ($state, Forms\Set $set) => $set(
+                                'series_name',
+                                $state ? (\App\Models\SkippedSeries::where('is_skipped', false)->get()->first(fn ($s) => \Illuminate\Support\Str::slug($s->series_name) === $state)?->series_name) : null
+                            )),
+
+                        Forms\Components\Hidden::make('series_name')
+                            ->dehydrated(),
                     ])->columns(2),
 
                 Forms\Components\Section::make('SEO & Metadata')
