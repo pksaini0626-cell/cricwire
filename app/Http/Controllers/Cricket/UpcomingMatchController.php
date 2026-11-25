@@ -56,7 +56,7 @@ class UpcomingMatchController extends Controller
 
             $match['is_live'] = false;
             $match['is_completed'] = false;
-            $upcoming[] = CricketMatchFormatter::format($match);
+            $upcoming[] = CricketMatchFormatter::formatMatchForCard($match);
         }
 
         usort($upcoming, function (array $a, array $b) {

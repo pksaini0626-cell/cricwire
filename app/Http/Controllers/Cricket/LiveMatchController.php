@@ -68,7 +68,7 @@ class LiveMatchController extends Controller
             $match['is_live'] = true;
             $match['is_completed'] = false;
 
-            $liveMatches[] = CricketMatchFormatter::format($match);
+            $liveMatches[] = CricketMatchFormatter::formatMatchForCard($match);
         }
 
         return $liveMatches;

@@ -165,7 +165,7 @@ class FinishedMatchController extends Controller
             $match['is_live'] = false;
             $match['is_completed'] = true;
 
-            $finished[] = CricketMatchFormatter::format($match);
+            $finished[] = CricketMatchFormatter::formatMatchForCard($match);
         }
 
         // Also include recently archived DB matches not already in feed
@@ -185,7 +185,7 @@ class FinishedMatchController extends Controller
                 $seenIds[$mId] = true;
                 $payload['is_live'] = false;
                 $payload['is_completed'] = true;
-                $finished[] = CricketMatchFormatter::format($payload);
+                $finished[] = CricketMatchFormatter::formatMatchForCard($payload);
             }
         }
 
