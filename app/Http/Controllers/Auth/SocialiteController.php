@@ -43,6 +43,7 @@ class SocialiteController extends Controller
                     'google_id' => $googleUser->getId(),
                     'avatar' => $googleUser->getAvatar() ?: $user->avatar,
                     'email_verified_at' => $user->email_verified_at ?? now(),
+                    'last_login_at' => now(),
                 ]);
             } else {
                 $user = User::create([
@@ -51,6 +52,7 @@ class SocialiteController extends Controller
                     'google_id' => $googleUser->getId(),
                     'avatar' => $googleUser->getAvatar(),
                     'email_verified_at' => now(),
+                    'last_login_at' => now(),
                     'password' => bcrypt(Str::random(24)),
                 ]);
             }
