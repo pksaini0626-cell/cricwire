@@ -346,6 +346,7 @@ class MatchDetail extends Component
         $isLive = !$this->isCompleted && (in_array($state, ['live', 'in progress', 'in_progress', 'innings break', '1', '2']) || ($hasScores && empty($result)));
         $isFinished = $this->isCompleted;
         $isUpcoming = !$isLive && !$isFinished;
+        $pollSeconds = $isLive ? 600 : 0;
 
         // Team names & polls
         $teamAName = $match['team_a'] ?? 'Team A';

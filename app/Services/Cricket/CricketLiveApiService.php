@@ -686,6 +686,19 @@ class CricketLiveApiService
     public function getFastMatchData(int|string $matchId, bool $includeCommentary = false): array
     {
         $matchId = (int) $matchId;
+
+        // 1. Finished Match DB-first archival lookup (0 API calls)
+        $finished = \App\Models\FinishedMatch::where('match_id', (string) $matchId)->first();
+        if ($finished) {
+            $stored = is_array($finished->match_data) && !empty($finished->match_data)
+                ? $finished->match_data
+                : $finished->match_json;
+            if (is_array($stored) && !empty($stored)) {
+                $stored['server_updated_at'] = $stored['server_updated_at'] ?? ($stored['updated_at'] ?? now()->toIso8601String());
+                return $stored;
+            }
+        }
+
         $cacheKey = "cricket:redis:match:{$matchId}";
         $cached = Cache::get($cacheKey);
 
@@ -728,22 +741,55 @@ class CricketLiveApiService
             ];
         }
 
-        $scorecard = $this->getScorecard($matchId);
-        $comm = $includeCommentary ? $this->getCommentary($matchId) : [];
-        $facts = $this->getMatchFacts($matchId);
+        // 2. Match Not Started (Upcoming / Scheduled): 0 API calls
+        $rawState = strtolower(trim((string) ($baseMatch['state'] ?? $baseMatch['status'] ?? $baseMatch['match_status'] ?? '')));
+        $hasScores = !empty($baseMatch['score_a']) || !empty($baseMatch['score_b']) || !empty($baseMatch['score']) || !empty($baseMatch['team_a_scores']) || !empty($baseMatch['team_b_scores']);
+        $isUpcoming = in_array($rawState, ['scheduled', 'upcoming', 'not started', 'preview', '0', ''], true) && !$hasScores && empty($baseMatch['result']);
 
-        $nowIso = now()->toIso8601String();
-        $payload = array_merge($baseMatch, [
-            'scorecard' => $scorecard['innings'] ?? [],
-            'commentary' => $comm['commentary'] ?? [],
-            'facts' => $facts,
-            'updated_at' => $nowIso,
-            'server_updated_at' => $nowIso,
-        ]);
+        if ($isUpcoming) {
+            $nowIso = now()->toIso8601String();
+            $payload = array_merge($baseMatch, [
+                'updated_at' => $nowIso,
+                'server_updated_at' => $nowIso,
+            ]);
+            $this->writeMatchToRedis($matchId, $payload);
+            return $payload;
+        }
 
-        $payload = $this->enrichFastMatchPayload($payload);
+        // 3. Match Live (In Progress): Fetch at most once every 10 minutes (600s) with atomic lock
+        $liveCacheKey = "cricket:live_match_payload:{$matchId}";
+        $liveCached = Cache::get($liveCacheKey);
+        if (is_array($liveCached) && !empty($liveCached)) {
+            return $liveCached;
+        }
 
-        $this->writeMatchToRedis($matchId, $payload);
+        $lock = Cache::lock("cricket:live_fetch_lock:{$matchId}", 15);
+        $payload = $lock->block(5, function () use ($matchId, $baseMatch, $includeCommentary, $liveCacheKey) {
+            $recheck = Cache::get($liveCacheKey);
+            if (is_array($recheck) && !empty($recheck)) {
+                return $recheck;
+            }
+
+            $scorecard = $this->getScorecard($matchId);
+            $comm = $includeCommentary ? $this->getCommentary($matchId) : [];
+            $facts = $this->getMatchFacts($matchId);
+
+            $nowIso = now()->toIso8601String();
+            $built = array_merge($baseMatch, [
+                'scorecard' => $scorecard['innings'] ?? [],
+                'commentary' => $comm['commentary'] ?? [],
+                'facts' => $facts,
+                'updated_at' => $nowIso,
+                'server_updated_at' => $nowIso,
+            ]);
+
+            $built = $this->enrichFastMatchPayload($built);
+            Cache::put($liveCacheKey, $built, 600);
+            $this->writeMatchToRedis($matchId, $built);
+
+            return $built;
+        });
+
         return $payload;
     }
 

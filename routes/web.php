@@ -103,26 +103,16 @@ Route::post('/api/matches/{matchId}/ping', function (string|int $matchId, \Illum
     return response()->json(['status' => true, 'match_id' => $matchId]);
 })->name('match.ping');
 
-// Direct Fast Real-Time Live Cricket JSON Endpoints (Cache-Backed)
-Route::get('/api/live/home', function (\Illuminate\Http\Request $request, \App\Services\Cricket\CricketLiveApiService $service) {
-    if (!$request->attributes->get('is_search_crawler') && !app()->bound('crawler_read_only_mode')) {
-        \Illuminate\Support\Facades\Cache::put('active_site_visitor', now()->timestamp, 120);
-    }
-    return response()
-        ->json($service->getFastHomeData())
-        ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-})->name('api.live.home');
+// Segregated Cricket Match API Endpoints
+Route::get('/api/matches/live', [\App\Http\Controllers\Cricket\LiveMatchController::class, 'index'])->name('api.matches.live');
+Route::get('/api/matches/live/{matchId}', [\App\Http\Controllers\Cricket\LiveMatchController::class, 'show'])->name('api.matches.live.show');
+Route::get('/api/matches/upcoming', [\App\Http\Controllers\Cricket\UpcomingMatchController::class, 'index'])->name('api.matches.upcoming');
+Route::get('/api/matches/finished', [\App\Http\Controllers\Cricket\FinishedMatchController::class, 'index'])->name('api.matches.finished');
+Route::get('/api/matches/finished/{matchId}', [\App\Http\Controllers\Cricket\FinishedMatchController::class, 'show'])->name('api.matches.finished.show');
 
-Route::get('/api/live/match/{matchId}', function ($matchId, \Illuminate\Http\Request $request, \App\Services\Cricket\CricketLiveApiService $service) {
-    if (!$request->attributes->get('is_search_crawler') && !app()->bound('crawler_read_only_mode')) {
-        \Illuminate\Support\Facades\Cache::put('active_site_visitor', now()->timestamp, 120);
-        \Illuminate\Support\Facades\Cache::put("watching:match:{$matchId}", true, 30);
-    }
-    $includeCommentary = $request->boolean('include_commentary');
-    return response()
-        ->json($service->getFastMatchData($matchId, $includeCommentary))
-        ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-})->name('api.live.match');
+// Direct Fast Real-Time Live Cricket JSON Endpoints (Delegated to LiveMatchController)
+Route::get('/api/live/home', [\App\Http\Controllers\Cricket\LiveMatchController::class, 'index'])->name('api.live.home');
+Route::get('/api/live/match/{matchId}', [\App\Http\Controllers\Cricket\LiveMatchController::class, 'show'])->name('api.live.match');
 
 // High-Speed Dynamic XML Sitemaps & Robots.txt
 Route::get('/sitemap.xml', [SitemapController::class, 'index'])->name('sitemap.index');

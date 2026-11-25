@@ -55,8 +55,14 @@ class CompletedMatchController extends Controller
         $matchKey = (string) $matchId;
 
         $existing = FinishedMatch::where('match_id', $matchKey)->first();
-        if ($existing && is_array($existing->match_json) && !empty($existing->match_json)) {
-            return $existing->match_json;
+        if ($existing) {
+            $storedPayload = is_array($existing->match_data) && !empty($existing->match_data)
+                ? $existing->match_data
+                : $existing->match_json;
+
+            if (is_array($storedPayload) && !empty($storedPayload)) {
+                return $storedPayload;
+            }
         }
 
         $apiService = app(CricketLiveApiService::class);
@@ -97,7 +103,9 @@ class CompletedMatchController extends Controller
                         'series_name' => $normalized['series'] ?? $normalized['series_name'] ?? null,
                         'match_title' => $normalized['matchs'] ?? $normalized['match_desc'] ?? trim(($normalized['team_a'] ?? '') . ' vs ' . ($normalized['team_b'] ?? '')),
                         'result_text' => $normalized['result'] ?? null,
+                        'match_data' => $normalized,
                         'match_json' => $normalized,
+                        'fetched_at' => now(),
                     ]
                 );
             } catch (\Throwable $e) {

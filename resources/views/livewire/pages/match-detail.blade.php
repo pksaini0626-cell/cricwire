@@ -1,7 +1,7 @@
 <div 
     class="min-h-screen bg-slate-950 text-slate-100 pb-24 font-sans antialiased flex flex-col selection:bg-rose-500 selection:text-white transition-all duration-300"
     :class="{ 'ring-2 ring-amber-400': isFlashing }"
-    x-data="matchDetailEngine({ matchId: '{{ $matchId }}', tab: '{{ $tab }}', isLive: {{ (!empty($isLive) && empty($isCompleted)) ? 'true' : 'false' }}, isFinished: {{ (!empty($isFinished) || !empty($isCompleted)) ? 'true' : 'false' }}, pollSeconds: {{ $pollSeconds ?? 10 }}, pollMs: {{ ($pollSeconds ?? 10) * 1000 }}, isLocal: @js(app()->environment('local')), allowPolling: {{ empty($isCompleted) ? 'true' : 'false' }}, live: { batsman: @js(array_values(array_slice($liveBatters ?? [], 0, 2))), bowler: @js(array_values(array_slice($liveBowlers ?? [], 0, 2))) } })"
+    x-data="matchDetailEngine({ matchId: '{{ $matchId }}', tab: '{{ $tab }}', isLive: {{ (!empty($isLive) && empty($isCompleted)) ? 'true' : 'false' }}, isFinished: {{ (!empty($isFinished) || !empty($isCompleted)) ? 'true' : 'false' }}, pollSeconds: {{ $pollSeconds ?? 600 }}, pollMs: {{ ($pollSeconds ?? 600) * 1000 }}, isLocal: @js(app()->environment('local')), allowPolling: {{ (!empty($isLive) && empty($isCompleted)) ? 'true' : 'false' }}, live: { batsman: @js(array_values(array_slice($liveBatters ?? [], 0, 2))), bowler: @js(array_values(array_slice($liveBowlers ?? [], 0, 2))) } })"
 >
     <script src="{{ asset('js/match-detail-engine.js') }}"></script>
 

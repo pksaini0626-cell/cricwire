@@ -295,7 +295,7 @@
                         <span x-text="teamAScore"></span>
                         <span x-show="teamAOver" class="text-[10px] text-[#94A3B8] font-normal ml-0.5" x-text="'(' + teamAOver + ' ov)'"></span>
                     </div>
-                    <div x-show="!teamAScore" class="text-[10px] text-[#64748B] font-mono mt-px">Yet to bat</div>
+                    <div x-show="!teamAScore" class="text-[10px] text-[#64748B] font-mono mt-px" x-text="isFinished ? 'DNB' : (teamBScore ? 'Yet to bat' : '-')"></div>
                 </div>
             </div>
 
@@ -312,7 +312,7 @@
                         <span x-text="teamBScore"></span>
                         <span x-show="teamBOver" class="text-[10px] text-[#94A3B8] font-normal ml-0.5" x-text="'(' + teamBOver + ' ov)'"></span>
                     </div>
-                    <div x-show="!teamBScore" class="text-[10px] text-[#64748B] font-mono mt-px">Yet to bat</div>
+                    <div x-show="!teamBScore" class="text-[10px] text-[#64748B] font-mono mt-px" x-text="isFinished ? 'DNB' : (teamAScore ? 'Yet to bat' : '-')"></div>
                 </div>
                 @if(!empty($teamBImg))
                     <img src="{{ $teamBImg }}" alt="{{ $teamBName }}" class="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover bg-[#0D1422] border border-[#253248] shrink-0" onerror="this.style.display='none'" />
