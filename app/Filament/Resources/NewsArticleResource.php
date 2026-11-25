@@ -32,8 +32,8 @@ class NewsArticleResource extends Resource
                             ->required()
                             ->maxLength(255)
                             ->live(onBlur: true)
-                            ->afterStateUpdated(function (Set $set, ?string $state, ?string $operation) {
-                                if ($operation === 'create' || empty($set('slug'))) {
+                            ->afterStateUpdated(function (Set $set, Get $get, ?string $state, ?string $operation) {
+                                if ($operation === 'create' || empty($get('slug'))) {
                                     $set('slug', Str::slug($state));
                                 }
                             }),
