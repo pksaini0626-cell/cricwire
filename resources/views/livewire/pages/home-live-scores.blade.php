@@ -525,7 +525,26 @@
                             @endphp
                             @foreach($feedNews as $article)
                                 @php
-                                    $thumb = $article->featured_image ?? $article->image_url ?? $article->thumbnail ?? null;
+                                    $rawThumb = $article->resolved_image_url
+                                        ?? $article->featured_image
+                                        ?? $article->image
+                                        ?? $article->image_url
+                                        ?? $article->thumbnail
+                                        ?? $article->banner
+                                        ?? null;
+
+                                    $thumb = null;
+                                    if (!empty($rawThumb) && is_string($rawThumb)) {
+                                        $rawThumb = trim($rawThumb);
+                                        if (str_starts_with($rawThumb, 'http://') || str_starts_with($rawThumb, 'https://')) {
+                                            $thumb = $rawThumb;
+                                        } else {
+                                            $cleanPath = ltrim($rawThumb, '/');
+                                            $cleanPath = preg_replace('#^(public/|storage/)+#', '', $cleanPath);
+                                            $thumb = asset('storage/' . ltrim($cleanPath, '/'));
+                                        }
+                                    }
+
                                     $category = $article->category ?? 'news';
                                     $categoryLabel = match($category) {
                                         'pitch_report' => 'Pitch Report',
@@ -542,9 +561,9 @@
                                 @endphp
                                 <a href="{{ route('news.show', ['article' => $article->slug]) }}" wire:navigate class="flex items-start gap-3 p-2.5 rounded-xl bg-[#0D1422]/70 hover:bg-[#0D1422] border border-[#253248]/60 hover:border-amber-500/40 transition group">
                                     @if(!empty($thumb))
-                                        <img src="{{ $thumb }}" alt="{{ $article->title }}" loading="lazy" class="w-20 h-14 rounded-xl object-cover shrink-0 border border-[#253248]" />
+                                        <img src="{{ $thumb }}" alt="{{ $article->title }}" loading="lazy" onerror="this.style.display='none'" class="w-20 h-14 sm:w-24 sm:h-16 rounded-lg object-cover block shrink-0 border border-[#253248]" />
                                     @else
-                                        <div class="w-20 h-14 rounded-xl bg-[#172337] border border-[#253248] flex items-center justify-center shrink-0 text-amber-400/70 text-lg">
+                                        <div class="w-20 h-14 sm:w-24 sm:h-16 rounded-lg bg-[#172337] border border-[#253248] flex items-center justify-center shrink-0 text-amber-400/70 text-lg">
                                             🏏
                                         </div>
                                     @endif
