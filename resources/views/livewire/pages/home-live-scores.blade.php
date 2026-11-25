@@ -508,6 +508,175 @@
                     </button>
                 </div>
 
+                <!-- Today's Upcoming Matches Horizontal Carousel -->
+                @if(!empty($todayUpcomingMatches) && count($todayUpcomingMatches) > 0)
+                    <section class="w-full min-w-0 space-y-3 pt-1" aria-label="Today's Upcoming Matches">
+                        <div class="flex items-center justify-between gap-3 px-0.5">
+                            <div class="flex items-center gap-2 min-w-0 flex-wrap">
+                                <h2 class="text-xs sm:text-sm font-black uppercase tracking-wider text-[#F8FAFC] flex items-center gap-1.5 whitespace-nowrap">
+                                    <span>⏰</span> Today's Upcoming
+                                </h2>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 whitespace-nowrap">
+                                    {{ count($todayUpcomingMatches) }} Today
+                                </span>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800/80 text-slate-300 border border-slate-700/70 whitespace-nowrap">
+                                    {{ now('Asia/Kolkata')->format('D, d M') }}
+                                </span>
+                            </div>
+
+                            <div class="flex items-center gap-2 shrink-0">
+                                <div class="hidden md:flex items-center gap-1.5">
+                                    <button
+                                        type="button"
+                                        @click="$refs.todaySlider.scrollBy({ left: -300, behavior: 'smooth' })"
+                                        class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-[#111B2B] hover:bg-[#172337] border border-[#253248] hover:border-amber-500/40 text-xs font-bold text-slate-300 hover:text-amber-400 transition active:scale-95"
+                                        aria-label="Scroll today's upcoming matches left"
+                                    >
+                                        ←
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="$refs.todaySlider.scrollBy({ left: 300, behavior: 'smooth' })"
+                                        class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-[#111B2B] hover:bg-[#172337] border border-[#253248] hover:border-amber-500/40 text-xs font-bold text-slate-300 hover:text-amber-400 transition active:scale-95"
+                                        aria-label="Scroll today's upcoming matches right"
+                                    >
+                                        →
+                                    </button>
+                                </div>
+                                <a
+                                    href="{{ url('/cricket-schedule') }}"
+                                    wire:navigate
+                                    class="text-[11px] font-semibold text-[#94A3B8] hover:text-amber-400 transition whitespace-nowrap"
+                                >
+                                    All Fixtures →
+                                </a>
+                            </div>
+                        </div>
+
+                        <div
+                            x-ref="todaySlider"
+                            class="flex items-stretch gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar pb-1"
+                        >
+                            @foreach($todayUpcomingMatches as $match)
+                                @php
+                                    $tMatchId = $match['match_id'] ?? $match['id'] ?? 0;
+                                    $tSeriesName = $match['series_name'] ?? $match['series'] ?? 'Cricket Series';
+                                    $tStage = $match['match_desc'] ?? $match['matchs'] ?? $match['format'] ?? 'Match';
+                                    $tTeamAName = $match['team_a'] ?? 'Team A';
+                                    $tTeamAShort = $match['team_a_short'] ?? \App\Services\Cricket\CricketLiveApiService::generateTeamShort($tTeamAName);
+                                    $tTeamAImg = $match['team_a_img'] ?? '';
+                                    $tTeamBName = $match['team_b'] ?? 'Team B';
+                                    $tTeamBShort = $match['team_b_short'] ?? \App\Services\Cricket\CricketLiveApiService::generateTeamShort($tTeamBName);
+                                    $tTeamBImg = $match['team_b_img'] ?? '';
+                                    $tIstLabel = $match['ist_time_label'] ?? (!empty($match['start_time_ist']) ? \Carbon\Carbon::parse($match['start_time_ist'], 'Asia/Kolkata')->format('h:i A') . ' IST' : 'Today IST');
+                                    $tSeriesSlug = \App\Helpers\CricketSlugHelper::makeSeriesSlug($match);
+                                    $tMatchSlug = \App\Helpers\CricketSlugHelper::makeMatchSlug($match, $tMatchId);
+                                    $tInfoUrl = route('match.detail', [
+                                        'seriesSlug' => $tSeriesSlug,
+                                        'tab' => 'info',
+                                        'matchSlug' => $tMatchSlug,
+                                    ]);
+                                @endphp
+                                <a
+                                    href="{{ $tInfoUrl }}"
+                                    wire:navigate
+                                    class="group block snap-start shrink-0 w-[270px] sm:w-[295px] bg-slate-900/90 hover:bg-slate-800/90 border border-slate-800 hover:border-amber-500/40 rounded-2xl p-3.5 transition shadow-lg"
+                                >
+                                    {{-- Top Row: Series Name + IST Time Pill --}}
+                                    <div class="flex items-center justify-between gap-2 mb-3">
+                                        <span class="text-[11px] font-medium text-slate-400 truncate" title="{{ $tSeriesName }}">
+                                            {{ $tSeriesName }}
+                                        </span>
+                                        <span class="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 whitespace-nowrap">
+                                            <span>🕒</span> {{ $tIstLabel }}
+                                        </span>
+                                    </div>
+
+                                    {{-- Middle Row: Team A vs Team B --}}
+                                    <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-1">
+                                        <div class="flex items-center gap-2 min-w-0">
+                                            @if(!empty($tTeamAImg))
+                                                <img
+                                                    src="{{ $tTeamAImg }}"
+                                                    alt="{{ $tTeamAName }}"
+                                                    loading="lazy"
+                                                    class="w-7 h-7 rounded-full object-cover bg-[#0D1422] border border-slate-700 shrink-0"
+                                                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                                                />
+                                                <div style="display:none" class="w-7 h-7 rounded-full bg-[#172337] border border-amber-500/25 text-[10px] font-bold text-amber-400 items-center justify-center shrink-0">
+                                                    {{ \Illuminate\Support\Str::limit($tTeamAShort, 3, '') }}
+                                                </div>
+                                            @else
+                                                <div class="w-7 h-7 rounded-full bg-[#172337] border border-amber-500/25 text-[10px] font-bold text-amber-400 flex items-center justify-center shrink-0">
+                                                    {{ \Illuminate\Support\Str::limit($tTeamAShort, 3, '') }}
+                                                </div>
+                                            @endif
+                                            <span class="text-xs font-bold text-slate-100 truncate" title="{{ $tTeamAName }}">
+                                                {{ $tTeamAShort }}
+                                            </span>
+                                        </div>
+
+                                        <span class="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider text-slate-400 bg-slate-800/80 border border-slate-700/70">
+                                            VS
+                                        </span>
+
+                                        <div class="flex items-center justify-end gap-2 min-w-0">
+                                            <span class="text-xs font-bold text-slate-100 truncate text-right" title="{{ $tTeamBName }}">
+                                                {{ $tTeamBShort }}
+                                            </span>
+                                            @if(!empty($tTeamBImg))
+                                                <img
+                                                    src="{{ $tTeamBImg }}"
+                                                    alt="{{ $tTeamBName }}"
+                                                    loading="lazy"
+                                                    class="w-7 h-7 rounded-full object-cover bg-[#0D1422] border border-slate-700 shrink-0"
+                                                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                                                />
+                                                <div style="display:none" class="w-7 h-7 rounded-full bg-[#172337] border border-amber-500/25 text-[10px] font-bold text-amber-400 items-center justify-center shrink-0">
+                                                    {{ \Illuminate\Support\Str::limit($tTeamBShort, 3, '') }}
+                                                </div>
+                                            @else
+                                                <div class="w-7 h-7 rounded-full bg-[#172337] border border-amber-500/25 text-[10px] font-bold text-amber-400 flex items-center justify-center shrink-0">
+                                                    {{ \Illuminate\Support\Str::limit($tTeamBShort, 3, '') }}
+                                                </div>
+                                            @endif
+                                        </div>
+                                    </div>
+
+                                    {{-- Toss Status Strip (30-min pre-match window) --}}
+                                    @if(!empty($match['show_toss_banner']) && in_array($match['toss_status'] ?? '', ['pending', 'delayed', 'decided'], true))
+                                        <div class="mt-2.5">
+                                            @if(($match['toss_status'] ?? '') === 'pending')
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 truncate max-w-full">
+                                                    🪙 Toss is pending
+                                                </span>
+                                            @elseif(($match['toss_status'] ?? '') === 'delayed')
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-orange-500/15 text-orange-300 border border-orange-500/30 truncate max-w-full">
+                                                    🌧️ {{ $match['toss_text'] ?? '' }}
+                                                </span>
+                                            @else
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 truncate max-w-full">
+                                                    🪙 {{ $match['toss_text'] ?? '' }}
+                                                </span>
+                                            @endif
+                                        </div>
+                                    @endif
+
+                                    {{-- Bottom Row: Match Stage + Match Info Link --}}
+                                    <div class="flex items-center justify-between gap-2 mt-3 pt-2.5 border-t border-slate-800/90 text-[11px]">
+                                        <span class="text-slate-400 font-medium truncate" title="{{ $tStage }}">
+                                            {{ $tStage }}
+                                        </span>
+                                        <span class="text-amber-400 group-hover:text-amber-300 font-semibold shrink-0 transition-colors">
+                                            Match Info →
+                                        </span>
+                                    </div>
+                                </a>
+                            @endforeach
+                        </div>
+                    </section>
+                @endif
+
                 <!-- Latest Cricket News Section (Main Feed: Mobile & All Screens) -->
                 @if(($featuredNews ?? collect())->isNotEmpty() || ($recentNews ?? collect())->isNotEmpty())
                     <section class="cricket-card mt-2">

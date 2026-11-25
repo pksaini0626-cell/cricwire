@@ -50,6 +50,10 @@ function createMatchDetailEngine(config) {
         last_ball_event: initLive.last_ball_event || '',
         need_run_ball: initLive.need_run_ball || '',
         result: initLive.result || '',
+        toss: initLive.toss || '',
+        show_toss_banner: Boolean(initLive.show_toss_banner),
+        toss_status: initLive.toss_status || 'none',
+        toss_text: initLive.toss_text || '',
         fav_team: '',
         min_rate: '',
         max_rate: '',
@@ -114,6 +118,25 @@ function createMatchDetailEngine(config) {
             return (b.name && b.name !== '-') ? [b] : [];
         },
 
+        get hasFirstBallStarted() {
+            const check = (s) => {
+                if (!s) return false;
+                const t = String(s).trim().toLowerCase();
+                if (t === '' || t === 'yet to bat' || t === 'null' || t === '-' || t === '0/0' || t === '0/0 (0)' || t === '0/0 (0.0 ov)') return false;
+                return /[1-9]/.test(t);
+            };
+            return check(this.live?.scoreA || this.live?.score_a || this.live?.team_a_scores || this.live?.team_a_score)
+                || check(this.live?.scoreB || this.live?.score_b || this.live?.team_b_scores || this.live?.team_b_score)
+                || check(this.live?.combinedScore || this.live?.score);
+        },
+
+        get showLiveTossBanner() {
+            return Boolean(this.live?.show_toss_banner)
+                && !this.isFinished
+                && !this.hasFirstBallStarted
+                && ['pending', 'delayed', 'decided'].includes(String(this.live?.toss_status || ''));
+        },
+
         sendHeartbeat() {
             if (!document.hidden && this.matchId && !this.isFinished) {
                 fetch('/api/matches/' + this.matchId + '/ping', {
@@ -143,7 +166,7 @@ function createMatchDetailEngine(config) {
             this.lastActivityTime = Date.now();
             this.isInactivePaused = false;
             this.sendHeartbeat();
-            if (this.isLive && !this.isFinished) {
+            if ((this.isLive || this.allowPolling) && !this.isFinished) {
                 this.fetchLiveMatch();
                 this.startPoller();
             }
@@ -191,13 +214,13 @@ function createMatchDetailEngine(config) {
                 this.sendHeartbeat();
                         if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
                         this.heartbeatTimer = setInterval(() => {
-                            if (!document.hidden && this.isLive && !this.isFinished) {
+                            if (!document.hidden && (this.isLive || this.allowPolling) && !this.isFinished) {
                                 this.sendHeartbeat();
                             }
                         }, 20000);
 
-                            // Zero-Refresh Fast Live Poller hitting /api/live/match/{matchId} every 8s when live & visible
-                            if (this.isLive && !document.hidden && !this.isFinished) {
+                            // Zero-Refresh Fast Live Poller hitting /api/live/match/{matchId} every 8s when live (or 15s during 30m pre-match toss window)
+                            if ((this.isLive || this.allowPolling) && !document.hidden && !this.isFinished) {
                                 this.fetchLiveMatch();
                             }
                             this.startPoller();
@@ -226,7 +249,7 @@ function createMatchDetailEngine(config) {
                             if (!document.hidden && !this.isFinished) {
                                     if (this.allowPolling) {
                                         this.sendHeartbeat();
-                                        if (this.isLive) {
+                                        if (this.isLive || this.allowPolling) {
                                             this.fetchLiveMatch();
                                             this.startPoller();
                                         }
@@ -257,7 +280,7 @@ function createMatchDetailEngine(config) {
                         if (this.pollTimer) clearInterval(this.pollTimer);
                         const interval = Math.max(5000, Math.min(30000, Number(this.pollMs) || 8000));
                         this.pollTimer = setInterval(() => {
-                                if (!document.hidden && this.isLive && !this.isFinished) {
+                                if (!document.hidden && (this.isLive || this.allowPolling) && !this.isFinished) {
                                     this.fetchLiveMatch();
                                 }
                             }, interval);
@@ -319,6 +342,18 @@ function createMatchDetailEngine(config) {
                                     } else if (updated[key] === undefined) {
                                         updated[key] = val;
                                     }
+                                }
+
+                                // Never revert a decided toss back to pending/none
+                                if (this.live?.toss_status === 'decided' && data.toss_status !== 'decided') {
+                                    updated.toss_status = 'decided';
+                                    updated.toss_text = this.live.toss_text;
+                                    updated.toss = this.live.toss || this.live.toss_text;
+                                    updated.show_toss_banner = this.live.show_toss_banner;
+                                }
+
+                                if (data.is_live === true && !data.is_completed) {
+                                    this.isLive = true;
                                 }
 
                                 // Stop polling immediately if match is completed

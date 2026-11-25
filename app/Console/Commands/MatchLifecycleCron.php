@@ -126,15 +126,10 @@ class MatchLifecycleCron extends Command
     protected function handleTossFetch(ManagedMatch $match, CricketLiveApiService $apiService, Carbon $nowIst): void
     {
         $matchId = (string) $match->match_id;
-        $facts = $apiService->getMatchFacts($matchId);
+        $facts = $apiService->getMatchFacts($matchId, ['start_time_ist' => $match->start_time_ist]);
         $toss = trim((string) ($facts['toss'] ?? ''));
 
-        $isInvalid = empty($toss) 
-            || str_contains(strtolower($toss), 'yet to take place') 
-            || str_contains(strtolower($toss), 'pending')
-            || str_contains(strtolower($toss), 'not conducted');
-
-        if (!$isInvalid) {
+        if (CricketLiveApiService::isDecidedToss($toss)) {
             $matchStartIst = Carbon::parse($match->start_time_ist)->timezone('Asia/Kolkata');
             $startText = "Match starts at " . $matchStartIst->format('h:i A') . " IST";
 
@@ -158,6 +153,11 @@ class MatchLifecycleCron extends Command
             }
 
             $this->info("Toss fetched for Match #{$matchId}: {$toss}");
+        } elseif (CricketLiveApiService::isDelayToss($toss)) {
+            $match->update([
+                'toss_text' => $toss,
+            ]);
+            $this->info("Toss delayed for Match #{$matchId}: {$toss}");
         }
     }
 

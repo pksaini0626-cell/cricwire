@@ -63,7 +63,18 @@
 
     // Requirement & Dates
     $needRunBall = (string) ($match['need_run_ball'] ?? $match['trail_lead'] ?? '');
-    $toss = (string) ($match['toss'] ?? '');
+    $tossState = (isset($match['toss_status'], $match['show_toss_banner'], $match['toss_text']))
+        ? [
+            'show_toss_banner' => (bool) $match['show_toss_banner'],
+            'toss_status' => (string) $match['toss_status'],
+            'toss_text' => (string) $match['toss_text'],
+        ]
+        : app(\App\Services\Cricket\CricketLiveApiService::class)->resolveTossDisplayState($match, $match['facts'] ?? []);
+
+    $showTossBanner = $tossState['show_toss_banner'];
+    $tossStatus = $tossState['toss_status'];
+    $tossText = $tossState['toss_text'];
+    $toss = in_array($tossStatus, ['decided', 'delayed'], true) ? $tossText : (string) ($match['toss'] ?? '');
     $matchTime = (string) ($match['match_time'] ?? '');
     $matchDate = (string) ($match['match_date'] ?? $match['start_time'] ?? '');
 
@@ -86,6 +97,21 @@
         teamBOver: '{{ addslashes($teamBOver) }}',
         needRunBall: '{{ addslashes($needRunBall) }}',
         resultText: '{{ addslashes($resultText) }}',
+        showTossBanner: {{ $showTossBanner ? 'true' : 'false' }},
+        tossStatus: @js($tossStatus),
+        tossText: @js($tossText),
+        get hasRealScore() {
+            const check = (s) => {
+                if (!s) return false;
+                const l = String(s).trim().toLowerCase();
+                if (l === '' || l === 'yet to bat' || l === 'null' || l === '-' || l === '0/0' || l === '0/0 (0)' || l === '0/0 (0.0 ov)') return false;
+                return /[1-9]/.test(l);
+            };
+            return check(this.teamAScore) || check(this.teamBScore);
+        },
+        get shouldShowTossStrip() {
+            return this.showTossBanner && this.status !== 'finished' && !this.hasRealScore && ['pending', 'delayed', 'decided'].includes(this.tossStatus);
+        },
         init() {
             const pinned = JSON.parse(localStorage.getItem('pinned_matches') || '[]');
             const skipped = JSON.parse(localStorage.getItem('skipped_matches') || '[]');
@@ -160,6 +186,17 @@
                             this.needRunBall = d.trail_lead;
                         } else if (d.need_run_ball !== undefined) {
                             this.needRunBall = d.need_run_ball;
+                        }
+                        if (d.show_toss_banner !== undefined) {
+                            this.showTossBanner = Boolean(d.show_toss_banner);
+                        }
+                        if (d.toss_status !== undefined && !(this.tossStatus === 'decided' && d.toss_status !== 'decided')) {
+                            this.tossStatus = String(d.toss_status);
+                        }
+                        if (d.toss_text !== undefined && d.toss_text !== '' && !(this.tossStatus === 'decided' && d.toss_status !== 'decided')) {
+                            this.tossText = String(d.toss_text);
+                        } else if (d.toss !== undefined && d.toss !== '') {
+                            this.tossText = String(d.toss);
                         }
                         if (d.result !== undefined && d.result !== '') {
                             this.resultText = d.result;
@@ -337,8 +374,41 @@
                 <span class="truncate" x-text="needRunBall"></span>
             </div>
         </template>
+        @php
+            $hasInitialScore = !empty($teamAScores) && !in_array(strtolower(trim($teamAScores)), ['yet to bat', 'null', '-', '0/0', '0/0 (0)'], true)
+                || (!empty($teamBScores) && !in_array(strtolower(trim($teamBScores)), ['yet to bat', 'null', '-', '0/0', '0/0 (0)'], true));
+            $ssrShowTossStrip = $showTossBanner && !$isFinished && !$hasInitialScore && empty($resultText) && empty($needRunBall) && in_array($tossStatus, ['pending', 'delayed', 'decided'], true);
+        @endphp
+        <div
+            x-show="!resultText && !needRunBall && shouldShowTossStrip"
+            @if(!$ssrShowTossStrip) x-cloak @endif
+            class="px-3 py-1.5 bg-[#0D1422]/70 border-t border-[#253248]/50 text-[11px] flex items-center"
+        >
+            <span
+                x-show="tossStatus === 'pending'"
+                @if($tossStatus !== 'pending') x-cloak @endif
+                class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 truncate max-w-full"
+            >
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0"></span>
+                <span class="truncate">🪙 Toss is pending</span>
+            </span>
+            <span
+                x-show="tossStatus === 'delayed'"
+                @if($tossStatus !== 'delayed') x-cloak @endif
+                class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-orange-500/15 text-orange-300 border border-orange-500/30 truncate max-w-full"
+            >
+                <span class="truncate" x-text="'🌧️ ' + tossText">🌧️ {{ $tossText }}</span>
+            </span>
+            <span
+                x-show="tossStatus === 'decided'"
+                @if($tossStatus !== 'decided') x-cloak @endif
+                class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/12 text-emerald-300 border border-emerald-500/30 truncate max-w-full"
+            >
+                <span class="truncate" x-text="'🪙 ' + tossText">🪙 {{ $tossText }}</span>
+            </span>
+        </div>
         @if(!empty($toss) || !empty($match['status_note']) || !empty($venue))
-            <template x-if="!resultText && !needRunBall">
+            <template x-if="!resultText && !needRunBall && !shouldShowTossStrip">
                 <div class="px-3 py-1.5 bg-[#0D1422]/70 border-t border-[#253248]/50 text-[11px] truncate">
                     @if(!empty($toss))
                         <span class="text-[#94A3B8]"><span class="text-[#F8FAFC] font-medium">Toss:</span> {{ $toss }}</span>

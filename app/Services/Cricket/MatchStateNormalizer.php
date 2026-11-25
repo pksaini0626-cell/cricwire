@@ -170,8 +170,14 @@ class MatchStateNormalizer
         $needRunBall = trim((string) ($match['need_run_ball'] ?? ''));
         $target = (int) ($match['target'] ?? $match['target_runs'] ?? 0);
         $toss = trim((string) ($match['toss'] ?? ''));
+        $isExplicitScheduled = in_array($state, ['scheduled', 'upcoming', 'not started', 'preview', '0'], true)
+            || in_array($status, ['scheduled', 'upcoming', 'not started', 'preview', '0'], true);
 
-        if ($needRunBall !== '' || $target > 0 || $toss !== '') {
+        if ($needRunBall !== '' || $target > 0) {
+            return true;
+        }
+
+        if ($toss !== '' && !$isExplicitScheduled && !CricketLiveApiService::isUndecidedToss($toss)) {
             return true;
         }
 

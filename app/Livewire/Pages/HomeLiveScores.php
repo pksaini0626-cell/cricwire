@@ -59,7 +59,8 @@ class HomeLiveScores extends Component
     public function render(
         \App\Http\Controllers\Cricket\LiveMatchController $liveController,
         \App\Http\Controllers\Cricket\UpcomingMatchController $upcomingController,
-        \App\Http\Controllers\Cricket\FinishedMatchController $finishedController
+        \App\Http\Controllers\Cricket\FinishedMatchController $finishedController,
+        CricketLiveApiService $apiService
     ) {
         // Track active visitor (skip for search crawlers)
         if (!request()->attributes->get('is_search_crawler') && !app()->bound('crawler_read_only_mode')) {
@@ -71,8 +72,9 @@ class HomeLiveScores extends Component
             $items
         ));
 
-        $liveMatches = $formatList($liveController->getLiveMatches());
+        $liveMatches = $apiService->enrichMatchesWithTossState($formatList($liveController->getLiveMatches()));
         $upcomingMatches = $formatList($upcomingController->getUpcomingMatches());
+        $todayUpcomingMatches = $apiService->enrichMatchesWithTossState($formatList($apiService->filterTodayUpcomingMatches($upcomingMatches)));
         $finishedMatches = $formatList($finishedController->getFinishedMatches());
 
         // Pagination bounds calculation
@@ -89,7 +91,7 @@ class HomeLiveScores extends Component
         }
 
         // Paginated slices for upcoming and finished
-        $paginatedUpcomingMatches = array_slice($upcomingMatches, ($this->upcomingPage - 1) * $this->perPage, $this->perPage);
+        $paginatedUpcomingMatches = $apiService->enrichMatchesWithTossState(array_slice($upcomingMatches, ($this->upcomingPage - 1) * $this->perPage, $this->perPage));
         $paginatedFinishedMatches = array_slice($finishedMatches, ($this->finishedPage - 1) * $this->perPage, $this->perPage);
 
         // Hydrate missing finished scores for the active finished page (DB archive + once-per-match scorecard lookup)
@@ -147,6 +149,7 @@ class HomeLiveScores extends Component
             'finishedCount' => $finishedTotal,
             'liveMatches' => $liveMatches,
             'upcomingMatches' => $upcomingMatches,
+            'todayUpcomingMatches' => $todayUpcomingMatches,
             'finishedMatches' => $finishedMatches,
             'paginatedUpcomingMatches' => $paginatedUpcomingMatches,
             'paginatedFinishedMatches' => $paginatedFinishedMatches,

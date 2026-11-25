@@ -54,6 +54,14 @@ class UpcomingMatchController extends Controller
                 continue;
             }
 
+            $tossState = $this->apiService->resolveTossDisplayState($match, $match['facts'] ?? []);
+            $match['show_toss_banner'] = $tossState['show_toss_banner'];
+            $match['toss_status'] = $tossState['toss_status'];
+            $match['toss_text'] = $tossState['toss_text'];
+            if (in_array($tossState['toss_status'], ['decided', 'delayed'], true)) {
+                $match['toss'] = $tossState['toss_text'];
+            }
+
             $match['is_live'] = false;
             $match['is_completed'] = false;
             $upcoming[] = CricketMatchFormatter::formatMatchForCard($match);

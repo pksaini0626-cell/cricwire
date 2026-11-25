@@ -6,12 +6,14 @@ use App\Helpers\CricketMatchFormatter;
 use App\Http\Controllers\Controller;
 use App\Models\CompletedMatchScorecard;
 use App\Models\FinishedMatch;
+use App\Models\ManagedMatch;
 use App\Services\Cricket\CricketLiveApiService;
 use App\Services\Cricket\MatchStateNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class FinishedMatchController extends Controller
 {
@@ -62,6 +64,22 @@ class FinishedMatchController extends Controller
                 : $existing->match_json;
 
             if (is_array($stored) && !empty($stored)) {
+                $apiService = app(CricketLiveApiService::class);
+                $hydrated = $this->hydrateMissingMatchFacts($matchKey, $stored, $apiService, $contextMatch);
+                if ($hydrated['changed']) {
+                    $stored = $hydrated['match'];
+                    try {
+                        $existing->update([
+                            'match_data' => $stored,
+                            'match_json' => $stored,
+                        ]);
+                    } catch (\Throwable $e) {
+                        Log::warning("FinishedMatchController: failed updating backfilled facts for {$matchKey}: " . $e->getMessage());
+                    }
+                } else {
+                    $stored = $hydrated['match'];
+                }
+
                 $scores = MatchStateNormalizer::normalizeScores($stored, $stored['scorecard'] ?? [], 'finished');
                 $stored['score_a'] = $existing->score_a ?: $scores['score_a'];
                 $stored['team_a_scores'] = $stored['score_a'];
@@ -142,6 +160,9 @@ class FinishedMatchController extends Controller
         $normalized['match_status'] = 'Finished';
         $normalized['state'] = 'Finished';
         $normalized['commentary_unavailable'] = true;
+
+        $hydrated = $this->hydrateMissingMatchFacts($matchKey, $normalized, $apiService, $contextMatch);
+        $normalized = $hydrated['match'];
 
         $hasPersistableData = !MatchStateNormalizer::isEmptyScore($scores['score_a'])
             || !MatchStateNormalizer::isEmptyScore($scores['score_b'])
@@ -332,9 +353,16 @@ class FinishedMatchController extends Controller
             }
 
             // Overwrite empty fields with archived DB values
-            foreach (['score_a', 'team_a_scores', 'team_a_over', 'score_b', 'team_b_scores', 'team_b_over', 'result', 'status_note'] as $key) {
+            foreach (['score_a', 'team_a_scores', 'team_a_over', 'score_b', 'team_b_scores', 'team_b_over', 'result', 'status_note', 'venue', 'umpire', 'umpires', 'referee', 'day_night', 'facts'] as $key) {
                 if (empty($match[$key]) && !empty($stored[$key])) {
                     $match[$key] = $stored[$key];
+                }
+            }
+            if (!empty($stored['toss']) && (!CricketLiveApiService::isUndecidedToss($stored['toss']) || empty($match['toss']))) {
+                if (CricketLiveApiService::isUndecidedToss($match['toss'] ?? '') && !CricketLiveApiService::isUndecidedToss($stored['toss'])) {
+                    $match['toss'] = $stored['toss'];
+                } elseif (empty($match['toss']) && !CricketLiveApiService::isUndecidedToss($stored['toss'])) {
+                    $match['toss'] = $stored['toss'];
                 }
             }
 
@@ -357,6 +385,14 @@ class FinishedMatchController extends Controller
             }
             if (empty($match['result']) && !empty($scorecardRow->result_text)) {
                 $match['result'] = $scorecardRow->result_text;
+            }
+            $scFacts = $scorecardRow->scorecard_payload['match_facts'] ?? [];
+            $scToss = $scorecardRow->scorecard_payload['toss'] ?? ($scFacts['toss'] ?? '');
+            if (!empty($scToss) && !CricketLiveApiService::isUndecidedToss($scToss) && CricketLiveApiService::isUndecidedToss($match['toss'] ?? '')) {
+                $match['toss'] = $scToss;
+            }
+            if (empty($match['facts']) && !empty($scFacts)) {
+                $match['facts'] = $scFacts;
             }
         }
 
@@ -412,5 +448,139 @@ class FinishedMatchController extends Controller
             'commentary_unavailable' => true,
             'data' => $data,
         ]);
+    }
+
+    /**
+     * Ensure completed match payload has match_facts (toss, venue, umpires, referee, day_night, series)
+     * merged from local archives or fetched once from /cricket/match-facts/{matchId} if missing.
+     *
+     * @return array{match: array, changed: bool}
+     */
+    protected function hydrateMissingMatchFacts(
+        string $matchKey,
+        array $match,
+        CricketLiveApiService $apiService,
+        array $contextMatch = []
+    ): array {
+        $changed = false;
+
+        $currentToss = trim((string) ($match['toss'] ?? $match['toss_decision'] ?? ''));
+        if ($currentToss !== '' && CricketLiveApiService::isUndecidedToss($currentToss) && !CricketLiveApiService::isDelayToss($currentToss)) {
+            $match['toss'] = '';
+            $currentToss = '';
+            $changed = true;
+        }
+
+        $facts = is_array($match['facts'] ?? null) ? $match['facts'] : [];
+        if (empty($facts) && !empty($contextMatch['facts']) && is_array($contextMatch['facts'])) {
+            $facts = $contextMatch['facts'];
+        }
+
+        $hasValidToss = CricketLiveApiService::isDecidedToss($currentToss) || CricketLiveApiService::isDelayToss($currentToss);
+
+        // 1. Zero-API DB/local fallbacks (ManagedMatch, CompletedMatchScorecard, pre-match JSON)
+        if (!$hasValidToss) {
+            $managed = ManagedMatch::where('match_id', (int) $matchKey)->first();
+            if ($managed && !empty($managed->toss_text) && (CricketLiveApiService::isDecidedToss($managed->toss_text) || CricketLiveApiService::isDelayToss($managed->toss_text))) {
+                $currentToss = trim((string) $managed->toss_text);
+                $match['toss'] = $currentToss;
+                $hasValidToss = true;
+                $changed = true;
+            }
+        }
+
+        if ((!$hasValidToss || empty($facts)) && class_exists(CompletedMatchScorecard::class)) {
+            $cms = CompletedMatchScorecard::where('match_id', $matchKey)->first();
+            if ($cms && is_array($cms->scorecard_payload)) {
+                $scFacts = is_array($cms->scorecard_payload['match_facts'] ?? null) ? $cms->scorecard_payload['match_facts'] : [];
+                if (empty($facts) && !empty($scFacts)) {
+                    $facts = $scFacts;
+                    $changed = true;
+                }
+                $scToss = trim((string) ($cms->scorecard_payload['toss'] ?? $scFacts['toss'] ?? ''));
+                if (!$hasValidToss && (CricketLiveApiService::isDecidedToss($scToss) || CricketLiveApiService::isDelayToss($scToss))) {
+                    $currentToss = $scToss;
+                    $match['toss'] = $currentToss;
+                    $hasValidToss = true;
+                    $changed = true;
+                }
+            }
+        }
+
+        if (!$hasValidToss || empty($facts)) {
+            $prePath = "match-cache/pre-match-{$matchKey}.json";
+            if (Storage::disk('local')->exists($prePath)) {
+                $preData = json_decode(Storage::disk('local')->get($prePath), true) ?: [];
+                if (empty($facts) && !empty($preData['facts']) && is_array($preData['facts'])) {
+                    $facts = $preData['facts'];
+                    $changed = true;
+                }
+                $preToss = trim((string) ($preData['toss'] ?? $preData['facts']['toss'] ?? ''));
+                if (!$hasValidToss && (CricketLiveApiService::isDecidedToss($preToss) || CricketLiveApiService::isDelayToss($preToss))) {
+                    $currentToss = $preToss;
+                    $match['toss'] = $currentToss;
+                    $hasValidToss = true;
+                    $changed = true;
+                }
+            }
+        }
+
+        // 2. Fetch once from /cricket/match-facts/{matchId} if toss or match_facts still missing
+        if ((!$hasValidToss || empty($facts)) && !$apiService->isHardStopActive()) {
+            $skipKey = "cricket:finished_facts_skip:{$matchKey}";
+            if (!Cache::has($skipKey)) {
+                try {
+                    $fetchedFacts = $apiService->getMatchFacts($matchKey, array_merge($match, ['state' => 'Complete']));
+                    if (!empty($fetchedFacts)) {
+                        $facts = array_merge($facts, $fetchedFacts);
+                        $changed = true;
+                        $fetchedToss = trim((string) ($fetchedFacts['toss'] ?? ''));
+                        if (CricketLiveApiService::isDecidedToss($fetchedToss) || CricketLiveApiService::isDelayToss($fetchedToss)) {
+                            $match['toss'] = $fetchedToss;
+                            $hasValidToss = true;
+                        } else {
+                            Cache::put($skipKey, true, 600);
+                        }
+                    } else {
+                        Cache::put($skipKey, true, 600);
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning("FinishedMatchController: getMatchFacts failed for {$matchKey}: " . $e->getMessage());
+                }
+            }
+        }
+
+        if (!empty($facts)) {
+            if (empty($match['venue']) && !empty($facts['venue'])) {
+                $match['venue'] = $facts['venue'];
+                $changed = true;
+            }
+            if (empty($match['umpire']) && !empty($facts['umpires'])) {
+                $match['umpire'] = is_array($facts['umpires']) ? implode(', ', array_filter($facts['umpires'])) : (string) $facts['umpires'];
+                $match['umpires'] = $facts['umpires'];
+                $changed = true;
+            }
+            if (empty($match['referee']) && !empty($facts['referee'])) {
+                $match['referee'] = $facts['referee'];
+                $changed = true;
+            }
+            if (!isset($match['day_night']) && isset($facts['day_night'])) {
+                $match['day_night'] = (bool) $facts['day_night'];
+                $changed = true;
+            }
+            if (empty($match['series']) && !empty($facts['series'])) {
+                $match['series'] = $facts['series'];
+                $changed = true;
+            }
+            if (!empty($match['toss']) && (empty($facts['toss']) || CricketLiveApiService::isUndecidedToss($facts['toss']))) {
+                $facts['toss'] = $match['toss'];
+            }
+            $match['facts'] = $facts;
+        }
+
+        return [
+            'match' => $match,
+            'changed' => $changed,
+        ];
     }
 }

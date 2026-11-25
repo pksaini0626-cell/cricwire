@@ -93,6 +93,34 @@ class CompletedMatchController extends Controller
 
         $isFinished = self::isFinishedMatch($normalized) || $apiService->isFinishedMatch($matchId);
         if ($isFinished) {
+            $currentToss = trim((string) ($normalized['toss'] ?? ''));
+            if ((CricketLiveApiService::isUndecidedToss($currentToss) || empty($normalized['facts'])) && !$apiService->isHardStopActive()) {
+                try {
+                    $facts = $apiService->getMatchFacts($matchId, array_merge($normalized, ['state' => 'Complete']));
+                    if (!empty($facts)) {
+                        $normalized['facts'] = $facts;
+                        if (CricketLiveApiService::isDecidedToss($facts['toss'] ?? '') || CricketLiveApiService::isDelayToss($facts['toss'] ?? '')) {
+                            $normalized['toss'] = $facts['toss'];
+                        }
+                        if (empty($normalized['venue']) && !empty($facts['venue'])) {
+                            $normalized['venue'] = $facts['venue'];
+                        }
+                        if (empty($normalized['umpire']) && !empty($facts['umpires'])) {
+                            $normalized['umpire'] = is_array($facts['umpires']) ? implode(', ', $facts['umpires']) : (string) $facts['umpires'];
+                            $normalized['umpires'] = $facts['umpires'];
+                        }
+                        if (empty($normalized['referee']) && !empty($facts['referee'])) {
+                            $normalized['referee'] = $facts['referee'];
+                        }
+                        if (!isset($normalized['day_night']) && isset($facts['day_night'])) {
+                            $normalized['day_night'] = (bool) $facts['day_night'];
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning("CompletedMatchController: getMatchFacts failed for {$matchKey}: " . $e->getMessage());
+                }
+            }
+
             $normalized['is_live'] = false;
             $normalized['match_status'] = 'Finished';
 

@@ -632,6 +632,161 @@ class CricketLiveApiService
     }
 
     /**
+     * Filter upcoming matches strictly to those scheduled for TODAY in Asia/Kolkata (IST),
+     * excluding completed/live matches, skipped series, and non-covered matches,
+     * sorted chronologically by start time ascending (earliest first).
+     */
+    public function filterTodayUpcomingMatches(array $upcomingMatches): array
+    {
+        if (empty($upcomingMatches)) {
+            return [];
+        }
+
+        $todayIst = \Carbon\Carbon::now('Asia/Kolkata')->toDateString();
+
+        try {
+            $candidates = $this->filterAllowedMatches($upcomingMatches);
+        } catch (\Throwable) {
+            $candidates = array_values(array_filter($upcomingMatches, fn ($m) => is_array($m)));
+        }
+
+        $todayMatches = [];
+        $seenIds = [];
+
+        foreach ($candidates as $match) {
+            if (!is_array($match)) {
+                continue;
+            }
+
+            if (($match['is_covered'] ?? true) === false || ($match['series_skipped'] ?? false) === true) {
+                continue;
+            }
+
+            $mId = (string) ($match['match_id'] ?? $match['id'] ?? '');
+            if ($mId !== '') {
+                if (isset($seenIds[$mId])) {
+                    continue;
+                }
+                $seenIds[$mId] = true;
+            }
+
+            if (self::isCompletedMatch($match) || self::isLiveMatch($match)) {
+                continue;
+            }
+
+            $matchIst = $this->parseMatchStartToIst($match);
+            if ($matchIst === null || $matchIst->toDateString() !== $todayIst) {
+                continue;
+            }
+
+            $match['start_timestamp_ist'] = $matchIst->timestamp;
+            $match['start_time_ist'] = $matchIst->format('Y-m-d H:i:s');
+            $match['ist_time_label'] = $matchIst->format('h:i A') . ' IST';
+
+            $todayMatches[] = $match;
+        }
+
+        usort($todayMatches, function (array $a, array $b): int {
+            return ($a['start_timestamp_ist'] ?? PHP_INT_MAX) <=> ($b['start_timestamp_ist'] ?? PHP_INT_MAX);
+        });
+
+        return array_values($todayMatches);
+    }
+
+    /**
+     * Parse a match's start timestamp or date string into Asia/Kolkata (IST).
+     */
+    public function parseMatchStartToIst(array $match): ?\Carbon\Carbon
+    {
+        $raw = is_array($match['raw'] ?? null) ? $match['raw'] : [];
+
+        $candidates = [
+            ['value' => $match['start_time_ist'] ?? null, 'tz' => 'Asia/Kolkata'],
+            ['value' => $match['timestamp'] ?? $raw['timestamp'] ?? null, 'tz' => 'UTC'],
+            ['value' => $match['start_time'] ?? $raw['start_time'] ?? null, 'tz' => 'UTC'],
+            ['value' => $match['match_start_time'] ?? $raw['match_start_time'] ?? null, 'tz' => 'UTC'],
+            ['value' => $match['date_time'] ?? $raw['date_time'] ?? null, 'tz' => 'UTC'],
+            ['value' => $match['dateTimeGMT'] ?? $raw['dateTimeGMT'] ?? null, 'tz' => 'UTC'],
+        ];
+
+        $matchDate = trim((string) ($match['match_date'] ?? $raw['match_date'] ?? ''));
+        $matchTime = trim((string) ($match['match_time'] ?? $raw['match_time'] ?? $match['time'] ?? ''));
+        if ($matchDate !== '' && $matchTime !== '' && !preg_match('/\d{1,2}:\d{2}/', $matchDate)) {
+            $candidates[] = ['value' => "{$matchDate} {$matchTime}", 'tz' => 'UTC'];
+        }
+
+        $candidates[] = ['value' => $match['match_date'] ?? null, 'tz' => 'UTC'];
+        $candidates[] = ['value' => $match['date_wise'] ?? null, 'tz' => 'UTC'];
+        $candidates[] = ['value' => $match['date'] ?? $raw['date'] ?? null, 'tz' => 'UTC'];
+
+        // Fallback: extract timestamp from status notes like "Match starts at Nov 26, 03:30 GMT"
+        $statusText = (string) ($match['status_note'] ?? $match['status'] ?? $raw['status_detail'] ?? $raw['status'] ?? '');
+        if ($statusText !== '' && preg_match('/starts\s+at\s+(.+)$/i', $statusText, $startsAt)) {
+            $candidates[] = ['value' => trim($startsAt[1]), 'tz' => 'UTC'];
+        }
+
+        foreach ($candidates as $candidate) {
+            $parsed = $this->parseDateCandidateToIst($candidate['value'], $candidate['tz']);
+            if ($parsed !== null) {
+                return $parsed;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Safely parse a single timestamp or date string into Asia/Kolkata.
+     */
+    private function parseDateCandidateToIst(mixed $value, string $defaultTz = 'UTC'): ?\Carbon\Carbon
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_numeric($value)) {
+            $num = (float) $value;
+            if ($num <= 0) {
+                return null;
+            }
+            $ts = $num > 9999999999 ? (int) floor($num / 1000) : (int) $num;
+
+            try {
+                return \Carbon\Carbon::createFromTimestamp($ts, 'UTC')->setTimezone('Asia/Kolkata');
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        if (!is_string($value)) {
+            return null;
+        }
+
+        $str = trim($value);
+        if ($str === '') {
+            return null;
+        }
+
+        // Require an explicit calendar date so bare times (e.g. "07:30 PM") don't falsely default to today
+        $hasExplicitDate = preg_match('/\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s,]+\d{1,2}|\d{1,2}[\s,]+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i', $str) === 1;
+        if (!$hasExplicitDate) {
+            return null;
+        }
+
+        try {
+            // PHP's DateTime treats "IST" as Israel Standard Time (+02:00); handle IST explicitly as Asia/Kolkata
+            if (preg_match('/\bIST\b/i', $str)) {
+                $cleanStr = trim(preg_replace('/\bIST\b/i', '', $str));
+                return \Carbon\Carbon::parse($cleanStr, 'Asia/Kolkata')->setTimezone('Asia/Kolkata');
+            }
+
+            return \Carbon\Carbon::parse($str, $defaultTz)->setTimezone('Asia/Kolkata');
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
      * Get Fast Home Data partitioned into live, upcoming, and recent strictly backed by Redis / Cache.
      */
     public function getHomeFromRedis(): array
@@ -644,9 +799,12 @@ class CricketLiveApiService
                 $redisHome['recent'] ?? ($redisHome['finished'] ?? [])
             );
 
+            $allowedUpcoming = $this->filterAllowedMatches($sanitized['upcoming']);
+
             return [
                 'live' => $this->filterAllowedMatches($sanitized['live']),
-                'upcoming' => $this->filterAllowedMatches($sanitized['upcoming']),
+                'upcoming' => $allowedUpcoming,
+                'today_upcoming' => $this->filterTodayUpcomingMatches($allowedUpcoming),
                 'recent' => $this->filterAllowedMatches($sanitized['recent']),
                 'finished' => $this->filterAllowedMatches($sanitized['finished']),
             ];
@@ -719,19 +877,47 @@ class CricketLiveApiService
         $dynamicConfig = $dynamicConfig ?? $this->getDynamicTtls($matchId, $baseMatch);
 
         // Header normalization when baseMatch is sparse
-        if (empty($baseMatch['team_a']) || $baseMatch['team_a'] === 'Team A') {
-            $header = $commRes['match_header'] ?? $scorecardRes['match_header'] ?? ($matchFacts['match_info'] ?? null);
-            if (is_array($header)) {
-                $baseMatch['team_a'] = $header['team1']['name'] ?? $baseMatch['team_a'] ?? 'Team A';
-                $baseMatch['team_b'] = $header['team2']['name'] ?? $baseMatch['team_b'] ?? 'Team B';
-                $baseMatch['team_a_short'] = $header['team1']['short'] ?? $baseMatch['team_a_short'] ?? self::generateTeamShort($baseMatch['team_a']);
-                $baseMatch['team_b_short'] = $header['team2']['short'] ?? $baseMatch['team_b_short'] ?? self::generateTeamShort($baseMatch['team_b']);
-                $baseMatch['series_name'] = $header['series_name'] ?? $baseMatch['series_name'] ?? 'Cricket Series';
-                $baseMatch['match_desc'] = $header['description'] ?? $header['match_desc'] ?? $baseMatch['match_desc'] ?? 'Match';
-                $baseMatch['format'] = $header['format'] ?? $baseMatch['format'] ?? 'T20';
-                $baseMatch['venue'] = $header['venue'] ?? $baseMatch['venue'] ?? ($matchFacts['venue'] ?? '');
-                $baseMatch['state'] = $header['state'] ?? $baseMatch['state'] ?? 'Live';
-                $baseMatch['status'] = $header['status'] ?? $baseMatch['status'] ?? 'Live';
+        $header = $commRes['match_header'] ?? $scorecardRes['match_header'] ?? ($matchFacts['match_info'] ?? null);
+        if (is_array($header) && (empty($baseMatch['team_a']) || $baseMatch['team_a'] === 'Team A')) {
+            $baseMatch['team_a'] = $header['team1']['name'] ?? $baseMatch['team_a'] ?? 'Team A';
+            $baseMatch['team_b'] = $header['team2']['name'] ?? $baseMatch['team_b'] ?? 'Team B';
+            $baseMatch['team_a_short'] = $header['team1']['short'] ?? $baseMatch['team_a_short'] ?? self::generateTeamShort($baseMatch['team_a']);
+            $baseMatch['team_b_short'] = $header['team2']['short'] ?? $baseMatch['team_b_short'] ?? self::generateTeamShort($baseMatch['team_b']);
+            $baseMatch['series_name'] = $header['series_name'] ?? $baseMatch['series_name'] ?? 'Cricket Series';
+            $baseMatch['match_desc'] = $header['description'] ?? $header['match_desc'] ?? $baseMatch['match_desc'] ?? 'Match';
+            $baseMatch['format'] = $header['format'] ?? $baseMatch['format'] ?? 'T20';
+            $baseMatch['venue'] = $header['venue'] ?? $baseMatch['venue'] ?? ($matchFacts['venue'] ?? '');
+            $baseMatch['state'] = $header['state'] ?? $baseMatch['state'] ?? 'Live';
+            $baseMatch['status'] = $header['status'] ?? $baseMatch['status'] ?? 'Live';
+        }
+
+        // Merge matchFacts metadata (toss, venue, umpires, referee, day_night, series) without overwriting decided values
+        if (!empty($matchFacts)) {
+            $factsToss = trim((string) ($matchFacts['toss'] ?? ''));
+            $baseToss = trim((string) ($baseMatch['toss'] ?? $baseMatch['toss_decision'] ?? ''));
+            if ($factsToss !== '' && (self::isDecidedToss($factsToss) || self::isDelayToss($factsToss) || $baseToss === '')) {
+                if (!self::isDecidedToss($baseToss) || self::isDecidedToss($factsToss)) {
+                    $baseMatch['toss'] = $factsToss;
+                }
+            }
+            if (empty($baseMatch['venue']) && !empty($matchFacts['venue'])) {
+                $baseMatch['venue'] = $matchFacts['venue'];
+            }
+            if (empty($baseMatch['umpire']) && !empty($matchFacts['umpires'])) {
+                $baseMatch['umpire'] = is_array($matchFacts['umpires'])
+                    ? implode(', ', array_filter($matchFacts['umpires']))
+                    : (string) $matchFacts['umpires'];
+                $baseMatch['umpires'] = $matchFacts['umpires'];
+            }
+            if (empty($baseMatch['referee']) && !empty($matchFacts['referee'])) {
+                $baseMatch['referee'] = $matchFacts['referee'];
+            }
+            if (!isset($baseMatch['day_night']) && isset($matchFacts['day_night'])) {
+                $baseMatch['day_night'] = (bool) $matchFacts['day_night'];
+            }
+            if (empty($baseMatch['series']) && !empty($matchFacts['series'])) {
+                $baseMatch['series'] = $matchFacts['series'];
+                $baseMatch['series_name'] = $baseMatch['series_name'] ?? $matchFacts['series'];
             }
         }
 
@@ -983,6 +1169,14 @@ class CricketLiveApiService
             'timestamp' => time(),
         ]);
 
+        $tossState = $this->resolveTossDisplayState($built, $matchFacts ?: ($built['facts'] ?? []), false);
+        $built['show_toss_banner'] = $tossState['show_toss_banner'];
+        $built['toss_status'] = $tossState['toss_status'];
+        $built['toss_text'] = $tossState['toss_text'];
+        if (in_array($tossState['toss_status'], ['decided', 'delayed'], true)) {
+            $built['toss'] = $tossState['toss_text'];
+        }
+
         return $this->enrichFastMatchPayload($built);
     }
 
@@ -1024,6 +1218,19 @@ class CricketLiveApiService
                 if (empty($cached['batters']) || empty($cached['bowler'])) {
                     $cached = $this->enrichFastMatchPayload($cached);
                 }
+                if ($cachedBucket === 'upcoming' || empty($cached['toss']) || self::isUndecidedToss($cached['toss'] ?? '')) {
+                    $tossState = $this->resolveTossDisplayState($cached, $cached['facts'] ?? []);
+                    $cached['show_toss_banner'] = $tossState['show_toss_banner'];
+                    $cached['toss_status'] = $tossState['toss_status'];
+                    $cached['toss_text'] = $tossState['toss_text'];
+                    if (in_array($tossState['toss_status'], ['decided', 'delayed'], true)) {
+                        $cached['toss'] = $tossState['toss_text'];
+                    }
+                    $cachedFacts = Cache::get("cricket:facts:{$matchId}");
+                    if (is_array($cachedFacts) && !empty($cachedFacts)) {
+                        $cached['facts'] = $cachedFacts;
+                    }
+                }
                 $cached['server_updated_at'] = $cached['server_updated_at'] ?? ($cached['updated_at'] ?? now()->toIso8601String());
                 return $cached;
             }
@@ -1063,10 +1270,21 @@ class CricketLiveApiService
 
         if ($isUpcoming) {
             $nowIso = now()->toIso8601String();
+            $tossState = $this->resolveTossDisplayState($baseMatch, $baseMatch['facts'] ?? []);
+            $cachedFacts = Cache::get("cricket:facts:{$matchId}");
             $payload = array_merge($baseMatch, [
+                'show_toss_banner' => $tossState['show_toss_banner'],
+                'toss_status' => $tossState['toss_status'],
+                'toss_text' => $tossState['toss_text'],
                 'updated_at' => $nowIso,
                 'server_updated_at' => $nowIso,
             ]);
+            if (in_array($tossState['toss_status'], ['decided', 'delayed'], true)) {
+                $payload['toss'] = $tossState['toss_text'];
+            }
+            if (is_array($cachedFacts) && !empty($cachedFacts)) {
+                $payload['facts'] = $cachedFacts;
+            }
             $this->writeMatchToRedis($matchId, $payload);
             return $payload;
         }
@@ -1099,7 +1317,7 @@ class CricketLiveApiService
             // Refresh live list score if needed + fetch fresh commentary & scorecard directly from upstream API
             $commRes = $this->getCommentary($matchId);
             $scorecardRes = $this->getScorecard($matchId);
-            $facts = Cache::remember("cricket:facts:{$matchId}", 3600, fn () => $this->getMatchFacts($matchId));
+            $facts = $this->getMatchFacts($matchId, $baseMatch);
 
             $built = $this->buildLiveMatchPayload($matchId, $baseMatch, $commRes, $scorecardRes, is_array($facts) ? $facts : []);
 
@@ -1328,36 +1546,71 @@ class CricketLiveApiService
 
     /**
      * Get or Archive Completed Match Scorecard in database for permanent 0-API call serving.
+     * Ensures match_facts (toss, venue, umpires, referee, day_night, series) is fetched once if missing and persisted.
      */
     public function getOrArchiveCompletedScorecard(int|string $matchId, array $matchMeta = []): array
     {
-        $matchId = (int) $matchId;
-        if (class_exists(\App\Models\CompletedMatchScorecard::class)) {
-            $record = CompletedMatchScorecard::where('match_id', $matchId)->first();
-            if ($record && !empty($record->scorecard_json)) {
-                return $record->scorecard_json;
+        $matchKey = (string) $matchId;
+        $record = class_exists(\App\Models\CompletedMatchScorecard::class)
+            ? CompletedMatchScorecard::where('match_id', $matchKey)->first()
+            : null;
+
+        $existingPayload = ($record && is_array($record->scorecard_payload)) ? $record->scorecard_payload : [];
+        $innings = $existingPayload['innings'] ?? (is_array($existingPayload) && array_is_list($existingPayload) ? $existingPayload : []);
+        $existingFacts = is_array($existingPayload['match_facts'] ?? null) ? $existingPayload['match_facts'] : [];
+        $existingToss = trim((string) ($existingFacts['toss'] ?? $existingPayload['toss'] ?? $matchMeta['toss'] ?? ''));
+
+        if ($record && !empty($innings) && !empty($existingFacts) && (self::isDecidedToss($existingToss) || self::isDelayToss($existingToss))) {
+            return $existingPayload;
+        }
+
+        if (empty($innings) && !$this->isHardStopActive()) {
+            $scorecard = $this->getScorecard($matchId);
+            $innings = $scorecard['innings'] ?? $scorecard;
+        }
+
+        $facts = $existingFacts;
+        if ((empty($facts) || self::isUndecidedToss($existingToss)) && !$this->isHardStopActive()) {
+            $fetchedFacts = $this->getMatchFacts($matchId, array_merge($matchMeta, ['state' => 'Complete']));
+            if (!empty($fetchedFacts)) {
+                $facts = $fetchedFacts;
             }
         }
 
-        $scorecard = $this->getScorecard($matchId);
-        $innings = $scorecard['innings'] ?? $scorecard;
+        $mergedFacts = array_filter([
+            'toss' => $facts['toss'] ?? $existingToss,
+            'venue' => $facts['venue'] ?? ($matchMeta['venue'] ?? ''),
+            'umpires' => $facts['umpires'] ?? ($matchMeta['umpires'] ?? []),
+            'referee' => $facts['referee'] ?? ($matchMeta['referee'] ?? ''),
+            'day_night' => $facts['day_night'] ?? ($matchMeta['day_night'] ?? false),
+            'series' => $facts['series'] ?? ($matchMeta['series_name'] ?? $matchMeta['series'] ?? ''),
+        ], fn ($v) => $v !== '' && $v !== []);
 
-        if (class_exists(\App\Models\CompletedMatchScorecard::class) && !empty($innings)) {
-            try {
-                CompletedMatchScorecard::updateOrCreate(
-                    ['match_id' => $matchId],
-                    [
-                        'series_name' => $matchMeta['series_name'] ?? null,
-                        'team_a' => $matchMeta['team_a'] ?? null,
-                        'team_b' => $matchMeta['team_b'] ?? null,
-                        'result_text' => $matchMeta['result_text'] ?? null,
-                        'scorecard_json' => ['innings' => $innings],
-                    ]
-                );
-            } catch (\Throwable $e) {}
+        $payload = array_merge($existingPayload, [
+            'innings' => is_array($innings) ? $innings : [],
+            'match_facts' => $mergedFacts,
+        ]);
+        if (!empty($mergedFacts['toss']) && (self::isDecidedToss($mergedFacts['toss']) || self::isDelayToss($mergedFacts['toss']))) {
+            $payload['toss'] = $mergedFacts['toss'];
         }
 
-        return ['innings' => $innings];
+        if (class_exists(\App\Models\CompletedMatchScorecard::class) && (!empty($innings) || !empty($mergedFacts))) {
+            try {
+                CompletedMatchScorecard::updateOrCreate(
+                    ['match_id' => $matchKey],
+                    [
+                        'series_name' => $matchMeta['series_name'] ?? $matchMeta['series'] ?? ($mergedFacts['series'] ?? ($record?->series_name)),
+                        'match_title' => $matchMeta['match_title'] ?? $matchMeta['match_desc'] ?? $matchMeta['matchs'] ?? ($record?->match_title),
+                        'result_text' => $matchMeta['result_text'] ?? $matchMeta['result'] ?? ($record?->result_text),
+                        'scorecard_payload' => $payload,
+                    ]
+                );
+            } catch (\Throwable $e) {
+                Log::warning("CricketLiveApiService::getOrArchiveCompletedScorecard failed for {$matchKey}: " . $e->getMessage());
+            }
+        }
+
+        return $payload;
     }
 
     /**
@@ -1445,9 +1698,12 @@ class CricketLiveApiService
                 $cached['recent'] ?? ($cached['finished'] ?? [])
             );
 
+            $allowedUpcoming = $this->filterAllowedMatches($sanitized['upcoming']);
+
             return [
                 'live' => $this->filterAllowedMatches($sanitized['live']),
-                'upcoming' => $this->filterAllowedMatches($sanitized['upcoming']),
+                'upcoming' => $allowedUpcoming,
+                'today_upcoming' => $this->filterTodayUpcomingMatches($allowedUpcoming),
                 'recent' => $this->filterAllowedMatches($sanitized['recent']),
                 'finished' => $this->filterAllowedMatches($sanitized['finished']),
             ];
@@ -1469,9 +1725,12 @@ class CricketLiveApiService
         $ttl = !empty($sanitized['live']) ? 10 : 180;
         Cache::put($cacheKey, $data, $ttl);
 
+        $allowedUpcoming = $this->filterAllowedMatches($data['upcoming']);
+
         return [
             'live' => $this->filterAllowedMatches($data['live']),
-            'upcoming' => $this->filterAllowedMatches($data['upcoming']),
+            'upcoming' => $allowedUpcoming,
+            'today_upcoming' => $this->filterTodayUpcomingMatches($allowedUpcoming),
             'recent' => $this->filterAllowedMatches($data['recent']),
             'finished' => $this->filterAllowedMatches($data['finished']),
         ];
@@ -1755,27 +2014,379 @@ class CricketLiveApiService
     }
 
     /**
-     * GET /cricket/match-facts/{$matchId}
-     * Maps toss, venue, umpires, referee, day_night, series.
+     * Determine whether a toss string indicates a delay (rain / wet outfield / inspection).
      */
-    public function getMatchFacts(int|string $matchId): array
+    public static function isDelayToss(?string $toss): bool
     {
+        $clean = strtolower(trim((string) $toss));
+        if ($clean === '') {
+            return false;
+        }
+
+        return str_contains($clean, 'delay')
+            || str_contains($clean, 'wet outfield')
+            || str_contains($clean, 'rain')
+            || str_contains($clean, 'postponed')
+            || str_contains($clean, 'inspection');
+    }
+
+    /**
+     * Determine whether a toss string is empty or an undecided placeholder.
+     */
+    public static function isUndecidedToss(?string $toss): bool
+    {
+        $clean = strtolower(trim((string) $toss));
+        if ($clean === '') {
+            return true;
+        }
+
+        $undecidedTokens = [
+            'yet to take place',
+            'pending',
+            'not conducted',
+            'not recorded',
+            'tbd',
+            'n/a',
+        ];
+
+        foreach ($undecidedTokens as $token) {
+            if (str_contains($clean, $token)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Determine whether a toss string contains an actual decided toss outcome.
+     */
+    public static function isDecidedToss(?string $toss): bool
+    {
+        return !self::isUndecidedToss($toss) && !self::isDelayToss($toss);
+    }
+
+    /**
+     * Resolve toss banner state for Match Cards, Match Detail Live Feed, and Info Tab (Asia/Kolkata).
+     *
+     * @return array{show_toss_banner: bool, toss_status: string, toss_text: string}
+     */
+    public function resolveTossDisplayState(array $match, array $facts = [], bool $allowFactsFetch = true): array
+    {
+        $matchId = (int) ($match['match_id'] ?? $match['id'] ?? $facts['match_id'] ?? 0);
+        $isCompleted = self::isCompletedMatch($match) || !empty($match['is_completed']);
+
+        $extractRawToss = static function (array $m, array $f): string {
+            $candidates = [
+                $f['toss'] ?? null,
+                $m['toss'] ?? null,
+                $m['toss_decision'] ?? null,
+                $m['toss_text'] ?? null,
+                $m['facts']['toss'] ?? null,
+            ];
+
+            foreach ($candidates as $cand) {
+                $str = trim((string) $cand);
+                if ($str !== '' && self::isDecidedToss($str)) {
+                    return $str;
+                }
+            }
+            foreach ($candidates as $cand) {
+                $str = trim((string) $cand);
+                if ($str !== '' && self::isDelayToss($str)) {
+                    return $str;
+                }
+            }
+            foreach ($candidates as $cand) {
+                $str = trim((string) $cand);
+                if ($str !== '') {
+                    return $str;
+                }
+            }
+
+            return '';
+        };
+
+        $toss = $extractRawToss($match, $facts);
+
+        if (self::isDelayToss($toss)) {
+            return [
+                'show_toss_banner' => true,
+                'toss_status' => 'delayed',
+                'toss_text' => $toss,
+            ];
+        }
+
+        if (self::isDecidedToss($toss)) {
+            return [
+                'show_toss_banner' => true,
+                'toss_status' => 'decided',
+                'toss_text' => $toss,
+            ];
+        }
+
+        if ($isCompleted) {
+            return [
+                'show_toss_banner' => false,
+                'toss_status' => 'none',
+                'toss_text' => 'Not recorded',
+            ];
+        }
+
+        // Evaluate 30-minute pre-match toss window in Asia/Kolkata (IST)
+        $nowIst = \Carbon\Carbon::now('Asia/Kolkata');
+        $startIst = $this->parseMatchStartToIst($match);
+        $inTossWindow = false;
+        if ($startIst !== null) {
+            $minutesToStart = $nowIst->diffInMinutes($startIst, false);
+            $inTossWindow = ($minutesToStart <= 30 && $minutesToStart >= -15);
+        }
+
+        if ($inTossWindow && $matchId > 0) {
+            if (empty($facts)) {
+                $cachedFacts = Cache::get("cricket:facts:{$matchId}");
+                if (is_array($cachedFacts) && !empty($cachedFacts)) {
+                    $facts = $cachedFacts;
+                } elseif ($allowFactsFetch && !$this->isHardStopActive()) {
+                    $facts = $this->getMatchFacts($matchId, $match);
+                }
+            }
+
+            $toss = $extractRawToss($match, $facts);
+
+            if (self::isDelayToss($toss)) {
+                return [
+                    'show_toss_banner' => true,
+                    'toss_status' => 'delayed',
+                    'toss_text' => $toss,
+                ];
+            }
+
+            if (self::isDecidedToss($toss)) {
+                return [
+                    'show_toss_banner' => true,
+                    'toss_status' => 'decided',
+                    'toss_text' => $toss,
+                ];
+            }
+
+            return [
+                'show_toss_banner' => true,
+                'toss_status' => 'pending',
+                'toss_text' => 'Toss is pending',
+            ];
+        }
+
+        return [
+            'show_toss_banner' => false,
+            'toss_status' => 'none',
+            'toss_text' => 'Toss yet to take place',
+        ];
+    }
+
+    /**
+     * Enrich a list of match arrays with resolved toss display fields.
+     */
+    public function enrichMatchesWithTossState(array $matches, bool $allowFactsFetch = true): array
+    {
+        return array_values(array_map(function ($m) use ($allowFactsFetch) {
+            if (!is_array($m)) {
+                return $m;
+            }
+            $state = $this->resolveTossDisplayState($m, $m['facts'] ?? [], $allowFactsFetch);
+            $m['show_toss_banner'] = $state['show_toss_banner'];
+            $m['toss_status'] = $state['toss_status'];
+            $m['toss_text'] = $state['toss_text'];
+            if (in_array($state['toss_status'], ['decided', 'delayed'], true)) {
+                $m['toss'] = $state['toss_text'];
+            }
+            return $m;
+        }, $matches));
+    }
+
+    /**
+     * Persist decided/delayed toss and match facts into managed_matches, finished_matches,
+     * completed_match_scorecards, and pre-match cache JSON so they never revert.
+     */
+    public function persistMatchFactsToStorage(int|string $matchId, array $facts): void
+    {
+        $matchKey = (string) $matchId;
+        $matchInt = (int) $matchId;
+        $toss = trim((string) ($facts['toss'] ?? ''));
+        $isDecided = self::isDecidedToss($toss);
+        $isDelay = self::isDelayToss($toss);
+
+        if ($matchInt <= 0 || (!$isDecided && !$isDelay)) {
+            return;
+        }
+
+        try {
+            $managed = ManagedMatch::where('match_id', $matchInt)->first();
+            if ($managed) {
+                $updates = ['toss_text' => $toss];
+                if ($isDecided) {
+                    $updates['toss_fetched'] = true;
+                    $updates['toss_fetched_at'] = $managed->toss_fetched_at ?? now();
+                    if (in_array($managed->lifecycle_stage, ['scheduled', '', null], true)) {
+                        $updates['lifecycle_stage'] = 'toss_done';
+                    }
+                }
+                $managed->update($updates);
+            }
+        } catch (\Throwable $e) {
+            Log::warning("CricketLiveApiService: failed persisting toss to managed_matches for {$matchKey}: " . $e->getMessage());
+        }
+
+        try {
+            $finished = \App\Models\FinishedMatch::where('match_id', $matchKey)->first();
+            if ($finished) {
+                $payload = is_array($finished->match_data) && !empty($finished->match_data)
+                    ? $finished->match_data
+                    : (is_array($finished->match_json) ? $finished->match_json : []);
+
+                $existingToss = trim((string) ($payload['toss'] ?? ''));
+                if ($isDecided || !self::isDecidedToss($existingToss)) {
+                    $payload['toss'] = $toss;
+                }
+                if (empty($payload['venue']) && !empty($facts['venue'])) {
+                    $payload['venue'] = $facts['venue'];
+                }
+                if (empty($payload['umpire']) && !empty($facts['umpires'])) {
+                    $payload['umpire'] = is_array($facts['umpires']) ? implode(', ', $facts['umpires']) : (string) $facts['umpires'];
+                    $payload['umpires'] = $facts['umpires'];
+                }
+                if (empty($payload['referee']) && !empty($facts['referee'])) {
+                    $payload['referee'] = $facts['referee'];
+                }
+                if (!isset($payload['day_night']) && isset($facts['day_night'])) {
+                    $payload['day_night'] = (bool) $facts['day_night'];
+                }
+                if (empty($payload['series']) && !empty($facts['series'])) {
+                    $payload['series'] = $facts['series'];
+                }
+                $payload['facts'] = array_merge($payload['facts'] ?? [], $facts);
+
+                $finished->update([
+                    'match_data' => $payload,
+                    'match_json' => $payload,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning("CricketLiveApiService: failed persisting toss to finished_matches for {$matchKey}: " . $e->getMessage());
+        }
+
+        try {
+            if (class_exists(CompletedMatchScorecard::class)) {
+                $cms = CompletedMatchScorecard::where('match_id', $matchKey)->first();
+                if ($cms) {
+                    $scPayload = is_array($cms->scorecard_payload) ? $cms->scorecard_payload : [];
+                    $existingScToss = trim((string) ($scPayload['toss'] ?? $scPayload['match_facts']['toss'] ?? ''));
+                    if ($isDecided || !self::isDecidedToss($existingScToss)) {
+                        $scPayload['toss'] = $toss;
+                    }
+                    $scPayload['match_facts'] = array_filter([
+                        'toss' => ($isDecided || !self::isDecidedToss($existingScToss)) ? $toss : $existingScToss,
+                        'venue' => $facts['venue'] ?? ($scPayload['match_facts']['venue'] ?? ''),
+                        'umpires' => $facts['umpires'] ?? ($scPayload['match_facts']['umpires'] ?? []),
+                        'referee' => $facts['referee'] ?? ($scPayload['match_facts']['referee'] ?? ''),
+                        'day_night' => $facts['day_night'] ?? ($scPayload['match_facts']['day_night'] ?? false),
+                        'series' => $facts['series'] ?? ($scPayload['match_facts']['series'] ?? ''),
+                    ], fn ($v) => $v !== '' && $v !== []);
+
+                    $cms->update(['scorecard_payload' => $scPayload]);
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning("CricketLiveApiService: failed persisting toss to completed_match_scorecards for {$matchKey}: " . $e->getMessage());
+        }
+
+        try {
+            $preMatchPath = "match-cache/pre-match-{$matchKey}.json";
+            if (Storage::disk('local')->exists($preMatchPath)) {
+                $preData = json_decode(Storage::disk('local')->get($preMatchPath), true) ?: [];
+                $preData['toss'] = $toss;
+                $preData['facts'] = array_merge($preData['facts'] ?? [], $facts);
+                Storage::disk('local')->put($preMatchPath, json_encode($preData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+            }
+        } catch (\Throwable $e) {}
+    }
+
+    /**
+     * GET /cricket/match-facts/{$matchId}
+     * Unwraps data wrapper, maps toss, venue, umpires, referee, day_night, series,
+     * applies short TTL for pending/empty toss during [T-35m, T+30m] and 24h TTL + DB persistence once decided.
+     */
+    public function getMatchFacts(int|string $matchId, array $matchContext = [], bool $useCache = true): array
+    {
+        $cacheKey = "cricket:facts:{$matchId}";
+        if ($useCache) {
+            $cached = Cache::get($cacheKey);
+            if (is_array($cached) && !empty($cached)) {
+                return $cached;
+            }
+        }
+
         $res = $this->get("/cricket/match-facts/{$matchId}");
-        if (!$res) {
+        if (!$res || !is_array($res)) {
             return [];
         }
 
-        $d = $res['data'] ?? $res;
-        return [
+        $d = is_array($res['data'] ?? null) ? $res['data'] : $res;
+        if (is_array($d['data'] ?? null) && !array_key_exists('toss', $d)) {
+            $d = $d['data'];
+        }
+
+        $rawUmpires = $d['umpires'] ?? $d['umpire'] ?? [];
+        $umpiresList = is_array($rawUmpires)
+            ? array_values(array_filter(array_map(fn ($u) => trim((string) $u), $rawUmpires)))
+            : array_values(array_filter(array_map('trim', explode(',', (string) $rawUmpires))));
+
+        $facts = [
             'match_id' => (int) $matchId,
-            'toss' => $d['toss'] ?? $d['toss_winner'] ?? '',
-            'venue' => $d['venue'] ?? $d['stadium'] ?? '',
-            'umpires' => $d['umpires'] ?? '',
-            'referee' => $d['referee'] ?? '',
+            'toss' => trim((string) ($d['toss'] ?? $d['toss_winner'] ?? $d['toss_decision'] ?? '')),
+            'venue' => trim((string) ($d['venue'] ?? $d['stadium'] ?? '')),
+            'umpires' => $umpiresList,
+            'umpire' => implode(', ', $umpiresList),
+            'referee' => trim((string) ($d['referee'] ?? '')),
             'day_night' => (bool) ($d['day_night'] ?? false),
-            'series' => $d['series'] ?? $d['series_name'] ?? '',
+            'series' => trim((string) ($d['series'] ?? $d['series_name'] ?? '')),
             'raw' => $res,
         ];
+
+        $toss = $facts['toss'];
+        $isCompleted = self::isCompletedMatch($matchContext);
+
+        if (self::isDecidedToss($toss)) {
+            $ttl = 86400; // 24 hours
+            $this->persistMatchFactsToStorage($matchId, $facts);
+        } elseif (self::isDelayToss($toss)) {
+            // Keep delay visible and persisted, but refresh every 45s while match isn't completed so actual toss decision is picked up
+            $ttl = $isCompleted ? 86400 : 45;
+            $this->persistMatchFactsToStorage($matchId, $facts);
+        } else {
+            // Empty or pending ("yet to take place" / "pending")
+            $startIst = $this->parseMatchStartToIst($matchContext);
+            if ($startIst === null) {
+                $managed = ManagedMatch::where('match_id', (int) $matchId)->first();
+                if ($managed && $managed->start_time_ist) {
+                    $startIst = \Carbon\Carbon::parse($managed->start_time_ist)->timezone('Asia/Kolkata');
+                }
+            }
+
+            $inPreMatchWindow = true;
+            if ($startIst !== null) {
+                $minutesToStart = \Carbon\Carbon::now('Asia/Kolkata')->diffInMinutes($startIst, false);
+                $inPreMatchWindow = ($minutesToStart <= 35 && $minutesToStart >= -30);
+            }
+
+            $ttl = ($inPreMatchWindow && !$isCompleted) ? 30 : 300;
+        }
+
+        if ($useCache) {
+            Cache::put($cacheKey, $facts, $ttl);
+        }
+
+        return $facts;
     }
 
     /**

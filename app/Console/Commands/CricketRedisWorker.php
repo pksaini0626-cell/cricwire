@@ -211,8 +211,8 @@ class CricketRedisWorker extends Command
                         $scorecardRes = Cache::remember($scorecardCacheKey, $scorecardTtl, fn () => $cricketService->getScorecard($matchId));
                     }
 
-                    // Match Facts cached 1h (static fixture metadata)
-                    $matchFacts = Cache::remember("cricket:facts:{$matchId}", 3600, fn () => $cricketService->getMatchFacts($matchId));
+                    // Match Facts with smart toss-aware TTL (30s when pending/empty, 24h when decided)
+                    $matchFacts = $cricketService->getMatchFacts($matchId, $baseMatch);
 
                     // Build unified payload with server_updated_at = now()->toIso8601String()
                     $matchPayload = $cricketService->buildLiveMatchPayload(

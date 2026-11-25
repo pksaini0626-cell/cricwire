@@ -210,6 +210,17 @@ class MatchDetail extends Component
         $preMatchData = $apiService->getPreMatchArchivedData($this->matchId);
         $archivedXI = $apiService->getArchivedPlayingXI($this->matchId);
 
+        if ($managed) {
+            if (empty($match['start_time_ist']) && !empty($managed->start_time_ist)) {
+                $match['start_time_ist'] = $managed->start_time_ist->timezone('Asia/Kolkata')->format('Y-m-d H:i:s');
+            }
+            if (!empty($managed->toss_text) && (CricketLiveApiService::isDecidedToss($managed->toss_text) || CricketLiveApiService::isDelayToss($managed->toss_text))) {
+                if (CricketLiveApiService::isUndecidedToss($match['toss'] ?? '') || CricketLiveApiService::isDecidedToss($managed->toss_text)) {
+                    $match['toss'] = $managed->toss_text;
+                }
+            }
+        }
+
         if ($preMatchData) {
             if (empty($matchFacts) && !empty($preMatchData['facts'])) {
                 $matchFacts = $preMatchData['facts'];
@@ -217,7 +228,7 @@ class MatchDetail extends Component
             if (empty($match['venue']) && !empty($preMatchData['venue'])) {
                 $match['venue'] = $preMatchData['venue'];
             }
-            if (empty($match['toss']) && !empty($preMatchData['toss'])) {
+            if (!empty($preMatchData['toss']) && CricketLiveApiService::isUndecidedToss($match['toss'] ?? '') && !CricketLiveApiService::isUndecidedToss($preMatchData['toss'])) {
                 $match['toss'] = $preMatchData['toss'];
             }
         }
@@ -233,6 +244,9 @@ class MatchDetail extends Component
                     $match = array_merge($match, $finishedPayload);
                     if (!empty($finishedPayload['scorecard']) && is_array($finishedPayload['scorecard'])) {
                         $scorecardData = $finishedPayload['scorecard'];
+                    }
+                    if (!empty($finishedPayload['facts']) && is_array($finishedPayload['facts'])) {
+                        $matchFacts = array_merge($matchFacts, $finishedPayload['facts']);
                     }
                 }
             } catch (\Throwable $e) {
@@ -279,14 +293,56 @@ class MatchDetail extends Component
             }
         }
 
-        // Lazy-load Match Facts: ONLY when the info tab is active
-        if ($this->tab === 'info' && empty($matchFacts)) {
+        // Load Match Facts when Info tab is active or when toss is still undecided (short-cached in 30m window)
+        $needsInfoFacts = ($this->tab === 'info') && (empty($matchFacts) || (!$this->isCompleted && CricketLiveApiService::isUndecidedToss($match['toss'] ?? $matchFacts['toss'] ?? '')));
+        if ($needsInfoFacts) {
             try {
-                $matchFacts = $apiService->getMatchFacts($this->matchId);
+                $fetchedFacts = $apiService->getMatchFacts($this->matchId, $match);
+                if (!empty($fetchedFacts)) {
+                    $matchFacts = array_merge($matchFacts, $fetchedFacts);
+                }
             } catch (\Throwable $e) {
-                $matchFacts = [];
+                // Keep existing facts on failure
             }
         }
+
+        // Resolve toss state (checks 30m IST pre-match window & short-cached match-facts automatically)
+        $tossState = $apiService->resolveTossDisplayState($match, $matchFacts);
+        if (empty($matchFacts)) {
+            $cachedFacts = Cache::get("cricket:facts:{$this->matchId}");
+            if (is_array($cachedFacts) && !empty($cachedFacts)) {
+                $matchFacts = $cachedFacts;
+            }
+        }
+
+        // Merge resolved facts back into $match so Info tab and Hero Box never lose toss/venue/officials
+        if (!empty($matchFacts)) {
+            $match['facts'] = $matchFacts;
+            if (empty($match['venue']) && !empty($matchFacts['venue'])) {
+                $match['venue'] = $matchFacts['venue'];
+            }
+            if (empty($match['umpire']) && !empty($matchFacts['umpires'])) {
+                $match['umpire'] = is_array($matchFacts['umpires'])
+                    ? implode(', ', array_filter($matchFacts['umpires']))
+                    : (string) $matchFacts['umpires'];
+                $match['umpires'] = $matchFacts['umpires'];
+            }
+            if (empty($match['referee']) && !empty($matchFacts['referee'])) {
+                $match['referee'] = $matchFacts['referee'];
+            }
+            if (!isset($match['day_night']) && isset($matchFacts['day_night'])) {
+                $match['day_night'] = (bool) $matchFacts['day_night'];
+            }
+            if (empty($match['series']) && !empty($matchFacts['series'])) {
+                $match['series'] = $matchFacts['series'];
+            }
+        }
+        if (in_array($tossState['toss_status'], ['decided', 'delayed'], true)) {
+            $match['toss'] = $tossState['toss_text'];
+        }
+        $match['show_toss_banner'] = $tossState['show_toss_banner'];
+        $match['toss_status'] = $tossState['toss_status'];
+        $match['toss_text'] = $tossState['toss_text'];
 
         // Lazy-load Highlights: ONLY when the highlights tab is active
         if ($this->tab === 'highlights') {
@@ -342,7 +398,7 @@ class MatchDetail extends Component
         $isLive = !$this->isCompleted && (in_array($state, ['live', 'in progress', 'in_progress', 'innings break', '1', '2']) || ($hasScores && empty($result)));
         $isFinished = $this->isCompleted;
         $isUpcoming = !$isLive && !$isFinished;
-        $pollSeconds = $isLive ? 8 : 0;
+        $pollSeconds = $isLive ? $pollSeconds : ($tossState['show_toss_banner'] ? 15 : 0);
 
         // Team names & polls
         $teamAName = $match['team_a'] ?? 'Team A';
@@ -384,6 +440,7 @@ class MatchDetail extends Component
             'commentaryData' => $commentaryData,
             'highlights' => $highlights,
             'matchFacts' => $matchFacts,
+            'tossState' => $tossState,
             'squads' => $squads,
             'seriesSlug' => $this->seriesSlug,
             'matchSlug' => $this->matchSlug,

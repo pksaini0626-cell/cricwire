@@ -1,7 +1,7 @@
 <div 
     class="min-h-screen bg-slate-950 text-slate-100 pb-24 font-sans antialiased flex flex-col selection:bg-rose-500 selection:text-white transition-all duration-300"
     :class="{ 'ring-2 ring-amber-400': isFlashing }"
-    x-data="matchDetailEngine({ matchId: '{{ $matchId }}', tab: '{{ $tab }}', isLive: {{ (!empty($isLive) && empty($isCompleted)) ? 'true' : 'false' }}, isFinished: {{ (!empty($isFinished) || !empty($isCompleted)) ? 'true' : 'false' }}, pollSeconds: {{ $pollSeconds ?? 8 }}, pollMs: {{ ($pollSeconds ?? 8) * 1000 }}, serverUpdatedAt: @js($match['server_updated_at'] ?? $match['updated_at'] ?? ''), isLocal: @js(app()->environment('local')), allowPolling: {{ (!empty($isLive) && empty($isCompleted)) ? 'true' : 'false' }}, live: { scoreA: @js($match['score_a'] ?? $match['team_a_scores'] ?? ''), scoreB: @js($match['score_b'] ?? $match['team_b_scores'] ?? ''), combinedScore: @js($match['score'] ?? ''), statusText: @js($match['need_run_ball'] ?? $match['status'] ?? ''), batsman: @js(array_values(array_slice($liveBatters ?? [], 0, 2))), bowler: @js(array_values(array_slice($liveBowlers ?? [], 0, 2))), recentBalls: @js(array_values(array_slice($match['recent_balls'] ?? [], 0, 12))), commentary: @js(array_values(array_slice($commentaryData ?? [], 0, 30))) } })"
+    x-data="matchDetailEngine({ matchId: '{{ $matchId }}', tab: '{{ $tab }}', isLive: {{ (!empty($isLive) && empty($isCompleted)) ? 'true' : 'false' }}, isFinished: {{ (!empty($isFinished) || !empty($isCompleted)) ? 'true' : 'false' }}, pollSeconds: {{ $pollSeconds ?? 8 }}, pollMs: {{ ($pollSeconds ?? 8) * 1000 }}, serverUpdatedAt: @js($match['server_updated_at'] ?? $match['updated_at'] ?? ''), isLocal: @js(app()->environment('local')), allowPolling: {{ (empty($isCompleted) && empty($isFinished) && (!empty($isLive) || !empty($tossState['show_toss_banner']))) ? 'true' : 'false' }}, live: { scoreA: @js($match['score_a'] ?? $match['team_a_scores'] ?? ''), scoreB: @js($match['score_b'] ?? $match['team_b_scores'] ?? ''), combinedScore: @js($match['score'] ?? ''), statusText: @js($match['need_run_ball'] ?? $match['status'] ?? ''), toss: @js($match['toss'] ?? ''), show_toss_banner: @js((bool) ($tossState['show_toss_banner'] ?? false)), toss_status: @js((string) ($tossState['toss_status'] ?? 'none')), toss_text: @js((string) ($tossState['toss_text'] ?? '')), batsman: @js(array_values(array_slice($liveBatters ?? [], 0, 2))), bowler: @js(array_values(array_slice($liveBowlers ?? [], 0, 2))), recentBalls: @js(array_values(array_slice($match['recent_balls'] ?? [], 0, 12))), commentary: @js(array_values(array_slice($commentaryData ?? [], 0, 30))) } })"
 >
     <script wire:ignore src="{{ asset('js/match-detail-engine.js') }}?v={{ @filemtime(public_path('js/match-detail-engine.js')) ?: 1 }}"></script>
 
@@ -30,10 +30,11 @@
         $venue = $match['venue'] ?? $liveInfo['venue'] ?? 'Venue info';
         $place = $match['place'] ?? $liveInfo['place'] ?? '';
         $matchType = $match['match_type'] ?? $liveInfo['match_type'] ?? $match['format'] ?? 'Cricket Match';
-        $toss = $match['toss'] ?? $liveInfo['toss'] ?? '';
-        $umpire = $match['umpire'] ?? $liveInfo['umpire'] ?? '';
+        $toss = $match['toss'] ?? $liveInfo['toss'] ?? ($matchFacts['toss'] ?? '');
+        $rawUmpire = $match['umpire'] ?? $liveInfo['umpire'] ?? $matchFacts['umpires'] ?? '';
+        $umpire = is_array($rawUmpire) ? implode(', ', array_filter($rawUmpire)) : (string) $rawUmpire;
         $thirdUmpire = $match['third_umpire'] ?? $liveInfo['third_umpire'] ?? '';
-        $referee = $match['referee'] ?? $liveInfo['referee'] ?? '';
+        $referee = (string) ($match['referee'] ?? $liveInfo['referee'] ?? $matchFacts['referee'] ?? '');
         $manOfMatch = $match['man_of_match_player'] ?? $match['man_of_match'] ?? '';
         $result = $match['result'] ?? $liveInfo['result'] ?? $match['status'] ?? $match['state'] ?? '';
         $needRunBall = $liveInfo['trail_lead'] ?? $match['trail_lead'] ?? $liveInfo['need_run_ball'] ?? $match['need_run_ball'] ?? '';
@@ -54,13 +55,28 @@
             } catch (\Throwable $e) {}
         }
 
-        $rawStatus = $match['match_status'] ?? $liveInfo['match_status'] ?? 'Live';
-        $isLive = is_string($rawStatus) ? strtolower($rawStatus) === 'live' : ($rawStatus == 2 || $rawStatus == 1);
-        $isFinished = !empty($result) || (is_string($rawStatus) && strtolower($rawStatus) === 'finished');
+        $rawStatus = $match['match_status'] ?? $liveInfo['match_status'] ?? ($match['state'] ?? 'Scheduled');
+        $isFinished = $isFinished ?? (!empty($result) || !empty($isCompleted) || (is_string($rawStatus) && in_array(strtolower($rawStatus), ['finished', 'complete', 'completed'], true)));
+        $isLive = $isLive ?? (!$isFinished && (is_string($rawStatus) ? strtolower($rawStatus) === 'live' : ($rawStatus == 2 || $rawStatus == 1)));
         $isUpcoming = $isUpcoming ?? (!$isLive && !$isFinished);
 
-        $tossText = strtolower(trim($match['toss'] ?? $match['toss_decision'] ?? $toss ?? ''));
-        $isTossPending = empty($tossText) || str_contains($tossText, 'yet to take place') || str_contains($tossText, 'pending') || str_contains($tossText, 'not conducted');
+        $tossState = $tossState ?? app(\App\Services\Cricket\CricketLiveApiService::class)->resolveTossDisplayState($match, $matchFacts ?? [], false);
+        $showTossBanner = (bool) ($tossState['show_toss_banner'] ?? false);
+        $tossStatus = (string) ($tossState['toss_status'] ?? 'none');
+        $resolvedTossText = (string) ($tossState['toss_text'] ?? '');
+        $isTossPending = $tossStatus === 'pending';
+
+        $isFirstBallScore = static function (?string $s): bool {
+            if ($s === null) {
+                return false;
+            }
+            $t = strtolower(trim($s));
+            if ($t === '' || $t === 'yet to bat' || $t === 'null' || $t === '-' || $t === '0/0' || $t === '0/0 (0)' || $t === '0/0 (0.0 ov)') {
+                return false;
+            }
+            return preg_match('/[1-9]/', $t) === 1;
+        };
+        $hasFirstBallStarted = $isFirstBallScore($scoreA) || $isFirstBallScore($scoreB) || $isFirstBallScore($combinedScore);
 
         // Ball indicator for live mode
         $currentBall = $liveInfo['last_ball_event'] ?? $liveInfo['last_ball'] ?? '•';
@@ -325,6 +341,10 @@
             'current_ball' => $currentBall,
             'need_run_ball' => $needRunBall,
             'result' => $result,
+            'toss' => in_array($tossStatus, ['decided', 'delayed'], true) ? $resolvedTossText : $toss,
+            'show_toss_banner' => $showTossBanner,
+            'toss_status' => $tossStatus,
+            'toss_text' => $resolvedTossText,
             'fav_team' => $favTeam,
             'min_rate' => $rateMin,
             'max_rate' => $rateMax,
@@ -498,11 +518,41 @@
 
                     <!-- Status text right below -->
                     <div class="text-[11px] sm:text-xs font-bold text-amber-400 mt-1.5 text-center truncate max-w-full px-2">
-                        @if($isTossPending && $isUpcoming)
-                            Toss Pending
-                        @else
-                            <span x-text="live.need_run_ball || live.statusText || '{{ $needRunBall ?: 'Ball in Progress' }}'">{{ $needRunBall ?: 'Ball in Progress' }}</span>
-                        @endif
+                        <span x-show="showLiveTossBanner && !live.need_run_ball" @if(!($showTossBanner && !$hasFirstBallStarted && empty($needRunBall))) x-cloak @endif x-text="live.toss_text || @js($resolvedTossText)">{{ $resolvedTossText }}</span>
+                        <span x-show="!showLiveTossBanner || live.need_run_ball" @if($showTossBanner && !$hasFirstBallStarted && empty($needRunBall)) x-cloak @endif x-text="live.need_run_ball || live.statusText || '{{ $needRunBall ?: 'Ball in Progress' }}'">{{ $needRunBall ?: 'Ball in Progress' }}</span>
+                    </div>
+
+                    <!-- Dynamic Toss Status Pill/Banner inside Live Feed Hero Box (pre-first-ball) -->
+                    @php
+                        $ssrShowLiveTossPill = $showTossBanner && !$isFinished && !$hasFirstBallStarted && in_array($tossStatus, ['pending', 'delayed', 'decided'], true);
+                    @endphp
+                    <div
+                        x-show="showLiveTossBanner"
+                        @if(!$ssrShowLiveTossPill) x-cloak @endif
+                        class="mt-2 flex justify-center w-full px-2"
+                    >
+                        <div
+                            x-show="live.toss_status === 'pending'"
+                            @if($tossStatus !== 'pending') x-cloak @endif
+                            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/35 text-amber-300 text-[11px] font-bold tracking-wide"
+                        >
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>
+                            <span>🪙 Toss is pending</span>
+                        </div>
+                        <div
+                            x-show="live.toss_status === 'delayed'"
+                            @if($tossStatus !== 'delayed') x-cloak @endif
+                            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/15 border border-orange-500/35 text-orange-300 text-[11px] font-bold tracking-wide max-w-full truncate"
+                        >
+                            <span class="truncate" x-text="'🌧️ ' + (live.toss_text || @js($resolvedTossText))">🌧️ {{ $resolvedTossText }}</span>
+                        </div>
+                        <div
+                            x-show="live.toss_status === 'decided'"
+                            @if($tossStatus !== 'decided') x-cloak @endif
+                            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 text-[11px] font-bold tracking-wide max-w-full truncate"
+                        >
+                            <span class="truncate" x-text="'🪙 ' + (live.toss_text || @js($resolvedTossText))">🪙 {{ $resolvedTossText }}</span>
+                        </div>
                     </div>
                 </div>
 
@@ -747,35 +797,41 @@
                     <h1 class="text-base sm:text-lg font-black text-white">
                         {{ $match['team_a'] ?? $teamAName ?? 'Team A' }} vs {{ $match['team_b'] ?? $teamBName ?? 'Team B' }}, {{ $match['match_stage'] ?? $matchs ?? 'Match' }}
                     </h1>
-                    @if(!empty($managedMatch?->toss_fetched) || (!empty($toss) && !$isTossPending))
-                        <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-black uppercase tracking-wider">
-                            <span>🪙 {{ $managedMatch?->toss_text ?: $toss }}</span>
-                        </div>
-                    @elseif($isTossPending && $isUpcoming)
-                        <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-black uppercase tracking-wider">
-                            <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-                            <span>🪙 Toss Pending</span>
-                        </div>
-                    @elseif(!$isUpcoming && in_array($match['status'] ?? $match['match_status'] ?? '', ['live', 'in_progress', 1, 2]))
-                        <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-black uppercase tracking-wider">
-                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                            <span>● Ball In Progress</span>
-                        </div>
-                    @endif
+                    <div x-show="live.show_toss_banner && live.toss_status === 'decided'" @if(!($showTossBanner && $tossStatus === 'decided')) x-cloak @endif class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-black uppercase tracking-wider">
+                        <span x-text="'🪙 ' + (live.toss_text || @js($resolvedTossText))">🪙 {{ $resolvedTossText }}</span>
+                    </div>
+                    <div x-show="live.show_toss_banner && live.toss_status === 'delayed'" @if(!($showTossBanner && $tossStatus === 'delayed')) x-cloak @endif class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-orange-500/15 border border-orange-500/35 text-orange-300 text-xs font-black uppercase tracking-wider">
+                        <span x-text="'🌧️ ' + (live.toss_text || @js($resolvedTossText))">🌧️ {{ $resolvedTossText }}</span>
+                    </div>
+                    <div x-show="live.show_toss_banner && live.toss_status === 'pending'" @if(!($showTossBanner && $tossStatus === 'pending')) x-cloak @endif class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-black uppercase tracking-wider">
+                        <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                        <span>🪙 Toss is pending</span>
+                    </div>
                 </div>
 
-                @if(!empty($managedMatch?->toss_fetched) && $isUpcoming)
-                    <!-- Prominent Toss Banner with IST Start Time & Countdown -->
-                    <div class="p-3 rounded-xl bg-gradient-to-r from-amber-500/15 via-emerald-500/15 to-sky-500/15 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-md">
-                        <div class="flex items-center space-x-2 text-xs sm:text-sm font-bold text-amber-300">
-                            <span class="text-base">🪙</span>
-                            <span>{{ $managedMatch->toss_text }}</span>
-                        </div>
-                        <div class="flex items-center space-x-2 text-xs font-semibold text-slate-300">
-                            <span>⏰ Match starts at {{ $managedMatch->start_time_ist ? $managedMatch->start_time_ist->timezone('Asia/Kolkata')->format('h:i A') . ' IST' : ($match['match_time'] ?? 'soon') }}</span>
-                        </div>
+                <div
+                    x-show="live.show_toss_banner && ['pending', 'delayed', 'decided'].includes(live.toss_status)"
+                    @if(!($showTossBanner && in_array($tossStatus, ['pending', 'delayed', 'decided'], true))) x-cloak @endif
+                    class="p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-md"
+                    :class="{
+                        'bg-gradient-to-r from-emerald-500/15 via-cyan-500/10 to-sky-500/15 border-emerald-500/35': live.toss_status === 'decided',
+                        'bg-gradient-to-r from-orange-500/15 via-amber-500/15 to-rose-500/10 border-orange-500/35': live.toss_status === 'delayed',
+                        'bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-slate-900 border-amber-500/30': live.toss_status === 'pending'
+                    }"
+                >
+                    <div class="flex items-center space-x-2 text-xs sm:text-sm font-bold"
+                         :class="{
+                             'text-emerald-300': live.toss_status === 'decided',
+                             'text-orange-300': live.toss_status === 'delayed',
+                             'text-amber-300': live.toss_status === 'pending'
+                         }">
+                        <span class="text-base" x-text="live.toss_status === 'delayed' ? '🌧️' : '🪙'">{{ $tossStatus === 'delayed' ? '🌧️' : '🪙' }}</span>
+                        <span x-text="live.toss_text || @js($resolvedTossText)">{{ $resolvedTossText }}</span>
                     </div>
-                @endif
+                    <div class="flex items-center space-x-2 text-xs font-semibold text-slate-300">
+                        <span>⏰ Match starts at {{ $managedMatch?->start_time_ist ? $managedMatch->start_time_ist->timezone('Asia/Kolkata')->format('h:i A') . ' IST' : ($match['ist_time_label'] ?? $match['match_time'] ?? 'soon') }}</span>
+                    </div>
+                </div>
 
                 <div class="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                     <span>Date & Time: <strong class="text-slate-200">{{ $match['match_date'] ?? $matchDate ?? 'Wed, 11 Nov 2026' }} ● {{ $match['match_time'] ?? $matchTime ?? '01:40 PM' }}</strong></span>
@@ -1950,7 +2006,7 @@
                         </div>
                         <div class="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                             <span class="text-slate-400 font-medium">Toss Decision</span>
-                            <span class="font-bold text-cyan-300 sm:text-right max-w-md">{{ $toss ?: 'Toss yet to take place' }}</span>
+                            <span class="font-bold text-cyan-300 sm:text-right max-w-md" x-text="live.toss_text || @js($resolvedTossText)">{{ $resolvedTossText }}</span>
                         </div>
                         @if(!empty($umpire))
                             <div class="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-1">

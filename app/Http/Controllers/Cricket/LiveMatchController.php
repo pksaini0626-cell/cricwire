@@ -65,6 +65,13 @@ class LiveMatchController extends Controller
             }
 
             $match = $this->hydrateLiveScores($match, $matchId);
+            $tossState = $this->apiService->resolveTossDisplayState($match, $match['facts'] ?? []);
+            $match['show_toss_banner'] = $tossState['show_toss_banner'];
+            $match['toss_status'] = $tossState['toss_status'];
+            $match['toss_text'] = $tossState['toss_text'];
+            if (in_array($tossState['toss_status'], ['decided', 'delayed'], true)) {
+                $match['toss'] = $tossState['toss_text'];
+            }
             $match['is_live'] = true;
             $match['is_completed'] = false;
 
@@ -165,16 +172,24 @@ class LiveMatchController extends Controller
         }
 
         if (!empty($data)) {
-            $scores = MatchStateNormalizer::normalizeScores($data, $data['scorecard'] ?? [], 'live');
+            $bucket = MatchStateNormalizer::classify($data, $archivedIds);
+            $scores = MatchStateNormalizer::normalizeScores($data, $data['scorecard'] ?? [], $bucket === 'live' ? 'live' : 'upcoming');
             $data['score_a'] = $scores['score_a'];
             $data['team_a_scores'] = $scores['score_a'];
             $data['score_b'] = $scores['score_b'];
             $data['team_b_scores'] = $scores['score_b'];
-            $data['is_live'] = true;
+            $tossState = $this->apiService->resolveTossDisplayState($data, $data['facts'] ?? []);
+            $data['show_toss_banner'] = $tossState['show_toss_banner'];
+            $data['toss_status'] = $tossState['toss_status'];
+            $data['toss_text'] = $tossState['toss_text'];
+            if (in_array($tossState['toss_status'], ['decided', 'delayed'], true)) {
+                $data['toss'] = $tossState['toss_text'];
+            }
+            $data['is_live'] = ($bucket === 'live');
             $data['is_completed'] = false;
             $data['server_updated_at'] = $data['server_updated_at'] ?? ($data['updated_at'] ?? now()->toIso8601String());
             $data['server_fetched_at'] = $data['server_updated_at'];
-            $data['poll_interval_ms'] = $data['poll_interval_ms'] ?? 8000;
+            $data['poll_interval_ms'] = $data['poll_interval_ms'] ?? ($bucket === 'live' ? 8000 : 15000);
         }
 
         return response()
