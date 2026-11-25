@@ -196,10 +196,15 @@ class MatchStateNormalizer
         if ((self::isEmptyScore($scoreA) || self::isEmptyScore($scoreB)) && !empty($scorecard)) {
             $innings = $scorecard['innings'] ?? $scorecard['scorecard'] ?? $scorecard;
             if (is_array($innings)) {
-                $teamAName = strtolower(trim((string) ($match['team_a'] ?? $match['team_a_short'] ?? '')));
-                $teamBName = strtolower(trim((string) ($match['team_b'] ?? $match['team_b_short'] ?? '')));
+                $teamAName = strtolower(trim((string) ($match['team_a'] ?? $match['team1'] ?? '')));
+                $teamAShort = strtolower(trim((string) ($match['team_a_short'] ?? $match['team1_short'] ?? '')));
+                $teamBName = strtolower(trim((string) ($match['team_b'] ?? $match['team2'] ?? '')));
+                $teamBShort = strtolower(trim((string) ($match['team_b_short'] ?? $match['team2_short'] ?? '')));
 
-                foreach ($innings as $idx => $inn) {
+                $teamAInnings = [];
+                $teamBInnings = [];
+
+                foreach (array_values($innings) as $idx => $inn) {
                     if (!is_array($inn)) {
                         continue;
                     }
@@ -208,19 +213,26 @@ class MatchStateNormalizer
                         continue;
                     }
 
-                    $innTeam = strtolower(trim((string) ($inn['batting_team'] ?? $inn['team_name'] ?? $inn['team'] ?? '')));
-                    $matchedA = $teamAName !== '' && $innTeam !== '' && (str_contains($innTeam, $teamAName) || str_contains($teamAName, $innTeam));
-                    $matchedB = $teamBName !== '' && $innTeam !== '' && (str_contains($innTeam, $teamBName) || str_contains($teamBName, $innTeam));
+                    $innTeam = strtolower(trim((string) ($inn['batting_team'] ?? $inn['bat_team'] ?? $inn['team_name'] ?? $inn['team'] ?? '')));
+                    $matchedA = self::teamMatchesInning($innTeam, $teamAName, $teamAShort);
+                    $matchedB = self::teamMatchesInning($innTeam, $teamBName, $teamBShort);
 
-                    if ($matchedA && self::isEmptyScore($scoreA)) {
-                        $scoreA = $formatted;
-                    } elseif ($matchedB && self::isEmptyScore($scoreB)) {
-                        $scoreB = $formatted;
-                    } elseif ((int) $idx === 0 && self::isEmptyScore($scoreA)) {
-                        $scoreA = $formatted;
-                    } elseif ((int) $idx === 1 && self::isEmptyScore($scoreB)) {
-                        $scoreB = $formatted;
+                    if ($matchedA && !$matchedB) {
+                        $teamAInnings[] = $formatted;
+                    } elseif ($matchedB && !$matchedA) {
+                        $teamBInnings[] = $formatted;
+                    } elseif ($idx % 2 === 0) {
+                        $teamAInnings[] = $formatted;
+                    } else {
+                        $teamBInnings[] = $formatted;
                     }
+                }
+
+                if (self::isEmptyScore($scoreA) && !empty($teamAInnings)) {
+                    $scoreA = implode(' & ', $teamAInnings);
+                }
+                if (self::isEmptyScore($scoreB) && !empty($teamBInnings)) {
+                    $scoreB = implode(' & ', $teamBInnings);
                 }
             }
         }
@@ -233,14 +245,9 @@ class MatchStateNormalizer
             $scoreB = '';
         }
 
-        // Absolute "Yet to bat" Rendering Rule
+        // Absolute "Yet to bat" & No-False-DNB Rendering Rule
         if ($bucket === 'finished') {
-            if ($scoreA === '') {
-                $scoreA = 'DNB';
-            }
-            if ($scoreB === '') {
-                $scoreB = 'DNB';
-            }
+            // Never default empty finished scores to "DNB" or "Yet to bat"
             return ['score_a' => $scoreA, 'score_b' => $scoreB];
         }
 
@@ -302,17 +309,18 @@ class MatchStateNormalizer
      */
     public static function formatInningScore(array $inn): string
     {
-        if (!empty($inn['score']) && is_string($inn['score'])) {
-            return trim($inn['score']);
+        $str = $inn['score_str'] ?? $inn['score'] ?? null;
+        if (is_string($str) && trim($str) !== '') {
+            return trim($str);
         }
 
-        $runs = $inn['runs'] ?? $inn['score_runs'] ?? null;
+        $runs = $inn['runs'] ?? $inn['total_runs'] ?? $inn['score_runs'] ?? null;
         if ($runs === null || $runs === '') {
             return '';
         }
 
-        $wickets = $inn['wickets'] ?? $inn['wkts'] ?? 0;
-        $overs = $inn['overs'] ?? $inn['over'] ?? '';
+        $wickets = $inn['wickets'] ?? $inn['wkts'] ?? $inn['total_wickets'] ?? 0;
+        $overs = $inn['overs'] ?? $inn['over'] ?? $inn['total_overs'] ?? '';
 
         $base = "{$runs}/{$wickets}";
         if ($overs !== '' && $overs !== null) {
@@ -320,6 +328,23 @@ class MatchStateNormalizer
         }
 
         return $base;
+    }
+
+    /**
+     * Match an inning's batting team string against team full name or short code.
+     */
+    private static function teamMatchesInning(string $innTeam, string $teamName, string $teamShort): bool
+    {
+        if ($innTeam === '') {
+            return false;
+        }
+        if ($teamName !== '' && (str_contains($innTeam, $teamName) || str_contains($teamName, $innTeam))) {
+            return true;
+        }
+        if ($teamShort !== '' && ($innTeam === $teamShort || str_contains($innTeam, $teamShort))) {
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -331,7 +356,7 @@ class MatchStateNormalizer
             return true;
         }
         $lower = strtolower(trim($score));
-        return in_array($lower, ['', 'yet to bat', 'null', 'n/a', '-', '0/0', '0/0 (0)', '0/0 (0.0)'], true);
+        return in_array($lower, ['', 'yet to bat', 'dnb', 'dnb - did not bat', 'did not bat', 'null', 'n/a', '-', '0/0', '0/0 (0)', '0/0 (0.0)'], true);
     }
 
     /**

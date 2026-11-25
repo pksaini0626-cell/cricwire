@@ -222,13 +222,13 @@ class MatchDetail extends Component
             }
         }
 
-        // When match is completed, delegate to CompletedMatchController (DB-first JSON, 0 API calls on repeat) and disable commentary
+        // When match is completed, delegate to FinishedMatchController (DB-first JSON, 0 API calls on repeat) and disable commentary
         if ($this->isCompleted) {
             $this->commentaryUnavailable = true;
             $commentaryData = [];
 
             try {
-                $finishedPayload = app(CompletedMatchController::class)->getOrStoreFinishedMatch($this->matchId, $match);
+                $finishedPayload = app(\App\Http\Controllers\Cricket\FinishedMatchController::class)->getOrArchive($this->matchId, $match);
                 if (!empty($finishedPayload)) {
                     $match = array_merge($match, $finishedPayload);
                     if (!empty($finishedPayload['scorecard']) && is_array($finishedPayload['scorecard'])) {

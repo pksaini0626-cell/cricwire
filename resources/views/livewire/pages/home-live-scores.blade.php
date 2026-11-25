@@ -5,7 +5,7 @@
         skippedIds: [],
         liveTickerData: {},
         pollInterval: null,
-        activeTab: @js($activeTab),
+        activeTab: $wire.entangle('activeTab'),
         lastActivityTime: Date.now(),
         isLocal: @js(app()->environment('local')),
         hasAutoPollParam: new URLSearchParams(window.location.search).get('autopoll') === '1',
@@ -69,8 +69,9 @@
             setTimeout(() => { this.isRefreshing = false; }, 600);
         },
         async fetchHomeData() {
+            if (this.activeTab !== 'live') return;
             try {
-                const res = await fetch(`/api/live/home?_=${Date.now()}`, {
+                const res = await fetch(`/api/matches/live?_=${Date.now()}`, {
                     headers: { 'Accept': 'application/json' },
                     cache: 'no-store'
                 });
@@ -80,10 +81,9 @@
                 if (!json) return;
                 const data = (json && json.data) ? json.data : (json || {});
                 const liveList = data.live || [];
-                const recentList = data.recent || data.finished || [];
-                
-                // Dispatch updates for both live and recently completed matches
-                [...liveList, ...recentList].forEach(m => {
+
+                // Dispatch updates ONLY for active live matches (never overwrite hydrated DB finished scores)
+                liveList.forEach(m => {
                     const mId = String(m.match_id || m.id || '');
                     if (!mId) return;
                     this.liveTickerData[mId] = {

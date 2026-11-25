@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Cricket;
 
 use App\Helpers\CricketMatchFormatter;
 use App\Http\Controllers\Controller;
+use App\Models\CompletedMatchScorecard;
 use App\Models\FinishedMatch;
 use App\Services\Cricket\CricketLiveApiService;
 use App\Services\Cricket\MatchStateNormalizer;
@@ -56,6 +57,12 @@ class FinishedMatchController extends Controller
                 : $existing->match_json;
 
             if (is_array($stored) && !empty($stored)) {
+                $scores = MatchStateNormalizer::normalizeScores($stored, $stored['scorecard'] ?? [], 'finished');
+                $stored['score_a'] = $existing->score_a ?: $scores['score_a'];
+                $stored['team_a_scores'] = $stored['score_a'];
+                $stored['score_b'] = $existing->score_b ?: $scores['score_b'];
+                $stored['team_b_scores'] = $stored['score_b'];
+                $stored['result'] = $stored['result'] ?? $existing->result_text ?? '';
                 $stored['is_live'] = false;
                 $stored['is_completed'] = true;
                 $stored['commentary_unavailable'] = true;
@@ -63,9 +70,16 @@ class FinishedMatchController extends Controller
             }
         }
 
-        $apiService = app(CricketLiveApiService::class);
+        // Check CompletedMatchScorecard table before calling external API
+        $cms = CompletedMatchScorecard::where('match_id', $matchKey)->first();
+        $scorecard = [];
+        if ($cms && is_array($cms->scorecard_payload) && !empty($cms->scorecard_payload)) {
+            $scorecard = $cms->scorecard_payload['innings'] ?? $cms->scorecard_payload;
+        }
 
+        $apiService = app(CricketLiveApiService::class);
         $baseMatch = $contextMatch;
+
         if (empty($baseMatch)) {
             try {
                 $baseMatch = $apiService->getFastMatchData($matchKey) ?? [];
@@ -75,16 +89,27 @@ class FinishedMatchController extends Controller
             }
         }
 
-        $scorecard = [];
-        try {
-            $scorecardRes = $apiService->getScorecard($matchKey);
-            $scorecard = $scorecardRes['innings'] ?? $scorecardRes ?? [];
-        } catch (\Throwable $e) {
-            Log::warning("FinishedMatchController: getScorecard failed for {$matchKey}: " . $e->getMessage());
+        $rawScorecardRes = [];
+        if (empty($scorecard) && !$apiService->isHardStopActive()) {
+            try {
+                $rawScorecardRes = $apiService->getScorecard($matchKey);
+                $scorecard = $rawScorecardRes['innings'] ?? $rawScorecardRes ?? [];
+            } catch (\Throwable $e) {
+                Log::warning("FinishedMatchController: getScorecard failed for {$matchKey}: " . $e->getMessage());
+            }
         }
 
         if (empty($scorecard) && !empty($baseMatch['scorecard']) && is_array($baseMatch['scorecard'])) {
             $scorecard = $baseMatch['scorecard'];
+        }
+
+        // Extract result/status text from raw scorecard metadata if missing on list item
+        if (empty($baseMatch['result']) && !empty($rawScorecardRes['raw']) && is_array($rawScorecardRes['raw'])) {
+            $rawData = $rawScorecardRes['raw']['data'] ?? $rawScorecardRes['raw'];
+            $candidateResult = $rawData['result'] ?? $rawData['status_note'] ?? $rawData['status'] ?? ($rawData['match_header']['status'] ?? '');
+            if (is_string($candidateResult) && trim($candidateResult) !== '') {
+                $baseMatch['result'] = trim($candidateResult);
+            }
         }
 
         $scores = MatchStateNormalizer::normalizeScores($baseMatch, is_array($scorecard) ? $scorecard : [], 'finished');
@@ -99,26 +124,34 @@ class FinishedMatchController extends Controller
         $normalized['is_live'] = false;
         $normalized['is_completed'] = true;
         $normalized['match_status'] = 'Finished';
+        $normalized['state'] = 'Finished';
         $normalized['commentary_unavailable'] = true;
 
-        try {
-            FinishedMatch::updateOrCreate(
-                ['match_id' => $matchKey],
-                [
-                    'series_name' => $normalized['series'] ?? $normalized['series_name'] ?? null,
-                    'match_title' => $normalized['matchs'] ?? $normalized['match_desc'] ?? trim(($normalized['team_a'] ?? '') . ' vs ' . ($normalized['team_b'] ?? '')),
-                    'result_text' => $normalized['result'] ?? $normalized['result_text'] ?? null,
-                    'score_a' => $scores['score_a'],
-                    'score_b' => $scores['score_b'],
-                    'match_data' => $normalized,
-                    'match_json' => $normalized,
-                    'fetched_at' => now(),
-                    'archived_at' => now(),
-                ]
-            );
-            Cache::forget('cricket:finished_matches:ids');
-        } catch (\Throwable $e) {
-            Log::error("FinishedMatchController: failed to archive {$matchKey}: " . $e->getMessage());
+        $hasPersistableData = !MatchStateNormalizer::isEmptyScore($scores['score_a'])
+            || !MatchStateNormalizer::isEmptyScore($scores['score_b'])
+            || !empty($scorecard)
+            || !empty($normalized['result']);
+
+        if ($hasPersistableData) {
+            try {
+                FinishedMatch::updateOrCreate(
+                    ['match_id' => $matchKey],
+                    [
+                        'series_name' => $normalized['series'] ?? $normalized['series_name'] ?? null,
+                        'match_title' => $normalized['matchs'] ?? $normalized['match_desc'] ?? trim(($normalized['team_a'] ?? '') . ' vs ' . ($normalized['team_b'] ?? '')),
+                        'result_text' => $normalized['result'] ?? $normalized['result_text'] ?? null,
+                        'score_a' => $scores['score_a'] ?: null,
+                        'score_b' => $scores['score_b'] ?: null,
+                        'match_data' => $normalized,
+                        'match_json' => $normalized,
+                        'fetched_at' => now(),
+                        'archived_at' => now(),
+                    ]
+                );
+                Cache::forget('cricket:finished_matches:ids');
+            } catch (\Throwable $e) {
+                Log::error("FinishedMatchController: failed to archive {$matchKey}: " . $e->getMessage());
+            }
         }
 
         return $normalized;
@@ -126,6 +159,7 @@ class FinishedMatchController extends Controller
 
     /**
      * Return merged finished matches from DB archive + Redis/static recent feed.
+     * Merges archived FinishedMatch & CompletedMatchScorecard scores in a single batch query (0 API calls).
      */
     public function getFinishedMatches(): array
     {
@@ -144,6 +178,26 @@ class FinishedMatchController extends Controller
         }
 
         $candidates = $apiService->filterAllowedMatches($rawRecent);
+        $matchIds = [];
+        foreach ($candidates as $m) {
+            if (!is_array($m)) {
+                continue;
+            }
+            $id = (string) ($m['match_id'] ?? $m['id'] ?? '');
+            if ($id !== '') {
+                $matchIds[] = $id;
+            }
+        }
+        $matchIds = array_values(array_unique($matchIds));
+
+        // Batch-load archived DB records (0 API calls)
+        $archivedRows = !empty($matchIds)
+            ? FinishedMatch::whereIn('match_id', $matchIds)->get()->keyBy('match_id')
+            : collect();
+        $scorecardRows = !empty($matchIds)
+            ? CompletedMatchScorecard::whereIn('match_id', $matchIds)->get()->keyBy('match_id')
+            : collect();
+
         $finished = [];
         $seenIds = [];
 
@@ -157,14 +211,7 @@ class FinishedMatchController extends Controller
             }
             $seenIds[$matchId] = true;
 
-            $scores = MatchStateNormalizer::normalizeScores($match, [], 'finished');
-            $match['score_a'] = $scores['score_a'];
-            $match['team_a_scores'] = $scores['score_a'];
-            $match['score_b'] = $scores['score_b'];
-            $match['team_b_scores'] = $scores['score_b'];
-            $match['is_live'] = false;
-            $match['is_completed'] = true;
-
+            $match = $this->mergeArchivedDbData($match, $archivedRows->get($matchId), $scorecardRows->get($matchId));
             $finished[] = CricketMatchFormatter::formatMatchForCard($match);
         }
 
@@ -183,13 +230,131 @@ class FinishedMatchController extends Controller
             $payload = is_array($row->match_data) && !empty($row->match_data) ? $row->match_data : $row->match_json;
             if (is_array($payload) && !empty($payload)) {
                 $seenIds[$mId] = true;
-                $payload['is_live'] = false;
-                $payload['is_completed'] = true;
+                $payload = $this->mergeArchivedDbData($payload, $row, null);
                 $finished[] = CricketMatchFormatter::formatMatchForCard($payload);
             }
         }
 
         return $finished;
+    }
+
+    /**
+     * Auto-hydrate missing scores for the current page (max 10 items) from DB or scorecard API once.
+     */
+    public function hydratePageMatches(array $pageMatches): array
+    {
+        $apiService = app(CricketLiveApiService::class);
+        $hydrated = [];
+
+        foreach ($pageMatches as $match) {
+            if (!is_array($match)) {
+                continue;
+            }
+
+            $matchId = (string) ($match['match_id'] ?? $match['id'] ?? '');
+            $scoreA = (string) ($match['score_a'] ?? $match['team_a_scores'] ?? '');
+            $scoreB = (string) ($match['score_b'] ?? $match['team_b_scores'] ?? '');
+
+            $missingScores = MatchStateNormalizer::isEmptyScore($scoreA) || MatchStateNormalizer::isEmptyScore($scoreB);
+
+            if ($matchId !== '' && $missingScores && !$apiService->isHardStopActive()) {
+                $skipKey = "cricket:finished_hydrate_skip:{$matchId}";
+                if (!Cache::has($skipKey)) {
+                    $lock = Cache::lock("lock:finished_hydrate:{$matchId}", 5);
+                    if ($lock->get()) {
+                        try {
+                            $archived = $this->getOrArchive($matchId, $match);
+                            if (!MatchStateNormalizer::isEmptyScore($archived['score_a'] ?? '')
+                                || !MatchStateNormalizer::isEmptyScore($archived['score_b'] ?? '')) {
+                                $match = array_merge($match, [
+                                    'score_a' => $archived['score_a'] ?? '',
+                                    'team_a_scores' => $archived['score_a'] ?? '',
+                                    'score_b' => $archived['score_b'] ?? '',
+                                    'team_b_scores' => $archived['score_b'] ?? '',
+                                    'result' => $archived['result'] ?? ($match['result'] ?? ''),
+                                    'state' => 'Finished',
+                                    'match_status' => 'Finished',
+                                ]);
+                            } else {
+                                // Back off 10 minutes if upstream genuinely has no scorecard yet
+                                Cache::put($skipKey, true, 600);
+                            }
+                        } catch (\Throwable $e) {
+                            Log::warning("FinishedMatchController: hydratePageMatches failed for {$matchId}: " . $e->getMessage());
+                        } finally {
+                            $lock->release();
+                        }
+                    }
+                }
+            }
+
+            $match['is_live'] = false;
+            $match['is_completed'] = true;
+            $match['match_status'] = 'Finished';
+            $match['state'] = 'Finished';
+
+            $hydrated[] = CricketMatchFormatter::formatMatchForCard($match);
+        }
+
+        return $hydrated;
+    }
+
+    /**
+     * Merge archived FinishedMatch / CompletedMatchScorecard data into a list match item.
+     */
+    protected function mergeArchivedDbData(array $match, ?FinishedMatch $archivedRow, ?CompletedMatchScorecard $scorecardRow): array
+    {
+        $scorecard = [];
+
+        if ($archivedRow) {
+            $stored = is_array($archivedRow->match_data) && !empty($archivedRow->match_data)
+                ? $archivedRow->match_data
+                : (is_array($archivedRow->match_json) ? $archivedRow->match_json : []);
+
+            if (!empty($stored['scorecard']) && is_array($stored['scorecard'])) {
+                $scorecard = $stored['scorecard'];
+            }
+
+            // Overwrite empty fields with archived DB values
+            foreach (['score_a', 'team_a_scores', 'team_a_over', 'score_b', 'team_b_scores', 'team_b_over', 'result', 'status_note'] as $key) {
+                if (empty($match[$key]) && !empty($stored[$key])) {
+                    $match[$key] = $stored[$key];
+                }
+            }
+
+            if (empty($match['score_a']) && !empty($archivedRow->score_a)) {
+                $match['score_a'] = $archivedRow->score_a;
+                $match['team_a_scores'] = $archivedRow->score_a;
+            }
+            if (empty($match['score_b']) && !empty($archivedRow->score_b)) {
+                $match['score_b'] = $archivedRow->score_b;
+                $match['team_b_scores'] = $archivedRow->score_b;
+            }
+            if (empty($match['result']) && !empty($archivedRow->result_text)) {
+                $match['result'] = $archivedRow->result_text;
+            }
+        }
+
+        if ($scorecardRow && is_array($scorecardRow->scorecard_payload) && !empty($scorecardRow->scorecard_payload)) {
+            if (empty($scorecard)) {
+                $scorecard = $scorecardRow->scorecard_payload['innings'] ?? $scorecardRow->scorecard_payload;
+            }
+            if (empty($match['result']) && !empty($scorecardRow->result_text)) {
+                $match['result'] = $scorecardRow->result_text;
+            }
+        }
+
+        $scores = MatchStateNormalizer::normalizeScores($match, is_array($scorecard) ? $scorecard : [], 'finished');
+        $match['score_a'] = $scores['score_a'];
+        $match['team_a_scores'] = $scores['score_a'];
+        $match['score_b'] = $scores['score_b'];
+        $match['team_b_scores'] = $scores['score_b'];
+        $match['is_live'] = false;
+        $match['is_completed'] = true;
+        $match['match_status'] = 'Finished';
+        $match['state'] = 'Finished';
+
+        return $match;
     }
 
     /**
@@ -203,7 +368,7 @@ class FinishedMatchController extends Controller
         $all = $this->getFinishedMatches();
         $total = count($all);
         $offset = ($page - 1) * $perPage;
-        $items = array_slice($all, $offset, $perPage);
+        $items = $this->hydratePageMatches(array_slice($all, $offset, $perPage));
 
         return response()->json([
             'status' => true,

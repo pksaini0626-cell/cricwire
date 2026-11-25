@@ -92,6 +92,22 @@ class HomeLiveScores extends Component
         $paginatedUpcomingMatches = array_slice($upcomingMatches, ($this->upcomingPage - 1) * $this->perPage, $this->perPage);
         $paginatedFinishedMatches = array_slice($finishedMatches, ($this->finishedPage - 1) * $this->perPage, $this->perPage);
 
+        // Hydrate missing finished scores for the active finished page (DB archive + once-per-match scorecard lookup)
+        if ($this->activeTab === 'finished' && !empty($paginatedFinishedMatches)) {
+            $paginatedFinishedMatches = $formatList($finishedController->hydratePageMatches($paginatedFinishedMatches));
+            $hydratedById = [];
+            foreach ($paginatedFinishedMatches as $hm) {
+                $hId = (string) ($hm['match_id'] ?? $hm['id'] ?? '');
+                if ($hId !== '') {
+                    $hydratedById[$hId] = $hm;
+                }
+            }
+            $finishedMatches = array_map(function ($m) use ($hydratedById) {
+                $mId = (string) ($m['match_id'] ?? $m['id'] ?? '');
+                return $hydratedById[$mId] ?? $m;
+            }, $finishedMatches);
+        }
+
         // Selected list based on active tab
         $currentMatches = match ($this->activeTab) {
             'upcoming' => $paginatedUpcomingMatches,
