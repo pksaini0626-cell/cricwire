@@ -291,6 +291,20 @@ function createMatchDetailEngine(config) {
                     }
                 }
 
+                // Stop polling immediately if match is completed
+                if (data.is_completed === true || data.isFinished === true || this.isFinished) {
+                    this.isFinished = true;
+                    this.isLive = false;
+                    this.allowPolling = false;
+                    if (this.pollTimer) {
+                        clearInterval(this.pollTimer);
+                        this.pollTimer = null;
+                    }
+                    if (data.result && !/^(match in progress|live|ball in progress)$/i.test(String(data.result).trim())) {
+                        updated.result = data.result;
+                    }
+                }
+
                 // Explicit reactive score & status fields
                 const rawScoreA = data.scoreA || data.score_a || data.team_a_scores || data.team_a_score || '';
                 const rawScoreB = data.scoreB || data.score_b || data.team_b_scores || data.team_b_score || '';

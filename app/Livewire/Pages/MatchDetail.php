@@ -190,7 +190,20 @@ class MatchDetail extends Component
             }
         }
 
-        $this->isCompleted = $isCompletedStatus || $isCompletedResult || $apiService->isFinishedMatch($this->matchId);
+        $completion = CricketLiveApiService::detectMatchCompletion($match, $scorecard ?? []);
+        $this->isCompleted = $isCompletedStatus || $isCompletedResult || $completion['is_completed'] || $apiService->isFinishedMatch($this->matchId);
+
+        if ($this->isCompleted) {
+            $match['is_live'] = false;
+            $match['match_status'] = 'Finished';
+            $finalLabel = $completion['status_label'] ?: ($match['result'] ?? 'Completed');
+            if (preg_match('/^(match in progress|live|ball in progress|in progress)$/i', trim((string) ($match['result'] ?? '')))) {
+                $match['result'] = $finalLabel;
+            }
+            if (empty($match['result'])) {
+                $match['result'] = $finalLabel;
+            }
+        }
 
         // Pre-Match & Playing XI Archived Lookups (0 Upstream API calls!)
         $preMatchData = $apiService->getPreMatchArchivedData($this->matchId);

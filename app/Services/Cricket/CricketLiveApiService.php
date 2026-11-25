@@ -351,7 +351,70 @@ class CricketLiveApiService
             return true;
         }
 
-        return false;
+        return self::detectMatchCompletion($match)['is_completed'];
+    }
+
+    /**
+     * Authoritative match completion and final status label detector.
+     *
+     * @return array{is_completed: bool, status_label: string}
+     */
+    public static function detectMatchCompletion(array $match, array $scorecard = []): array
+    {
+        $rawResult = trim((string) ($match['result'] ?? $match['match_result'] ?? $match['status_note'] ?? $match['result_text'] ?? ''));
+        $resultLower = strtolower($rawResult);
+
+        $state = strtolower(trim((string) ($match['state'] ?? '')));
+        $status = strtolower(trim((string) ($match['status'] ?? '')));
+        $matchStatus = strtolower(trim((string) ($match['match_status'] ?? '')));
+        $combinedState = trim("{$state} {$status} {$matchStatus}");
+
+        $winPatterns = [
+            'won by', 'beat ', 'defeated', 'match drawn', 'match tied',
+            'no result', 'abandoned', 'match ended', 'innings complete', 'target chased',
+        ];
+        foreach ($winPatterns as $pattern) {
+            if ($resultLower !== '' && str_contains($resultLower, $pattern)) {
+                return ['is_completed' => true, 'status_label' => $rawResult];
+            }
+        }
+
+        $completedStates = ['complete', 'completed', 'finished', 'result', 'ended', 'abandon', 'cancel'];
+        foreach ($completedStates as $term) {
+            if ($combinedState !== '' && str_contains($combinedState, $term)) {
+                return [
+                    'is_completed' => true,
+                    'status_label' => $rawResult !== '' ? $rawResult : 'Completed',
+                ];
+            }
+        }
+        if (in_array((string) ($match['match_status'] ?? $match['state'] ?? ''), ['3'], true)) {
+            return [
+                'is_completed' => true,
+                'status_label' => $rawResult !== '' ? $rawResult : 'Completed',
+            ];
+        }
+
+        // 2nd/final innings target-chased or all-out completion check
+        $target = (int) ($match['target'] ?? 0);
+        $currentInning = (int) ($match['current_inning'] ?? $match['inning'] ?? (count($scorecard) >= 2 ? 2 : 1));
+        if ($target > 0 && $currentInning >= 2) {
+            $chasingScore = trim((string) ($match['score_b'] ?? $match['team_b_scores'] ?? $match['team_b_score'] ?? $match['score'] ?? ''));
+            if (preg_match('/^(\d+)(?:\/(\d+))?/', $chasingScore, $m)) {
+                $runs = (int) $m[1];
+                if ($runs >= $target) {
+                    return [
+                        'is_completed' => true,
+                        'status_label' => $rawResult !== '' ? $rawResult : 'Target Chased',
+                    ];
+                }
+            }
+        }
+
+        return [
+            'is_completed' => false,
+            'status_label' => $rawResult,
+        ];
     }
 
     /**
