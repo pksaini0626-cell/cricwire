@@ -6,14 +6,24 @@
     $matchs = $match['matchs'] ?? $match['match_desc'] ?? $match['match_type'] ?? 'Match';
     $venue = $match['venue'] ?? '';
     
-    // Status detection
+    // Status detection (normalized + derived fallback via CricketLiveApiService)
     $rawStatus = $status ?? $match['match_status'] ?? $match['status'] ?? $match['state'] ?? 'Live';
-    $isLive = is_string($rawStatus) ? strtolower($rawStatus) === 'live' : ($rawStatus == 2 || $rawStatus == 1);
-    
+    $normalizedRawStatus = is_string($rawStatus) ? strtolower(trim($rawStatus)) : '';
+    $liveStatusAliases = ['live', 'in progress', 'in_progress', 'inprogress', 'playing', 'innings break', 'innings_break', 'stumps', 'lunch', 'tea', 'drinks'];
+
     $statusNote = (string) ($match['status_note'] ?? '');
     $resultText = (string) ($match['result'] ?? (str_contains(strtolower($statusNote), 'won') ? $statusNote : ''));
     $stateStr = strtolower((string) ($match['state'] ?? ''));
-    $isFinished = !empty($resultText) || in_array($stateStr, ['complete', 'finished', 'completed', 'abandoned'], true) || (is_string($rawStatus) && in_array(strtolower($rawStatus), ['finished', 'complete', 'completed'], true));
+
+    $isFinished = !empty($resultText)
+        || \App\Services\Cricket\CricketLiveApiService::isCompletedMatch($match)
+        || in_array($stateStr, ['complete', 'finished', 'completed', 'abandoned'], true)
+        || in_array($normalizedRawStatus, ['finished', 'complete', 'completed', 'abandoned'], true);
+
+    $isLive = !$isFinished && (
+        (is_string($rawStatus) ? in_array($normalizedRawStatus, $liveStatusAliases, true) : ($rawStatus == 2 || $rawStatus == 1))
+        || \App\Services\Cricket\CricketLiveApiService::isLiveMatch($match)
+    );
 
     // Team A details
     $teamAName = $match['team_a'] ?? 'Team A';
@@ -151,7 +161,22 @@
                         } else if (d.need_run_ball !== undefined) {
                             this.needRunBall = d.need_run_ball;
                         }
-                        if (d.result !== undefined && d.result !== '') this.resultText = d.result;
+                        if (d.result !== undefined && d.result !== '') {
+                            this.resultText = d.result;
+                            this.status = 'finished';
+                        } else {
+                            const hasRealScore = (s) => {
+                                if (!s) return false;
+                                const l = String(s).trim().toLowerCase();
+                                return l !== '' && l !== 'yet to bat' && l !== 'null' && l !== '0/0' && l !== '0/0 (0)' && /[0-9]/.test(l);
+                            };
+                            const st = String(d.state ?? d.status ?? '').trim().toLowerCase();
+                            if (['complete', 'finished', 'completed', 'abandoned'].includes(st)) {
+                                this.status = 'finished';
+                            } else if (hasRealScore(this.teamAScore) || hasRealScore(this.teamBScore) || ['live', 'in progress', 'in_progress', 'inprogress', 'playing', 'innings break', 'innings_break', 'stumps', 'lunch', 'tea', 'drinks'].includes(st)) {
+                                this.status = 'live';
+                            }
+                        }
                     }
                 });
             }
@@ -212,20 +237,16 @@
 
             {{-- Right: Status + Pin + Skip --}}
             <div class="flex items-center gap-1 shrink-0">
-                @if($isLive)
-                    <span class="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider bg-[#EF233C]/15 text-[#EF233C] px-1.5 py-px rounded border border-[#EF233C]/25 leading-relaxed">
-                        <span class="w-1.5 h-1.5 bg-[#EF233C] rounded-full animate-ping"></span>
-                        LIVE
-                    </span>
-                @elseif($isFinished)
-                    <span class="px-1.5 py-px rounded text-[9px] font-semibold bg-[#22C55E]/12 text-[#22C55E] border border-[#22C55E]/25 leading-relaxed">
-                        Finished
-                    </span>
-                @else
-                    <span class="px-1.5 py-px rounded text-[9px] font-medium bg-[#172337] text-amber-300 border border-amber-500/15 leading-relaxed whitespace-nowrap">
-                        Upcoming
-                    </span>
-                @endif
+                <span x-show="status === 'live'" @if(!$isLive) x-cloak @endif class="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider bg-[#EF233C]/15 text-[#EF233C] px-1.5 py-px rounded border border-[#EF233C]/25 leading-relaxed">
+                    <span class="w-1.5 h-1.5 bg-[#EF233C] rounded-full animate-ping"></span>
+                    LIVE
+                </span>
+                <span x-show="status === 'finished'" @if(!$isFinished) x-cloak @endif class="px-1.5 py-px rounded text-[9px] font-semibold bg-[#22C55E]/12 text-[#22C55E] border border-[#22C55E]/25 leading-relaxed">
+                    Finished
+                </span>
+                <span x-show="status !== 'live' && status !== 'finished'" @if($isLive || $isFinished) x-cloak @endif class="px-1.5 py-px rounded text-[9px] font-medium bg-[#172337] text-amber-300 border border-amber-500/15 leading-relaxed whitespace-nowrap">
+                    Upcoming
+                </span>
 
                 <button 
                     type="button" 
