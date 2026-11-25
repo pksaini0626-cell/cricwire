@@ -34,17 +34,29 @@ class SocialiteController extends Controller
         try {
             $googleUser = Socialite::driver('google')->user();
 
-            $user = User::updateOrCreate(
-                ['email' => $googleUser->getEmail()],
-                [
+            $user = User::where('google_id', $googleUser->getId())
+                ->orWhere('email', $googleUser->getEmail())
+                ->first();
+
+            if ($user) {
+                $user->update([
+                    'google_id' => $googleUser->getId(),
+                    'avatar' => $googleUser->getAvatar() ?: $user->avatar,
+                    'email_verified_at' => $user->email_verified_at ?? now(),
+                ]);
+            } else {
+                $user = User::create([
                     'name' => $googleUser->getName() ?: $googleUser->getNickname() ?: 'Cricket Fan',
+                    'email' => $googleUser->getEmail(),
                     'google_id' => $googleUser->getId(),
                     'avatar' => $googleUser->getAvatar(),
+                    'email_verified_at' => now(),
                     'password' => bcrypt(Str::random(24)),
-                ]
-            );
+                ]);
+            }
 
-            Auth::login($user, $remember = true);
+            Auth::login($user, true);
+            request()->session()->regenerate();
 
             $intendedUrl = session()->pull('url.intended', route('home'));
             return redirect()->to($intendedUrl)->with('success', 'Logged in successfully!');
