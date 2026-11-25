@@ -605,7 +605,15 @@ class CricketLiveApiService
      */
     public function writeMatchToRedis(int|string $matchId, array $payload): void
     {
-        $ttl = self::classifyMatchBucket($payload) === 'finished' ? 604800 : 300;
+        if (empty($payload)) {
+            return;
+        }
+        $bucket = self::classifyMatchBucket($payload);
+        $ttl = match ($bucket) {
+            'finished' => 604800,
+            'live' => 10,
+            default => 120,
+        };
         Cache::put("cricket:redis:match:{$matchId}", $payload, $ttl);
     }
 
@@ -626,6 +634,7 @@ class CricketLiveApiService
             if (empty($cached['batters']) || empty($cached['bowler'])) {
                 $cached = $this->enrichFastMatchPayload($cached);
             }
+            $cached['server_updated_at'] = $cached['server_updated_at'] ?? ($cached['updated_at'] ?? now()->toIso8601String());
             return $cached;
         }
 
@@ -660,11 +669,13 @@ class CricketLiveApiService
         $comm = $includeCommentary ? $this->getCommentary($matchId) : [];
         $facts = $this->getMatchFacts($matchId);
 
+        $nowIso = now()->toIso8601String();
         $payload = array_merge($baseMatch, [
             'scorecard' => $scorecard['innings'] ?? [],
             'commentary' => $comm['commentary'] ?? [],
             'facts' => $facts,
-            'updated_at' => now()->toIso8601String(),
+            'updated_at' => $nowIso,
+            'server_updated_at' => $nowIso,
         ]);
 
         $payload = $this->enrichFastMatchPayload($payload);
@@ -1027,7 +1038,7 @@ class CricketLiveApiService
             'finished' => $sanitized['finished'],
         ];
 
-        $ttl = !empty($sanitized['live']) ? 30 : 180;
+        $ttl = !empty($sanitized['live']) ? 10 : 180;
         Cache::put($cacheKey, $data, $ttl);
 
         return [

@@ -14,6 +14,7 @@ const PRECACHE_ASSETS = [
 // Patterns that must NEVER be cached (live cricket feeds, websockets, polling, APIs)
 const EXCLUDE_URL_PATTERNS = [
     /\/api\//i,
+    /\/live-feed\//i,
     /\/livewire\//i,
     /\/ws\//i,
     /\/socket\.io\//i,

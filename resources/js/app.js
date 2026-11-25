@@ -221,7 +221,10 @@ function createMatchDetailEngine(config) {
             if (!this.isUserActive()) return;
             try {
                 const res = await fetch(`/api/live/match/${this.matchId}?_=${Date.now()}`, {
-                    headers: { 'Accept': 'application/json' },
+                    headers: {
+                        'Accept': 'application/json',
+                        'Cache-Control': 'no-cache'
+                    },
                     cache: 'no-store'
                 });
 
@@ -340,6 +343,25 @@ function createMatchDetailEngine(config) {
                 }
 
                 this.live = updated;
+
+                const latestBall = data.latest_ball || {};
+                const nextBallKey = (latestBall.over !== undefined && latestBall.ball !== undefined)
+                    ? `${latestBall.over}.${latestBall.ball}`
+                    : (data.last_ball_event || data.event || '');
+                if (
+                    (nextBallKey && nextBallKey !== this.lastEvent) ||
+                    (scoreA && scoreA !== this.live?.scoreA) ||
+                    (scoreB && scoreB !== this.live?.scoreB)
+                ) {
+                    console.debug('[MatchDetail] Live update', {
+                        lastBallKey: nextBallKey,
+                        scoreA,
+                        scoreB,
+                        oversA: updated.team_a_over || '',
+                        oversB: updated.team_b_over || '',
+                        serverUpdatedAt: data.server_updated_at || data.updated_at || null
+                    });
+                }
 
                 this.handleBallEvent(data);
             } catch (err) {
