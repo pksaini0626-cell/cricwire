@@ -28,6 +28,14 @@
             $ga4MeasurementId = \App\Support\LiveEngineConfig::ga4MeasurementId();
         @endphp
 
+        <!-- Google Tag Manager / gtag -->
+        <script async src="https://www.googletagmanager.com/gtm.js?id=GTM-KX6J92NK"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+        </script>
+
         <!-- Google Analytics 4 (GA4) -->
         @if(!empty($ga4MeasurementId))
             <script async src="https://www.googletagmanager.com/gtag/js?id={{ urlencode($ga4MeasurementId) }}"></script>
