@@ -7,13 +7,12 @@ use Carbon\Carbon;
 class MatchStateNormalizer
 {
     /**
-     * Keywords in state/status/match_status/match_desc indicating a finished match.
+     * Keywords in state/status/match_status indicating a finished match.
      */
     private const FINISHED_STATE_KEYWORDS = [
         'complete',
         'completed',
         'finished',
-        'final',
         'result',
         'abandon',
         'abandoned',
@@ -102,7 +101,7 @@ class MatchStateNormalizer
             return true;
         }
 
-        $stateFields = array_filter([$state, $status, $matchStatus, $matchDesc], fn ($v) => $v !== '');
+        $stateFields = array_filter([$state, $status, $matchStatus], fn ($v) => $v !== '');
         foreach ($stateFields as $field) {
             foreach (self::FINISHED_STATE_KEYWORDS as $kw) {
                 if (str_contains($field, $kw)) {
@@ -399,8 +398,24 @@ class MatchStateNormalizer
             return false;
         }
 
-        $startRaw = $match['start_time_ist'] ?? $match['match_time'] ?? $match['date_wise'] ?? null;
+        // Never timeout-finish a match that was freshly synced within the last 30 minutes
+        $freshTs = $match['server_updated_at'] ?? $match['updated_at'] ?? null;
+        if (is_string($freshTs) && $freshTs !== '') {
+            try {
+                if (Carbon::parse($freshTs)->diffInMinutes(now(), false) < 30) {
+                    return false;
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        $startRaw = $match['start_time_ist'] ?? $match['date_wise'] ?? null;
         if (empty($startRaw) || !is_string($startRaw)) {
+            return false;
+        }
+
+        // Require an explicit date in the timestamp so bare times like "01:40 PM" don't false-trigger
+        if (!preg_match('/\d{4}-\d{2}-\d{2}|[a-z]{3}\s+\d{1,2}/i', $startRaw)) {
             return false;
         }
 

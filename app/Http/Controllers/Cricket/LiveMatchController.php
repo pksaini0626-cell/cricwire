@@ -146,7 +146,7 @@ class LiveMatchController extends Controller
 
         if (!$request->attributes->get('is_search_crawler') && !app()->bound('crawler_read_only_mode')) {
             Cache::put('active_site_visitor', now()->timestamp, 120);
-            Cache::put("watching:match:{$matchKey}", true, 30);
+            Cache::put("watching:match:{$matchKey}", now()->timestamp, 45);
         }
 
         $archivedIds = FinishedMatchController::getArchivedMatchIds();
@@ -172,6 +172,9 @@ class LiveMatchController extends Controller
             $data['team_b_scores'] = $scores['score_b'];
             $data['is_live'] = true;
             $data['is_completed'] = false;
+            $data['server_updated_at'] = $data['server_updated_at'] ?? ($data['updated_at'] ?? now()->toIso8601String());
+            $data['server_fetched_at'] = $data['server_updated_at'];
+            $data['poll_interval_ms'] = $data['poll_interval_ms'] ?? 8000;
         }
 
         return response()

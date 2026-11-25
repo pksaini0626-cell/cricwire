@@ -96,11 +96,14 @@ Route::get('/api/matches/{matchId}/sessions', [\App\Http\Controllers\Cricket\Ses
 // Match Viewer Presence Heartbeat Ping
 Route::post('/api/matches/{matchId}/ping', function (string|int $matchId, \Illuminate\Http\Request $request) {
     if (!$request->attributes->get('is_search_crawler') && !app()->bound('crawler_read_only_mode')) {
-        \Illuminate\Support\Facades\Cache::put('active_site_visitor', now()->timestamp, 120);
-        \Illuminate\Support\Facades\Cache::put("watching:match:{$matchId}", true, 30);
-        \Illuminate\Support\Facades\Cache::put("cricket:watchers:match:{$matchId}", true, 30);
+        $ts = now()->timestamp;
+        \Illuminate\Support\Facades\Cache::put('active_site_visitor', $ts, 120);
+        \Illuminate\Support\Facades\Cache::put("watching:match:{$matchId}", $ts, 45);
+        \Illuminate\Support\Facades\Cache::put("cricket:watchers:match:{$matchId}", $ts, 45);
     }
-    return response()->json(['status' => true, 'match_id' => $matchId]);
+    return response()
+        ->json(['status' => true, 'match_id' => $matchId])
+        ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
 })->name('match.ping');
 
 // Segregated Cricket Match API Endpoints

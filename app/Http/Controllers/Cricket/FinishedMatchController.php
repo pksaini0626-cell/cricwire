@@ -39,6 +39,11 @@ class FinishedMatchController extends Controller
             return $match;
         }
 
+        // Never archive a match that is still actively Live / In Progress without a final outcome
+        if (MatchStateNormalizer::isLive($match) && !MatchStateNormalizer::isFinished($match)) {
+            return $match;
+        }
+
         return $this->getOrArchive($matchId, $match);
     }
 
@@ -68,6 +73,11 @@ class FinishedMatchController extends Controller
                 $stored['commentary_unavailable'] = true;
                 return $stored;
             }
+        }
+
+        // Guard: refuse to persist a still-live match into FinishedMatch
+        if (!empty($contextMatch) && MatchStateNormalizer::isLive($contextMatch) && !MatchStateNormalizer::isFinished($contextMatch)) {
+            return $contextMatch;
         }
 
         // Check CompletedMatchScorecard table before calling external API
@@ -121,6 +131,12 @@ class FinishedMatchController extends Controller
         $normalized['score_b'] = $scores['score_b'];
         $normalized['team_b_scores'] = $scores['score_b'];
         $normalized['scorecard'] = $scorecard;
+
+        // Re-verify after scorecard fetch: never archive a live / in-progress match
+        if (MatchStateNormalizer::isLive($normalized) && !MatchStateNormalizer::isFinished($normalized)) {
+            return $normalized;
+        }
+
         $normalized['is_live'] = false;
         $normalized['is_completed'] = true;
         $normalized['match_status'] = 'Finished';

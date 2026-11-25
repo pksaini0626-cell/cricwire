@@ -681,7 +681,314 @@ class CricketLiveApiService
     }
 
     /**
+     * Check whether a cached live payload is older than $maxAgeSeconds based on server_updated_at / updated_at.
+     */
+    public function isPayloadStale(array $payload, int $maxAgeSeconds = 10): bool
+    {
+        $tsRaw = $payload['server_updated_at'] ?? $payload['updated_at'] ?? null;
+        if (!is_string($tsRaw) || trim($tsRaw) === '') {
+            $unixTs = $payload['timestamp'] ?? null;
+            if (is_numeric($unixTs) && (int) $unixTs > 0) {
+                return (time() - (int) $unixTs) >= $maxAgeSeconds;
+            }
+            return true;
+        }
+
+        try {
+            $parsedTs = \Carbon\Carbon::parse($tsRaw)->timestamp;
+            return (time() - $parsedTs) >= $maxAgeSeconds;
+        } catch (\Throwable) {
+            return true;
+        }
+    }
+
+    /**
+     * Build a complete, normalized live match payload from upstream commentary + scorecard + facts.
+     * Sets server_updated_at and updated_at to the current ISO-8601 timestamp.
+     */
+    public function buildLiveMatchPayload(
+        int|string $matchId,
+        array $baseMatch,
+        array $commRes,
+        array $scorecardRes,
+        array $matchFacts = [],
+        ?array $dynamicConfig = null
+    ): array {
+        $commentaryData = $commRes['commentary'] ?? [];
+        $scorecardData = $scorecardRes['innings'] ?? [];
+        $dynamicConfig = $dynamicConfig ?? $this->getDynamicTtls($matchId, $baseMatch);
+
+        // Header normalization when baseMatch is sparse
+        if (empty($baseMatch['team_a']) || $baseMatch['team_a'] === 'Team A') {
+            $header = $commRes['match_header'] ?? $scorecardRes['match_header'] ?? ($matchFacts['match_info'] ?? null);
+            if (is_array($header)) {
+                $baseMatch['team_a'] = $header['team1']['name'] ?? $baseMatch['team_a'] ?? 'Team A';
+                $baseMatch['team_b'] = $header['team2']['name'] ?? $baseMatch['team_b'] ?? 'Team B';
+                $baseMatch['team_a_short'] = $header['team1']['short'] ?? $baseMatch['team_a_short'] ?? self::generateTeamShort($baseMatch['team_a']);
+                $baseMatch['team_b_short'] = $header['team2']['short'] ?? $baseMatch['team_b_short'] ?? self::generateTeamShort($baseMatch['team_b']);
+                $baseMatch['series_name'] = $header['series_name'] ?? $baseMatch['series_name'] ?? 'Cricket Series';
+                $baseMatch['match_desc'] = $header['description'] ?? $header['match_desc'] ?? $baseMatch['match_desc'] ?? 'Match';
+                $baseMatch['format'] = $header['format'] ?? $baseMatch['format'] ?? 'T20';
+                $baseMatch['venue'] = $header['venue'] ?? $baseMatch['venue'] ?? ($matchFacts['venue'] ?? '');
+                $baseMatch['state'] = $header['state'] ?? $baseMatch['state'] ?? 'Live';
+                $baseMatch['status'] = $header['status'] ?? $baseMatch['status'] ?? 'Live';
+            }
+        }
+
+        // Score normalization (prefer fresh scorecard / miniscore over stale baseMatch when available)
+        $scoreA = '';
+        $scoreB = '';
+        $combinedScore = $baseMatch['score'] ?? '';
+
+        if (!empty($scorecardData) && is_array($scorecardData)) {
+            $teamAName = strtolower(trim((string) ($baseMatch['team_a'] ?? '')));
+            $teamBName = strtolower(trim((string) ($baseMatch['team_b'] ?? '')));
+            $teamAShort = strtolower(trim((string) ($baseMatch['team_a_short'] ?? '')));
+            $teamBShort = strtolower(trim((string) ($baseMatch['team_b_short'] ?? '')));
+
+            foreach ($scorecardData as $idx => $inn) {
+                if (!is_array($inn)) continue;
+                $inTeam = $inn['bat_team'] ?? $inn['team']['name'] ?? $inn['team']['short_name'] ?? $inn['team_name'] ?? '';
+                $inTeamShort = $inn['bat_team_short'] ?? $inn['team']['short_name'] ?? '';
+                $inScore = trim((string) ($inn['score'] ?? ''));
+
+                if ($inScore === '' && isset($inn['team']['score'])) {
+                    $r = $inn['team']['score'] ?? 0;
+                    $w = $inn['team']['wicket'] ?? 0;
+                    $ov = $inn['team']['over'] ?? '';
+                    $inScore = "{$r}/{$w}" . ($ov !== '' ? " ({$ov} ov)" : '');
+                }
+
+                if ($inScore !== '') {
+                    $inTeamLower = strtolower(trim((string) $inTeam));
+                    $inTeamShortLower = strtolower(trim((string) $inTeamShort));
+
+                    $isTeamA = ($inTeamLower && ($inTeamLower === $teamAName || ($teamAName && (str_contains($teamAName, $inTeamLower) || str_contains($inTeamLower, $teamAName)))))
+                        || ($inTeamShortLower && ($inTeamShortLower === $teamAShort || ($teamAShort && str_contains($teamAShort, $inTeamShortLower))));
+
+                    $isTeamB = ($inTeamLower && ($inTeamLower === $teamBName || ($teamBName && (str_contains($teamBName, $inTeamLower) || str_contains($inTeamLower, $teamBName)))))
+                        || ($inTeamShortLower && ($inTeamShortLower === $teamBShort || ($teamBShort && str_contains($teamBShort, $inTeamShortLower))));
+
+                    if ($isTeamA) {
+                        $scoreA = $inScore;
+                    } elseif ($isTeamB) {
+                        $scoreB = $inScore;
+                    } elseif ($idx === 0 && $scoreA === '') {
+                        $scoreA = $inScore;
+                    } elseif ($idx === 1 && $scoreB === '') {
+                        $scoreB = $inScore;
+                    }
+                }
+            }
+        }
+
+        $miniscore = $commRes['miniscore'] ?? null;
+        if (is_array($miniscore) && !empty($miniscore['innings_scores']) && is_array($miniscore['innings_scores'])) {
+            foreach ($miniscore['innings_scores'] as $innS) {
+                if (!is_array($innS)) continue;
+                $innScoreStr = ($innS['score'] ?? 0) . '/' . ($innS['wickets'] ?? 0) . (isset($innS['overs']) ? " ({$innS['overs']} ov)" : '');
+                $innBatTeam = strtolower(trim((string) ($innS['bat_team'] ?? '')));
+                $tAShortLower = strtolower(trim((string) ($baseMatch['team_a_short'] ?? '')));
+                $tBShortLower = strtolower(trim((string) ($baseMatch['team_b_short'] ?? '')));
+
+                if ($innBatTeam !== '' && ($innBatTeam === $tAShortLower || ($tAShortLower && str_contains($tAShortLower, $innBatTeam)))) {
+                    $scoreA = $innScoreStr;
+                } elseif ($innBatTeam !== '' && ($innBatTeam === $tBShortLower || ($tBShortLower && str_contains($tBShortLower, $innBatTeam)))) {
+                    $scoreB = $innScoreStr;
+                }
+            }
+        }
+
+        if ($scoreA === '') {
+            $scoreA = (string) ($baseMatch['score_a'] ?? $baseMatch['team_a_scores'] ?? $baseMatch['team_a_score'] ?? '');
+        }
+        if ($scoreB === '') {
+            $scoreB = (string) ($baseMatch['score_b'] ?? $baseMatch['team_b_scores'] ?? $baseMatch['team_b_score'] ?? '');
+        }
+        if ($scoreA === '' && $scoreB === '' && $combinedScore !== '') {
+            $scoreA = $combinedScore;
+        }
+        if ($combinedScore === '') {
+            $combinedScore = $scoreA ?: $scoreB;
+        }
+
+        // Batters normalization
+        $batters = [];
+        if (is_array($miniscore)) {
+            if (!empty($miniscore['striker']['name'])) {
+                $batters[] = [
+                    'name' => $miniscore['striker']['name'],
+                    'runs' => $miniscore['striker']['runs'] ?? 0,
+                    'run' => $miniscore['striker']['runs'] ?? 0,
+                    'balls' => $miniscore['striker']['balls'] ?? 0,
+                    'ball' => $miniscore['striker']['balls'] ?? 0,
+                    'fours' => $miniscore['striker']['fours'] ?? 0,
+                    'sixes' => $miniscore['striker']['sixes'] ?? 0,
+                    'strike_rate' => $miniscore['striker']['strike_rate'] ?? '0.00',
+                    'is_striker' => true,
+                ];
+            }
+            if (!empty($miniscore['non_striker']['name'])) {
+                $batters[] = [
+                    'name' => $miniscore['non_striker']['name'],
+                    'runs' => $miniscore['non_striker']['runs'] ?? 0,
+                    'run' => $miniscore['non_striker']['runs'] ?? 0,
+                    'balls' => $miniscore['non_striker']['balls'] ?? 0,
+                    'ball' => $miniscore['non_striker']['balls'] ?? 0,
+                    'fours' => $miniscore['non_striker']['fours'] ?? 0,
+                    'sixes' => $miniscore['non_striker']['sixes'] ?? 0,
+                    'strike_rate' => $miniscore['non_striker']['strike_rate'] ?? '0.00',
+                    'is_striker' => false,
+                ];
+            }
+        }
+
+        if (empty($batters) && !empty($scorecardData) && is_array($scorecardData)) {
+            $activeInning = end($scorecardData);
+            if (is_array($activeInning)) {
+                $allBatsmen = $activeInning['batsmen'] ?? $activeInning['batsman'] ?? [];
+                foreach ($allBatsmen as $b) {
+                    $outDesc = strtolower(trim((string) ($b['out_desc'] ?? $b['out_by'] ?? '')));
+                    if ($outDesc === 'batting' || $outDesc === 'not out' || $outDesc === '' || str_contains($outDesc, 'not out')) {
+                        $batters[] = [
+                            'name' => $b['name'] ?? $b['short_name'] ?? 'Batter',
+                            'runs' => $b['runs'] ?? $b['run'] ?? 0,
+                            'run' => $b['runs'] ?? $b['run'] ?? 0,
+                            'balls' => $b['balls'] ?? $b['ball'] ?? 0,
+                            'ball' => $b['balls'] ?? $b['ball'] ?? 0,
+                            'fours' => $b['fours'] ?? 0,
+                            'sixes' => $b['sixes'] ?? 0,
+                            'strike_rate' => $b['strike_rate'] ?? '0.00',
+                            'is_striker' => count($batters) === 0,
+                        ];
+                    }
+                }
+            }
+        }
+
+        if (empty($batters) && !empty($commentaryData[0]['batsman'])) {
+            $batters[] = [
+                'name' => $commentaryData[0]['batsman'],
+                'runs' => 0,
+                'run' => 0,
+                'balls' => 0,
+                'ball' => 0,
+                'fours' => 0,
+                'sixes' => 0,
+                'strike_rate' => '0.00',
+                'is_striker' => true,
+            ];
+        }
+
+        // Bowlers normalization (current + previous)
+        $bowlers = [];
+        if (is_array($miniscore) && !empty($miniscore['bowler_striker']['name'])) {
+            $b = $miniscore['bowler_striker'];
+            $bowlers[] = [
+                'name' => $b['name'],
+                'overs' => \App\Helpers\CricketMatchFormatter::normalizeOvers($b['overs'] ?? $b['over'] ?? '0.0'),
+                'over' => \App\Helpers\CricketMatchFormatter::normalizeOvers($b['overs'] ?? $b['over'] ?? '0.0'),
+                'maidens' => $b['maidens'] ?? $b['maiden'] ?? 0,
+                'maiden' => $b['maidens'] ?? $b['maiden'] ?? 0,
+                'runs' => $b['runs'] ?? $b['run'] ?? 0,
+                'run' => $b['runs'] ?? $b['run'] ?? 0,
+                'wickets' => $b['wickets'] ?? $b['wicket'] ?? 0,
+                'wicket' => $b['wickets'] ?? $b['wicket'] ?? 0,
+                'economy' => $b['economy'] ?? '0.00',
+                'is_current' => true,
+            ];
+        }
+
+        if (empty($bowlers) && !empty($scorecardData) && is_array($scorecardData)) {
+            $activeInning = end($scorecardData);
+            if (is_array($activeInning)) {
+                $allBowlers = $activeInning['bowlers'] ?? $activeInning['bolwer'] ?? $activeInning['bowler'] ?? [];
+                if (!empty($allBowlers)) {
+                    $lastTwo = array_reverse(array_slice($allBowlers, -2));
+                    foreach ($lastTwo as $idx => $lastB) {
+                        $bowlers[] = [
+                            'name' => $lastB['name'] ?? $lastB['short_name'] ?? 'Bowler',
+                            'overs' => \App\Helpers\CricketMatchFormatter::normalizeOvers($lastB['overs'] ?? $lastB['over'] ?? '0.0'),
+                            'over' => \App\Helpers\CricketMatchFormatter::normalizeOvers($lastB['overs'] ?? $lastB['over'] ?? '0.0'),
+                            'maidens' => $lastB['maidens'] ?? $lastB['maiden'] ?? 0,
+                            'maiden' => $lastB['maidens'] ?? $lastB['maiden'] ?? 0,
+                            'runs' => $lastB['runs'] ?? $lastB['run'] ?? 0,
+                            'run' => $lastB['runs'] ?? $lastB['run'] ?? 0,
+                            'wickets' => $lastB['wickets'] ?? $lastB['wicket'] ?? 0,
+                            'wicket' => $lastB['wickets'] ?? $lastB['wicket'] ?? 0,
+                            'economy' => $lastB['economy'] ?? '0.00',
+                            'is_current' => $idx === 0,
+                        ];
+                    }
+                }
+            }
+        }
+
+        if (empty($bowlers) && !empty($commentaryData[0]['bowler'])) {
+            $bowlers[] = [
+                'name' => $commentaryData[0]['bowler'],
+                'overs' => '0.0',
+                'over' => '0.0',
+                'maidens' => 0,
+                'maiden' => 0,
+                'runs' => 0,
+                'run' => 0,
+                'wickets' => 0,
+                'wicket' => 0,
+                'economy' => '0.00',
+                'is_current' => true,
+            ];
+        }
+
+        $recentBalls = array_slice($commentaryData, 0, 12);
+        $latestBall = !empty($commentaryData) ? $commentaryData[0] : null;
+        $statusText = (string) ($miniscore['status'] ?? $baseMatch['result'] ?? $baseMatch['status_note'] ?? $baseMatch['status'] ?? $baseMatch['state'] ?? 'Live');
+        $nowIso = now()->toIso8601String();
+
+        $built = array_merge($baseMatch, [
+            'match_id' => (int) $matchId,
+            'id' => (int) $matchId,
+            'team_a' => $baseMatch['team_a'] ?? 'Team A',
+            'team_b' => $baseMatch['team_b'] ?? 'Team B',
+            'team_a_short' => $baseMatch['team_a_short'] ?? self::generateTeamShort($baseMatch['team_a'] ?? 'Team A'),
+            'team_b_short' => $baseMatch['team_b_short'] ?? self::generateTeamShort($baseMatch['team_b'] ?? 'Team B'),
+            'score_a' => $scoreA,
+            'score_b' => $scoreB,
+            'score' => $combinedScore,
+            'team_a_scores' => $scoreA,
+            'team_b_scores' => $scoreB,
+            'team_a_score' => $scoreA,
+            'team_b_score' => $scoreB,
+            'status' => $statusText,
+            'statusText' => $statusText,
+            'state' => $baseMatch['state'] ?? 'Live',
+            'result' => $baseMatch['result'] ?? '',
+            'batters' => $batters,
+            'live_batters' => $batters,
+            'batsman' => $batters,
+            'bowler' => $bowlers,
+            'live_bowler' => $bowlers[0] ?? [],
+            'live_bowlers' => $bowlers,
+            'recent_balls' => $recentBalls,
+            'latest_ball' => $latestBall,
+            'commentary' => $commentaryData,
+            'scorecard' => $scorecardData,
+            'facts' => $matchFacts ?: ($baseMatch['facts'] ?? []),
+            'poll_interval_ms' => $dynamicConfig['poll_interval_ms'] ?? 8000,
+            'dynamic_format' => $dynamicConfig['format'] ?? 'T20',
+            'in_break' => $dynamicConfig['in_break'] ?? false,
+            'server_updated_at' => $nowIso,
+            'server_fetched_at' => $nowIso,
+            'updated_at' => $nowIso,
+            'timestamp' => time(),
+        ]);
+
+        return $this->enrichFastMatchPayload($built);
+    }
+
+    /**
      * Get Fast Match Data for real-time Live Line & Match Center.
+     * Enforces a 10-second self-healing freshness guard for live matches.
      */
     public function getFastMatchData(int|string $matchId, bool $includeCommentary = false): array
     {
@@ -693,7 +1000,7 @@ class CricketLiveApiService
             $stored = is_array($finished->match_data) && !empty($finished->match_data)
                 ? $finished->match_data
                 : $finished->match_json;
-            if (is_array($stored) && !empty($stored)) {
+            if (is_array($stored) && !empty($stored) && (!self::isLiveMatch($stored) || self::isCompletedMatch($stored))) {
                 $stored['server_updated_at'] = $stored['server_updated_at'] ?? ($stored['updated_at'] ?? now()->toIso8601String());
                 return $stored;
             }
@@ -703,18 +1010,26 @@ class CricketLiveApiService
         $cached = Cache::get($cacheKey);
 
         if (is_array($cached) && !empty($cached)) {
-            if ($includeCommentary && empty($cached['commentary'])) {
-                $comm = $this->getCommentary($matchId);
-                $cached['commentary'] = $comm['commentary'] ?? [];
+            $cachedBucket = self::classifyMatchBucket($cached);
+            $isFreshLive = ($cachedBucket === 'live') && !$this->isPayloadStale($cached, 10);
+
+            if ($cachedBucket !== 'live' || $isFreshLive) {
+                if ($cachedBucket === 'live') {
+                    Cache::put("watching:match:{$matchId}", now()->timestamp, 45);
+                }
+                if ($includeCommentary && empty($cached['commentary'])) {
+                    $comm = $this->getCommentary($matchId);
+                    $cached['commentary'] = $comm['commentary'] ?? [];
+                }
+                if (empty($cached['batters']) || empty($cached['bowler'])) {
+                    $cached = $this->enrichFastMatchPayload($cached);
+                }
+                $cached['server_updated_at'] = $cached['server_updated_at'] ?? ($cached['updated_at'] ?? now()->toIso8601String());
+                return $cached;
             }
-            if (empty($cached['batters']) || empty($cached['bowler'])) {
-                $cached = $this->enrichFastMatchPayload($cached);
-            }
-            $cached['server_updated_at'] = $cached['server_updated_at'] ?? ($cached['updated_at'] ?? now()->toIso8601String());
-            return $cached;
         }
 
-        // Gather from live/upcoming/recent
+        // Gather base match from Redis/fast home data
         $homeData = $this->getFastHomeData();
         $allMatches = array_merge(
             $homeData['live'] ?? [],
@@ -722,11 +1037,11 @@ class CricketLiveApiService
             $homeData['recent'] ?? []
         );
 
-        $baseMatch = [];
+        $baseMatch = is_array($cached) ? $cached : [];
         foreach ($allMatches as $m) {
             $mId = (int) ($m['match_id'] ?? $m['id'] ?? 0);
             if ($mId === $matchId) {
-                $baseMatch = $m;
+                $baseMatch = array_merge($baseMatch, $m);
                 break;
             }
         }
@@ -756,35 +1071,39 @@ class CricketLiveApiService
             return $payload;
         }
 
-        // 3. Match Live (In Progress): Fetch at most once every 10 minutes (600s) with atomic lock
+        // 3. Match Live (In Progress): Self-Healing 10-Second Freshness Guard
+        Cache::put("watching:match:{$matchId}", now()->timestamp, 45);
+
         $liveCacheKey = "cricket:live_match_payload:{$matchId}";
         $liveCached = Cache::get($liveCacheKey);
-        if (is_array($liveCached) && !empty($liveCached)) {
+        if (is_array($liveCached) && !empty($liveCached) && !$this->isPayloadStale($liveCached, 10)) {
+            if ($includeCommentary && empty($liveCached['commentary'])) {
+                $comm = $this->getCommentary($matchId);
+                $liveCached['commentary'] = $comm['commentary'] ?? [];
+            }
             return $liveCached;
         }
 
-        $lock = Cache::lock("cricket:live_fetch_lock:{$matchId}", 15);
-        $payload = $lock->block(5, function () use ($matchId, $baseMatch, $includeCommentary, $liveCacheKey) {
-            $recheck = Cache::get($liveCacheKey);
-            if (is_array($recheck) && !empty($recheck)) {
-                return $recheck;
+        $lock = Cache::lock("lock:live:match:{$matchId}", 5);
+        $payload = $lock->block(5, function () use ($matchId, $baseMatch, $cacheKey, $liveCacheKey) {
+            $recheckRedis = Cache::get($cacheKey);
+            if (is_array($recheckRedis) && !empty($recheckRedis) && !$this->isPayloadStale($recheckRedis, 10)) {
+                return $recheckRedis;
             }
 
-            $scorecard = $this->getScorecard($matchId);
-            $comm = $includeCommentary ? $this->getCommentary($matchId) : [];
-            $facts = $this->getMatchFacts($matchId);
+            $recheckLive = Cache::get($liveCacheKey);
+            if (is_array($recheckLive) && !empty($recheckLive) && !$this->isPayloadStale($recheckLive, 10)) {
+                return $recheckLive;
+            }
 
-            $nowIso = now()->toIso8601String();
-            $built = array_merge($baseMatch, [
-                'scorecard' => $scorecard['innings'] ?? [],
-                'commentary' => $comm['commentary'] ?? [],
-                'facts' => $facts,
-                'updated_at' => $nowIso,
-                'server_updated_at' => $nowIso,
-            ]);
+            // Refresh live list score if needed + fetch fresh commentary & scorecard directly from upstream API
+            $commRes = $this->getCommentary($matchId);
+            $scorecardRes = $this->getScorecard($matchId);
+            $facts = Cache::remember("cricket:facts:{$matchId}", 3600, fn () => $this->getMatchFacts($matchId));
 
-            $built = $this->enrichFastMatchPayload($built);
-            Cache::put($liveCacheKey, $built, 600);
+            $built = $this->buildLiveMatchPayload($matchId, $baseMatch, $commRes, $scorecardRes, is_array($facts) ? $facts : []);
+
+            Cache::put($liveCacheKey, $built, 10);
             $this->writeMatchToRedis($matchId, $built);
 
             return $built;
@@ -994,8 +1313,8 @@ class CricketLiveApiService
         $inBreak = str_contains($state, 'break') || str_contains($state, 'delay') || str_contains($state, 'rain') || str_contains($state, 'tea') || str_contains($state, 'lunch') || str_contains($state, 'stumps');
 
         $pollIntervalMs = match ($format) {
-            'TEST' => $inBreak ? 45000 : 20000,
-            'ODI' => $inBreak ? 30000 : 15000,
+            'TEST' => $inBreak ? 45000 : 12000,
+            'ODI' => $inBreak ? 30000 : 8000,
             default => $inBreak ? 20000 : 8000,
         };
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cricwire-v1';
+const CACHE_NAME = 'cricwire-v2';
 const OFFLINE_URL = '/offline.html';
 
 // Core static assets to cache for offline support
@@ -14,8 +14,10 @@ const PRECACHE_ASSETS = [
 // Patterns that must NEVER be cached (live cricket feeds, websockets, polling, APIs)
 const EXCLUDE_URL_PATTERNS = [
     /\/api\//i,
+    /\/api\/live\//i,
     /\/live-feed\//i,
     /\/livewire\//i,
+    /\/js\/match-detail-engine\.js/i,
     /\/ws\//i,
     /\/socket\.io\//i,
     /\/matches\/live/i,

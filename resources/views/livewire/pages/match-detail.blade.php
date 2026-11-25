@@ -1,9 +1,9 @@
 <div 
     class="min-h-screen bg-slate-950 text-slate-100 pb-24 font-sans antialiased flex flex-col selection:bg-rose-500 selection:text-white transition-all duration-300"
     :class="{ 'ring-2 ring-amber-400': isFlashing }"
-    x-data="matchDetailEngine({ matchId: '{{ $matchId }}', tab: '{{ $tab }}', isLive: {{ (!empty($isLive) && empty($isCompleted)) ? 'true' : 'false' }}, isFinished: {{ (!empty($isFinished) || !empty($isCompleted)) ? 'true' : 'false' }}, pollSeconds: {{ $pollSeconds ?? 600 }}, pollMs: {{ ($pollSeconds ?? 600) * 1000 }}, isLocal: @js(app()->environment('local')), allowPolling: {{ (!empty($isLive) && empty($isCompleted)) ? 'true' : 'false' }}, live: { batsman: @js(array_values(array_slice($liveBatters ?? [], 0, 2))), bowler: @js(array_values(array_slice($liveBowlers ?? [], 0, 2))) } })"
+    x-data="matchDetailEngine({ matchId: '{{ $matchId }}', tab: '{{ $tab }}', isLive: {{ (!empty($isLive) && empty($isCompleted)) ? 'true' : 'false' }}, isFinished: {{ (!empty($isFinished) || !empty($isCompleted)) ? 'true' : 'false' }}, pollSeconds: {{ $pollSeconds ?? 8 }}, pollMs: {{ ($pollSeconds ?? 8) * 1000 }}, serverUpdatedAt: @js($match['server_updated_at'] ?? $match['updated_at'] ?? ''), isLocal: @js(app()->environment('local')), allowPolling: {{ (!empty($isLive) && empty($isCompleted)) ? 'true' : 'false' }}, live: { scoreA: @js($match['score_a'] ?? $match['team_a_scores'] ?? ''), scoreB: @js($match['score_b'] ?? $match['team_b_scores'] ?? ''), combinedScore: @js($match['score'] ?? ''), statusText: @js($match['need_run_ball'] ?? $match['status'] ?? ''), batsman: @js(array_values(array_slice($liveBatters ?? [], 0, 2))), bowler: @js(array_values(array_slice($liveBowlers ?? [], 0, 2))), recentBalls: @js(array_values(array_slice($match['recent_balls'] ?? [], 0, 12))), commentary: @js(array_values(array_slice($commentaryData ?? [], 0, 30))) } })"
 >
-    <script src="{{ asset('js/match-detail-engine.js') }}"></script>
+    <script wire:ignore src="{{ asset('js/match-detail-engine.js') }}?v={{ @filemtime(public_path('js/match-detail-engine.js')) ?: 1 }}"></script>
 
     @php
         // Unified Score Resolution (Normalized, Never empty!)
@@ -426,10 +426,7 @@
 
                 <div class="flex items-center space-x-1.5 text-[11px] text-slate-400 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800 shrink-0">
                     <span class="w-2 h-2 rounded-full {{ $isLive ? 'bg-rose-500 animate-ping' : 'bg-emerald-400' }}"></span>
-                    <span class="font-mono" x-show="!live.match_id">{{ $isLive ? 'LIVE FEED' : 'IST (UTC+5:30)' }}</span>
-                    <span class="font-mono text-emerald-400 font-semibold" x-show="live.match_id" x-cloak>
-                        ● Live • Updated: <span x-text="lastUpdatedTimeStr">--:--:--</span> (<span x-text="lastUpdatedAgo">just now</span>)
-                    </span>
+                    <span class="font-mono">{{ $isLive ? 'LIVE FEED' : 'IST (UTC+5:30)' }}</span>
                 </div>
             </div>
         </div>
@@ -504,7 +501,7 @@
                         @if($isTossPending && $isUpcoming)
                             Toss Pending
                         @else
-                            <span x-text="live.need_run_ball || '{{ $needRunBall ?: 'Ball in Progress' }}'">{{ $needRunBall ?: 'Ball in Progress' }}</span>
+                            <span x-text="live.need_run_ball || live.statusText || '{{ $needRunBall ?: 'Ball in Progress' }}'">{{ $needRunBall ?: 'Ball in Progress' }}</span>
                         @endif
                     </div>
                 </div>
@@ -524,7 +521,7 @@
                             $scoreBFallback = $scoreB ?: ($hasActivePlay ? ($isSecondInnings && $targetVal ? 'Chasing ' . $targetVal : 'In Progress') : 'Yet to Bat');
                         @endphp
                         <div class="text-sm sm:text-base font-black text-white tracking-tight flex items-center gap-1 flex-wrap">
-                            <span x-text="live.score_a || live.team_a_scores || live.team_a_score || '{{ $scoreAFallback }}'">{{ $scoreAFallback }}</span>
+                            <span x-text="live.scoreA || live.score_a || live.team_a_scores || live.team_a_score || '{{ $scoreAFallback }}'">{{ $scoreAFallback }}</span>
                             <span class="text-[10px] sm:text-xs font-normal text-slate-400" x-show="live.team_a_over || '{{ $teamAOver }}'" x-text="'(' + (live.team_a_over || '{{ $teamAOver }}') + ' ov)'">@if($teamAOver)({{ $teamAOver }} ov)@endif</span>
                         </div>
                     </div>
@@ -532,8 +529,8 @@
                     <!-- Center Divider -->
                     <div class="text-center px-1 shrink-0">
                         <span class="text-[10px] font-black text-slate-500 px-1.5 py-0.5 rounded bg-slate-950 border border-slate-800">VS</span>
-                        <template x-if="!(live.score_a || live.team_a_scores) && !(live.score_b || live.team_b_scores) && (live.score || '{{ $combinedScore }}')">
-                            <span class="block px-2 py-0.5 mt-1 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-bold" x-text="live.score || '{{ $combinedScore }}'">{{ $combinedScore }}</span>
+                        <template x-if="!(live.scoreA || live.score_a || live.team_a_scores) && !(live.scoreB || live.score_b || live.team_b_scores) && (live.combinedScore || live.score || '{{ $combinedScore }}')">
+                            <span class="block px-2 py-0.5 mt-1 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-bold" x-text="live.combinedScore || live.score || '{{ $combinedScore }}'">{{ $combinedScore }}</span>
                         </template>
                     </div>
 
@@ -545,8 +542,8 @@
                         </div>
                         <span class="text-[9px] text-slate-400 font-medium block truncate max-w-[120px] sm:hidden text-right ml-auto" title="{{ $teamBName }}">{{ $teamBName }}</span>
                         <div class="text-sm sm:text-base font-black tracking-tight flex items-center justify-end gap-1 flex-wrap"
-                             :class="(live.score_b || live.team_b_scores || live.team_b_score || '{{ $scoreB }}') ? 'text-amber-400' : 'text-rose-400 text-xs sm:text-sm font-extrabold'">
-                            <span x-text="live.score_b || live.team_b_scores || live.team_b_score || '{{ $scoreBFallback }}'">{{ $scoreBFallback }}</span>
+                             :class="(live.scoreB || live.score_b || live.team_b_scores || live.team_b_score || '{{ $scoreB }}') ? 'text-amber-400' : 'text-rose-400 text-xs sm:text-sm font-extrabold'">
+                            <span x-text="live.scoreB || live.score_b || live.team_b_scores || live.team_b_score || '{{ $scoreBFallback }}'">{{ $scoreBFallback }}</span>
                             <span class="text-[10px] sm:text-xs font-normal text-slate-400" x-show="live.team_b_over || '{{ $teamBOver }}'" x-text="'(' + (live.team_b_over || '{{ $teamBOver }}') + ' ov)'">@if($teamBOver)({{ $teamBOver }} ov)@endif</span>
                         </div>
                     </div>
@@ -1162,8 +1159,25 @@
                 </div>
 
                 @if(!empty($recentOvers))
+                    <!-- Dynamic Polled Recent Balls Strip (replaces static snapshot once live poll arrives) -->
+                    <div x-show="live.recentBalls && live.recentBalls.length" x-cloak class="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar">
+                        <template x-for="(cBall, bIndex) in (live.recentBalls || live.recent_balls || [])" :key="bIndex">
+                            <span class="w-7 h-7 sm:w-8 sm:h-8 rounded-full border font-mono font-bold flex items-center justify-center shrink-0 shadow-sm text-xs"
+                                :class="{
+                                    'bg-rose-600 border-rose-500 text-white animate-pulse shadow-sm shadow-rose-600/50': (cBall.wicket && cBall.wicket != '0') || String(cBall.type || '').toLowerCase().includes('wicket'),
+                                    'bg-amber-500/20 border-amber-400 text-amber-300 text-[10px] lowercase': ((cBall.wides && cBall.wides != '0') || (cBall.noballs && cBall.noballs != '0')),
+                                    'bg-sky-500/20 border-sky-400 text-sky-300 shadow-sm shadow-sky-500/20': (String(cBall.runs) === '4'),
+                                    'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-sm shadow-emerald-500/30': (String(cBall.runs) === '6'),
+                                    'bg-slate-900 border-slate-700/60 text-slate-400': (String(cBall.runs) === '0' && !cBall.wicket && !cBall.wides && !cBall.noballs),
+                                    'bg-slate-800/80 border-slate-700/80 text-slate-200': (String(cBall.runs) !== '4' && String(cBall.runs) !== '6' && String(cBall.runs) !== '0' && !cBall.wicket && !cBall.wides && !cBall.noballs)
+                                }"
+                                x-text="((cBall.wicket && cBall.wicket != '0') || String(cBall.type || '').toLowerCase().includes('wicket')) ? 'W' : ((cBall.wides && cBall.wides != '0') ? 'wd' : ((cBall.noballs && cBall.noballs != '0') ? 'nb' : (cBall.runs ?? '•')))"
+                                :title="(cBall.over || cBall.overs || '') + ' ov'">
+                            </span>
+                        </template>
+                    </div>
                     <!-- Grouped Over-by-Over History List (Latest First) -->
-                    <div class="space-y-2">
+                    <div x-show="!(live.recentBalls && live.recentBalls.length)" class="space-y-2">
                         @foreach(array_slice($recentOvers, 0, 4) as $oData)
                             <div class="flex items-center gap-2 overflow-x-auto py-1 border-b border-slate-800/40 pb-2 last:border-b-0 last:pb-0 no-scrollbar">
                                 <div class="shrink-0 flex items-center gap-1.5 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 text-xs">
@@ -1489,32 +1503,64 @@
                     </div>
 
                     <div class="space-y-2.5">
-                        @forelse(array_slice($allCommentaryItems, 0, 30) as $comm)
-                            <div class="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/80">
-                                <div class="flex items-center justify-between text-xs mb-1">
-                                    <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold text-[11px]">
-                                        Over {{ $comm['overs'] ?? '•' }}
-                                    </span>
-                                    @if(!empty($comm['wicket']) && $comm['wicket'] != '0')
-                                        <span class="text-rose-400 font-bold text-[11px]">WICKET!</span>
-                                    @elseif(isset($comm['runs']) && $comm['runs'] == '6')
-                                        <span class="text-emerald-400 font-bold text-[11px]">SIX!</span>
-                                    @elseif(isset($comm['runs']) && $comm['runs'] == '4')
-                                        <span class="text-blue-400 font-bold text-[11px]">FOUR!</span>
-                                    @endif
-                                </div>
-                                @if(!empty($comm['title']))
-                                    <div class="text-xs font-semibold text-white mb-0.5">{{ $comm['title'] }}</div>
-                                @endif
-                                @if(!empty($comm['description']))
-                                    <p class="text-xs text-slate-300 leading-relaxed">{{ $comm['description'] }}</p>
-                                @endif
+                        <template x-if="live.commentary && live.commentary.length">
+                            <div class="space-y-2.5">
+                                <template x-for="(comm, cIdx) in live.commentary.slice(0, 30)" :key="cIdx">
+                                    <div class="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/80">
+                                        <div class="flex items-center justify-between text-xs mb-1">
+                                            <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold text-[11px]"
+                                                  x-text="'Over ' + ((comm.over !== undefined && comm.over !== '') ? (comm.over + (comm.ball !== undefined && comm.ball !== '' ? '.' + comm.ball : '')) : (comm.overs || '•'))">
+                                            </span>
+                                            <template x-if="(comm.wicket && comm.wicket != '0') || String(comm.type || '').toLowerCase().includes('wicket')">
+                                                <span class="text-rose-400 font-bold text-[11px]">WICKET!</span>
+                                            </template>
+                                            <template x-if="!(comm.wicket && comm.wicket != '0') && String(comm.runs) === '6'">
+                                                <span class="text-emerald-400 font-bold text-[11px]">SIX!</span>
+                                            </template>
+                                            <template x-if="!(comm.wicket && comm.wicket != '0') && String(comm.runs) === '4'">
+                                                <span class="text-blue-400 font-bold text-[11px]">FOUR!</span>
+                                            </template>
+                                        </div>
+                                        <template x-if="comm.title || comm.batsman">
+                                            <div class="text-xs font-semibold text-white mb-0.5" x-text="comm.title || (comm.bowler ? (comm.bowler + ' to ' + comm.batsman) : comm.batsman)"></div>
+                                        </template>
+                                        <template x-if="comm.description || comm.text">
+                                            <p class="text-xs text-slate-300 leading-relaxed" x-text="comm.description || comm.text"></p>
+                                        </template>
+                                    </div>
+                                </template>
                             </div>
-                        @empty
-                            <div class="py-6 text-center text-slate-500 text-xs">
-                                Commentary is not yet available for this match.
+                        </template>
+                        <template x-if="!(live.commentary && live.commentary.length)">
+                            <div class="space-y-2.5">
+                                @forelse(array_slice($allCommentaryItems, 0, 30) as $comm)
+                                    <div class="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/80">
+                                        <div class="flex items-center justify-between text-xs mb-1">
+                                            <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold text-[11px]">
+                                                Over {{ $comm['overs'] ?? $comm['over'] ?? '•' }}
+                                            </span>
+                                            @if(!empty($comm['wicket']) && $comm['wicket'] != '0')
+                                                <span class="text-rose-400 font-bold text-[11px]">WICKET!</span>
+                                            @elseif(isset($comm['runs']) && $comm['runs'] == '6')
+                                                <span class="text-emerald-400 font-bold text-[11px]">SIX!</span>
+                                            @elseif(isset($comm['runs']) && $comm['runs'] == '4')
+                                                <span class="text-blue-400 font-bold text-[11px]">FOUR!</span>
+                                            @endif
+                                        </div>
+                                        @if(!empty($comm['title']))
+                                            <div class="text-xs font-semibold text-white mb-0.5">{{ $comm['title'] }}</div>
+                                        @endif
+                                        @if(!empty($comm['description']) || !empty($comm['text']))
+                                            <p class="text-xs text-slate-300 leading-relaxed">{{ $comm['description'] ?? $comm['text'] }}</p>
+                                        @endif
+                                    </div>
+                                @empty
+                                    <div class="py-6 text-center text-slate-500 text-xs">
+                                        Commentary is not yet available for this match.
+                                    </div>
+                                @endforelse
                             </div>
-                        @endforelse
+                        </template>
                     </div>
                 </div>
                 @endif

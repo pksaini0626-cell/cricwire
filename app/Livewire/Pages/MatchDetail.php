@@ -74,7 +74,7 @@ class MatchDetail extends Component
         $isCrawler = request()->attributes->get('is_search_crawler') || app()->bound('crawler_read_only_mode');
         if (!$isCrawler) {
             if (!$isFinishedMatch) {
-                Cache::put("watching:match:{$this->matchId}", true, 30);
+                Cache::put("watching:match:{$this->matchId}", now()->timestamp, 45);
             }
             Cache::put('active_site_visitor', now()->timestamp, 120);
         }
@@ -191,7 +191,7 @@ class MatchDetail extends Component
             }
         }
 
-        $completion = CricketLiveApiService::detectMatchCompletion($match, $scorecard ?? []);
+        $completion = CricketLiveApiService::detectMatchCompletion($match, $scorecardData ?? []);
         $this->isCompleted = $isCompletedStatus || $isCompletedResult || $completion['is_completed'] || CompletedMatchController::isFinishedMatch($match) || $apiService->isFinishedMatch($this->matchId);
 
         if ($this->isCompleted) {
@@ -342,7 +342,7 @@ class MatchDetail extends Component
         $isLive = !$this->isCompleted && (in_array($state, ['live', 'in progress', 'in_progress', 'innings break', '1', '2']) || ($hasScores && empty($result)));
         $isFinished = $this->isCompleted;
         $isUpcoming = !$isLive && !$isFinished;
-        $pollSeconds = $isLive ? 600 : 0;
+        $pollSeconds = $isLive ? 8 : 0;
 
         // Team names & polls
         $teamAName = $match['team_a'] ?? 'Team A';
