@@ -19,6 +19,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->prepend(
             \App\Http\Middleware\HandleSeoRedirects::class,
         );
+        $middleware->web(append: [
+            \App\Http\Middleware\TrackSiteVisitors::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

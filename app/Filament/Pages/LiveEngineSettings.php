@@ -47,6 +47,9 @@ class LiveEngineSettings extends Page
 
             'social_facebook_url' => LiveEngineConfig::get('social_facebook_url', 'https://facebook.com/cricwire'),
             'social_facebook_enabled' => filter_var(LiveEngineConfig::get('social_facebook_enabled', '0'), FILTER_VALIDATE_BOOLEAN),
+
+            // Google Analytics 4
+            'ga4_measurement_id' => LiveEngineConfig::get('ga4_measurement_id', ''),
         ]);
     }
 
@@ -61,6 +64,21 @@ class LiveEngineSettings extends Page
                             ->label('Show Market Rates & Session Odds')
                             ->helperText('Safe-Mode Review Toggle: When turned OFF, all market rates and session boxes are completely removed from the DOM so app store reviewers see zero odds content.')
                             ->default(true),
+                    ]),
+
+                Section::make('Google Analytics 4 (GA4) Tracking')
+                    ->description('Configure your Google Analytics 4 Measurement ID to automatically inject gtag.js on public pages.')
+                    ->schema([
+                        TextInput::make('ga4_measurement_id')
+                            ->label('GA4 Measurement ID')
+                            ->placeholder('G-XXXXXXXXXX')
+                            ->helperText('Enter your GA4 Measurement ID (e.g. G-XXXXXXXXXX). Leave empty to disable Google Analytics.')
+                            ->maxLength(32)
+                            ->nullable()
+                            ->regex('/^G-[A-Za-z0-9]+$/')
+                            ->validationMessages([
+                                'regex' => 'GA4 Measurement ID must match format G-XXXXXXXXXX.',
+                            ]),
                     ]),
 
                 Section::make('Social Media Links & Follow Us')
@@ -180,6 +198,8 @@ class LiveEngineSettings extends Page
 
         LiveEngineConfig::set('social_facebook_url', (string) ($state['social_facebook_url'] ?? ''));
         LiveEngineConfig::set('social_facebook_enabled', (bool) ($state['social_facebook_enabled'] ?? false));
+
+        LiveEngineConfig::set('ga4_measurement_id', strtoupper(trim((string) ($state['ga4_measurement_id'] ?? ''))));
 
         Notification::make()
             ->title('System, Social & App Settings updated successfully.')

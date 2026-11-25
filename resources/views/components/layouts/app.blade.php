@@ -25,7 +25,19 @@
             $siteName = \App\Support\SeoConfig::get('seo_org_name', 'Cricwire');
             $googleVerification = \App\Support\SeoConfig::get('google_site_verification');
             $bingVerification = \App\Support\SeoConfig::get('bing_site_verification');
+            $ga4MeasurementId = \App\Support\LiveEngineConfig::ga4MeasurementId();
         @endphp
+
+        <!-- Google Analytics 4 (GA4) -->
+        @if(!empty($ga4MeasurementId))
+            <script async src="https://www.googletagmanager.com/gtag/js?id={{ urlencode($ga4MeasurementId) }}"></script>
+            <script>
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', @js($ga4MeasurementId));
+            </script>
+        @endif
 
         <!-- Primary Meta Tags -->
         <title>{{ $pageTitle }}</title>

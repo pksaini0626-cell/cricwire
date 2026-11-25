@@ -68,6 +68,16 @@ class LiveEngineConfig
     }
 
     /**
+     * Get configured Google Analytics 4 (GA4) Measurement ID.
+     */
+    public static function ga4MeasurementId(): ?string
+    {
+        $id = trim((string) self::get('ga4_measurement_id', ''));
+
+        return $id !== '' ? $id : null;
+    }
+
+    /**
      * Retrieve all active social media links with visibility toggles.
      */
     public static function getActiveSocialLinks(): array
@@ -168,6 +178,7 @@ class LiveEngineConfig
             Cache::forget(self::CACHE_PREFIX . 'social_telegram_enabled');
             Cache::forget(self::CACHE_PREFIX . 'social_youtube_url');
             Cache::forget(self::CACHE_PREFIX . 'social_youtube_enabled');
+            Cache::forget(self::CACHE_PREFIX . 'ga4_measurement_id');
         }
     }
 }
