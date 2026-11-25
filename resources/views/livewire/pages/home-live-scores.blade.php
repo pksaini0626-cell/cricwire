@@ -507,6 +507,65 @@
                         Restore <span x-text="skippedIds.length"></span> hidden matches
                     </button>
                 </div>
+
+                <!-- Latest Cricket News Section (Main Feed: Mobile & All Screens) -->
+                @if(($featuredNews ?? collect())->isNotEmpty() || ($recentNews ?? collect())->isNotEmpty())
+                    <section class="cricket-card mt-2">
+                        <div class="cricket-card-header">
+                            <h2 class="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+                                <span>📰</span> Latest Cricket News
+                            </h2>
+                            <a href="{{ route('news.index') }}" wire:navigate class="text-[11px] font-semibold text-[#94A3B8] hover:text-amber-400 transition">
+                                View All →
+                            </a>
+                        </div>
+                        <div class="cricket-card-body space-y-3">
+                            @php
+                                $feedNews = ($featuredNews ?? collect())->merge($recentNews ?? collect())->unique('id')->take(6);
+                            @endphp
+                            @foreach($feedNews as $article)
+                                @php
+                                    $thumb = $article->featured_image ?? $article->image_url ?? $article->thumbnail ?? null;
+                                    $category = $article->category ?? 'news';
+                                    $categoryLabel = match($category) {
+                                        'pitch_report' => 'Pitch Report',
+                                        'prediction' => 'Prediction',
+                                        'fantasy_tips' => 'Fantasy Tips',
+                                        default => 'News',
+                                    };
+                                    $categoryColor = match($category) {
+                                        'pitch_report' => 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+                                        'prediction' => 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+                                        'fantasy_tips' => 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
+                                        default => 'bg-slate-700/60 text-slate-300 border-slate-600/50',
+                                    };
+                                @endphp
+                                <a href="{{ route('news.show', ['article' => $article->slug]) }}" wire:navigate class="flex items-start gap-3 p-2.5 rounded-xl bg-[#0D1422]/70 hover:bg-[#0D1422] border border-[#253248]/60 hover:border-amber-500/40 transition group">
+                                    @if(!empty($thumb))
+                                        <img src="{{ $thumb }}" alt="{{ $article->title }}" loading="lazy" class="w-20 h-14 rounded-xl object-cover shrink-0 border border-[#253248]" />
+                                    @else
+                                        <div class="w-20 h-14 rounded-xl bg-[#172337] border border-[#253248] flex items-center justify-center shrink-0 text-amber-400/70 text-lg">
+                                            🏏
+                                        </div>
+                                    @endif
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border {{ $categoryColor }}">
+                                                {{ $categoryLabel }}
+                                            </span>
+                                            <span class="text-[10px] text-[#64748B]">
+                                                {{ $article->published_at ? $article->published_at->diffForHumans() : ($article->created_at ? $article->created_at->diffForHumans() : 'Recent') }}
+                                            </span>
+                                        </div>
+                                        <h3 class="line-clamp-2 text-xs sm:text-sm font-semibold text-[#F8FAFC] group-hover:text-amber-400 transition-colors leading-snug">
+                                            {{ $article->title }}
+                                        </h3>
+                                    </div>
+                                </a>
+                            @endforeach
+                        </div>
+                    </section>
+                @endif
             </main>
 
             <!-- SIDEBAR RAIL: Sports Pulse & Community Widgets (Right, 4-cols on desktop) -->

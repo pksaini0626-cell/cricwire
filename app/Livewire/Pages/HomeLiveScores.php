@@ -153,6 +153,24 @@ class HomeLiveScores extends Component
             default => $liveMatches,
         };
 
+        $featuredNews = \App\Models\NewsArticle::where('status', 'published')
+            ->where('is_featured', true)
+            ->latest('published_at')
+            ->take(2)
+            ->get();
+
+        if ($featuredNews->isEmpty()) {
+            $featuredNews = \App\Models\NewsArticle::where('status', 'published')
+                ->latest('published_at')
+                ->take(1)
+                ->get();
+        }
+
+        $recentNews = \App\Models\NewsArticle::where('status', 'published')
+            ->latest('published_at')
+            ->take(5)
+            ->get();
+
         $seoData = class_exists(\App\Services\Seo\CricketSeoService::class)
             ? \App\Services\Seo\CricketSeoService::forHome()
             : [
@@ -176,6 +194,8 @@ class HomeLiveScores extends Component
             'finishedTotalPages' => $finishedTotalPages,
             'perPage' => $this->perPage,
             'matches' => $currentMatches,
+            'featuredNews' => $featuredNews,
+            'recentNews' => $recentNews,
             'seoData' => $seoData,
         ])->layout('layouts.app', [
             'seoData' => $seoData,
