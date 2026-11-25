@@ -355,8 +355,21 @@ class CricketLiveApiService
     }
 
     /**
+     * Strict upcoming match detector.
+     * Returns true if the match has not started yet (Upcoming, Scheduled, Not started, or Yet to bat with no live score/overs).
+     */
+    public static function isUpcomingMatch(array $match): bool
+    {
+        if (self::isCompletedMatch($match)) {
+            return false;
+        }
+
+        return !self::isLiveMatch($match);
+    }
+
+    /**
      * Strict live match detector.
-     * Returns false if completed; true if live keywords or live scores exist without final result.
+     * Returns false if completed or upcoming/not-started; true only for genuinely in-progress matches.
      */
     public static function isLiveMatch(array $match): bool
     {
@@ -366,28 +379,9 @@ class CricketLiveApiService
 
         $state = strtolower(trim((string) ($match['state'] ?? '')));
         $status = strtolower(trim((string) ($match['status'] ?? '')));
-        $combinedStatus = $state . ' ' . $status;
-
-        $liveTerms = [
-            'live',
-            'in progress',
-            'in_progress',
-            'innings break',
-            'stumps',
-            'lunch',
-            'tea',
-            'day ',
-            'rain',
-            'delay',
-            '1',
-            '2',
-        ];
-
-        foreach ($liveTerms as $term) {
-            if (str_contains($combinedStatus, $term)) {
-                return true;
-            }
-        }
+        $matchStatus = strtolower(trim((string) ($match['match_status'] ?? '')));
+        $statusNote = strtolower(trim((string) ($match['status_note'] ?? '')));
+        $combinedStatus = trim($state . ' ' . $status . ' ' . $matchStatus . ' ' . $statusNote);
 
         // Live scores exist without a final result
         $scoreA = trim((string) ($match['score_a'] ?? $match['team_a_scores'] ?? $match['team_a_score'] ?? ''));
@@ -403,8 +397,63 @@ class CricketLiveApiService
             return preg_match('/[0-9]/', $s) === 1;
         };
 
-        if ($isRealScore($scoreA) || $isRealScore($scoreB) || $isRealScore($score)) {
+        $hasRealScore = $isRealScore($scoreA) || $isRealScore($scoreB) || $isRealScore($score);
+
+        // Explicit upcoming / not-started indicators
+        $upcomingTerms = [
+            'upcoming',
+            'scheduled',
+            'fixture',
+            'not started',
+            'match starts at',
+            'starts at',
+            'preview',
+        ];
+
+        foreach ($upcomingTerms as $term) {
+            if (str_contains($combinedStatus, $term) && !$hasRealScore) {
+                return false;
+            }
+        }
+
+        if ($hasRealScore) {
             return true;
+        }
+
+        // Exact numeric live codes (avoid matching dates/times like "Nov 25" or "15th")
+        if (in_array($state, ['1', '2'], true) || in_array($matchStatus, ['1', '2'], true)) {
+            return true;
+        }
+
+        $liveTerms = [
+            'in progress',
+            'in_progress',
+            'innings break',
+            'stumps',
+            'lunch',
+            'tea',
+            'day ',
+            'rain',
+            'delay',
+            'toss',
+            'opt to',
+            'elected to',
+        ];
+
+        foreach ($liveTerms as $term) {
+            if (str_contains($combinedStatus, $term)) {
+                return true;
+            }
+        }
+
+        // Only treat 'live' as live if not accompanied by 'yet to bat' on both sides with no active play
+        if ($state === 'live' || $matchStatus === 'live') {
+            $bothYetToBat = (strtolower($scoreA) === 'yet to bat' || $scoreA === '')
+                && (strtolower($scoreB) === 'yet to bat' || $scoreB === '')
+                && $score === '';
+            if (!$bothYetToBat) {
+                return true;
+            }
         }
 
         return false;

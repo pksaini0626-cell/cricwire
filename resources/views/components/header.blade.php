@@ -56,15 +56,6 @@
                 <span>🌙</span>
             </div>
 
-            <!-- Live Pulse Badge -->
-            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/30 glow-red">
-                <span class="relative flex h-2 w-2">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                </span>
-                <span class="text-[10px] font-black tracking-wider uppercase text-red-400">LIVE FEED</span>
-            </div>
-
             <!-- In-App Notification Bell & Dropdown Drawer -->
             <div 
                 x-data="{

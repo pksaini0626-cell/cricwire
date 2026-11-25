@@ -184,17 +184,19 @@
     x-cloak
     class="relative group"
 >
-    <a 
-        href="{{ $detailUrl }}" 
-        wire:navigate 
-        class="block rounded-lg bg-[#111B2B] border {{ $isLive ? 'border-amber-500/30' : 'border-[#253248]' }} hover:border-amber-500/40 transition-all duration-150 relative overflow-hidden"
+    <div 
+        role="link"
+        tabindex="0"
+        @click="window.Livewire?.navigate ? window.Livewire.navigate('{{ $detailUrl }}') : (window.location.href = '{{ $detailUrl }}')"
+        @keydown.enter="window.Livewire?.navigate ? window.Livewire.navigate('{{ $detailUrl }}') : (window.location.href = '{{ $detailUrl }}')"
+        class="block cursor-pointer rounded-lg bg-[#111B2B] border {{ $isLive ? 'border-amber-500/30' : 'border-[#253248]' }} hover:border-amber-500/40 transition-all duration-150 relative overflow-hidden"
         :class="{ 'ring-1 ring-amber-400/50 border-amber-500/40': isPinned }"
     >
         {{-- ───── HEADER ROW: Badge · Series · Status · Actions ───── --}}
         <div class="flex items-center justify-between gap-2 px-3 py-2 bg-[#0D1422]/60 border-b border-[#253248]/60">
             {{-- Left: Format badge + Series name --}}
             <div class="flex items-center gap-2 min-w-0 flex-1">
-                <span class="px-1.5 py-px rounded text-[9px] font-bold uppercase tracking-wider bg-[#172337] text-amber-400 border border-amber-500/15 shrink-0 leading-relaxed">
+                <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 whitespace-nowrap shrink-0">
                     {{ $matchs }}
                 </span>
                 <a 
@@ -220,8 +222,8 @@
                         Finished
                     </span>
                 @else
-                    <span class="px-1.5 py-px rounded text-[9px] font-medium bg-[#172337] text-amber-300 border border-amber-500/15 leading-relaxed">
-                        {{ $matchDate ?: 'Upcoming' }} {{ $matchTime }}
+                    <span class="px-1.5 py-px rounded text-[9px] font-medium bg-[#172337] text-amber-300 border border-amber-500/15 leading-relaxed whitespace-nowrap">
+                        Upcoming
                     </span>
                 @endif
 
@@ -330,5 +332,5 @@
                 </div>
             </template>
         @endif
-    </a>
+    </div>
 </div>

@@ -1,0 +1,1502 @@
+{
+    "match_id": 166687,
+    "series_name": "Sheffield Shield 2026-27",
+    "match_desc": "14th Match",
+    "format": "TEST",
+    "poll_interval_seconds": 30,
+    "poll_ms": 30000,
+    "state": "Live",
+    "score": "342/10 (113.2 ov)",
+    "team_a": "Tasmania",
+    "team_b": "Western Australia",
+    "team_a_short": "TAS",
+    "team_b_short": "WA",
+    "team_a_img": "https://cricketliveapi.com/images/team_images/166.jpg",
+    "team_b_img": "https://cricketliveapi.com/images/team_images/87.jpg",
+    "team_a_scores": "342/10 (113.2 ov)",
+    "team_b_scores": "296/6 (104.6 ov)",
+    "score_a": "342/10 (113.2 ov)",
+    "score_b": "296/6 (104.6 ov)",
+    "team_a_score": "342/10 (113.2 ov)",
+    "team_b_score": "296/6 (104.6 ov)",
+    "team_a_over": "",
+    "team_b_over": "",
+    "live_inning": "",
+    "status": "In Progress",
+    "result": "",
+    "latest_ball": {
+        "over": "104",
+        "ball": "6",
+        "runs": 0,
+        "type": "ball",
+        "text": "Beau Webster to Rocchiccioli, no run",
+        "batsman": "",
+        "bowler": ""
+    },
+    "recent_balls": [
+        {
+            "over": "104",
+            "ball": "6",
+            "runs": 0,
+            "type": "ball",
+            "text": "Beau Webster to Rocchiccioli, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "104",
+            "ball": "6",
+            "runs": 0,
+            "type": "ball",
+            "text": "Beau Webster to Rocchiccioli, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "104",
+            "ball": "5",
+            "runs": 0,
+            "type": "ball",
+            "text": "Beau Webster to Rocchiccioli, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "104",
+            "ball": "4",
+            "runs": 0,
+            "type": "ball",
+            "text": "Beau Webster to Rocchiccioli, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "104",
+            "ball": "3",
+            "runs": 0,
+            "type": "ball",
+            "text": "Beau Webster to Rocchiccioli, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "104",
+            "ball": "2",
+            "runs": 0,
+            "type": "ball",
+            "text": "Beau Webster to Rocchiccioli, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "104",
+            "ball": "1",
+            "runs": 0,
+            "type": "ball",
+            "text": "Beau Webster to Rocchiccioli, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "",
+            "ball": "",
+            "runs": 0,
+            "type": "ball",
+            "text": "<b>Beau Webster [18.0-2-50-1] is back into the attack</b>",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "103",
+            "ball": "6",
+            "runs": 0,
+            "type": "ball",
+            "text": "Gabe Bell to Rocchiccioli, 1 run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "103",
+            "ball": "5",
+            "runs": 0,
+            "type": "ball",
+            "text": "Gabe Bell to Rocchiccioli, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "103",
+            "ball": "4",
+            "runs": 0,
+            "type": "ball",
+            "text": "Gabe Bell to Rocchiccioli, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "103",
+            "ball": "3",
+            "runs": 0,
+            "type": "ball",
+            "text": "Gabe Bell to Rocchiccioli, no run",
+            "batsman": "",
+            "bowler": ""
+        }
+    ],
+    "commentary": [
+        {
+            "over": "104",
+            "ball": "6",
+            "runs": 0,
+            "type": "ball",
+            "text": "Beau Webster to Rocchiccioli, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "104",
+            "ball": "6",
+            "runs": 0,
+            "type": "ball",
+            "text": "Beau Webster to Rocchiccioli, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "104",
+            "ball": "5",
+            "runs": 0,
+            "type": "ball",
+            "text": "Beau Webster to Rocchiccioli, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "104",
+            "ball": "4",
+            "runs": 0,
+            "type": "ball",
+            "text": "Beau Webster to Rocchiccioli, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "104",
+            "ball": "3",
+            "runs": 0,
+            "type": "ball",
+            "text": "Beau Webster to Rocchiccioli, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "104",
+            "ball": "2",
+            "runs": 0,
+            "type": "ball",
+            "text": "Beau Webster to Rocchiccioli, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "104",
+            "ball": "1",
+            "runs": 0,
+            "type": "ball",
+            "text": "Beau Webster to Rocchiccioli, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "",
+            "ball": "",
+            "runs": 0,
+            "type": "ball",
+            "text": "<b>Beau Webster [18.0-2-50-1] is back into the attack</b>",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "103",
+            "ball": "6",
+            "runs": 0,
+            "type": "ball",
+            "text": "Gabe Bell to Rocchiccioli, 1 run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "103",
+            "ball": "5",
+            "runs": 0,
+            "type": "ball",
+            "text": "Gabe Bell to Rocchiccioli, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "103",
+            "ball": "4",
+            "runs": 0,
+            "type": "ball",
+            "text": "Gabe Bell to Rocchiccioli, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "103",
+            "ball": "3",
+            "runs": 0,
+            "type": "ball",
+            "text": "Gabe Bell to Rocchiccioli, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "103",
+            "ball": "2",
+            "runs": 0,
+            "type": "ball",
+            "text": "Gabe Bell to Rocchiccioli, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "103",
+            "ball": "1",
+            "runs": 0,
+            "type": "ball",
+            "text": "Gabe Bell to Rocchiccioli, leg byes, <b>FOUR</b>",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "",
+            "ball": "",
+            "runs": 0,
+            "type": "ball",
+            "text": "<b>Gabe Bell [23.0-7-48-1] is back into the attack</b>",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "",
+            "ball": "",
+            "runs": 0,
+            "type": "ball",
+            "text": "<b>12:34 Local Time, 04:34 GMT, 10:04 IST:</b> <b>Day 3: Lunch Break -</b> Western Australia 291/6 (103), trail by 51 runs",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "102",
+            "ball": "6",
+            "runs": 0,
+            "type": "ball",
+            "text": "Bradley Hope to Corey Wasley, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "102",
+            "ball": "5",
+            "runs": 0,
+            "type": "ball",
+            "text": "Bradley Hope to Corey Wasley, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "102",
+            "ball": "4",
+            "runs": 0,
+            "type": "ball",
+            "text": "Bradley Hope to Corey Wasley, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "102",
+            "ball": "3",
+            "runs": 0,
+            "type": "ball",
+            "text": "Bradley Hope to Rocchiccioli, 1 run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "102",
+            "ball": "2",
+            "runs": 0,
+            "type": "ball",
+            "text": "Bradley Hope to Corey Wasley, 1 run",
+            "batsman": "",
+            "bowler": ""
+        }
+    ],
+    "scorecard": [
+        {
+            "bat_team": "Tasmania",
+            "bat_team_short": "TAS",
+            "bowl_team": "Western Australia",
+            "score": "342/10 (113.2 ov)",
+            "run_rate": 3.02,
+            "batsmen": [
+                {
+                    "player_id": 23461,
+                    "name": "Teague Wyllie",
+                    "short_name": "Teague Wyllie",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 1,
+                    "balls": 17,
+                    "fours": 0,
+                    "sixes": 0,
+                    "strike_rate": 5.88,
+                    "out_desc": "retd hurt",
+                    "wicket_code": "RETD_HURT",
+                    "mins": 24,
+                    "dots": 16
+                },
+                {
+                    "player_id": 9422,
+                    "name": "Gabe Bell",
+                    "short_name": "Gabe Bell",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 29,
+                    "balls": 33,
+                    "fours": 5,
+                    "sixes": 0,
+                    "strike_rate": 87.88,
+                    "out_desc": "b Rocchiccioli",
+                    "wicket_code": "BOWLED",
+                    "mins": 46,
+                    "dots": 20
+                },
+                {
+                    "player_id": 8165,
+                    "name": "Jackson Bird",
+                    "short_name": "Jackson Bird",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 0,
+                    "balls": 6,
+                    "fours": 0,
+                    "sixes": 0,
+                    "strike_rate": 0,
+                    "out_desc": "c Aaron Hardie b Brody Couch",
+                    "wicket_code": "CAUGHT",
+                    "mins": 0,
+                    "dots": 6
+                },
+                {
+                    "player_id": 1449141,
+                    "name": "Marcus Bean",
+                    "short_name": "Marcus Bean",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 0,
+                    "balls": 3,
+                    "fours": 0,
+                    "sixes": 0,
+                    "strike_rate": 0,
+                    "out_desc": "not out",
+                    "wicket_code": "",
+                    "mins": 6,
+                    "dots": 3
+                },
+                {
+                    "player_id": 11426,
+                    "name": "Caleb Jewell",
+                    "short_name": "Caleb Jewell",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 40,
+                    "balls": 90,
+                    "fours": 2,
+                    "sixes": 1,
+                    "strike_rate": 44.44,
+                    "out_desc": "c Bancroft b Aaron Hardie",
+                    "wicket_code": "CAUGHT",
+                    "mins": 127,
+                    "dots": 71
+                },
+                {
+                    "player_id": 17937,
+                    "name": "Tim Ward",
+                    "short_name": "Tim Ward",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 12,
+                    "balls": 37,
+                    "fours": 1,
+                    "sixes": 0,
+                    "strike_rate": 32.43,
+                    "out_desc": "c Rocchiccioli b Aaron Hardie",
+                    "wicket_code": "CAUGHT",
+                    "mins": 2,
+                    "dots": 32
+                },
+                {
+                    "player_id": 8645,
+                    "name": "Jordan Silk",
+                    "short_name": "Jordan Silk",
+                    "is_captain": true,
+                    "is_keeper": false,
+                    "runs": 128,
+                    "balls": 180,
+                    "fours": 14,
+                    "sixes": 1,
+                    "strike_rate": 71.11,
+                    "out_desc": "b Jhye Richardson",
+                    "wicket_code": "BOWLED",
+                    "mins": 270,
+                    "dots": 116
+                },
+                {
+                    "player_id": 8646,
+                    "name": "Beau Webster",
+                    "short_name": "Beau Webster",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 9,
+                    "balls": 13,
+                    "fours": 2,
+                    "sixes": 0,
+                    "strike_rate": 69.23,
+                    "out_desc": "c Aaron Hardie b Albert Esterhuysen",
+                    "wicket_code": "CAUGHT",
+                    "mins": 23,
+                    "dots": 10
+                },
+                {
+                    "player_id": 9448,
+                    "name": "Jake Doran",
+                    "short_name": "Doran",
+                    "is_captain": false,
+                    "is_keeper": true,
+                    "runs": 6,
+                    "balls": 31,
+                    "fours": 0,
+                    "sixes": 0,
+                    "strike_rate": 19.35,
+                    "out_desc": "st Josh Inglis b Rocchiccioli",
+                    "wicket_code": "STUMPED",
+                    "mins": 53,
+                    "dots": 26
+                },
+                {
+                    "player_id": 14667,
+                    "name": "Bradley Hope",
+                    "short_name": "Bradley Hope",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 11,
+                    "balls": 27,
+                    "fours": 2,
+                    "sixes": 0,
+                    "strike_rate": 40.74,
+                    "out_desc": "c Tom Murray b Albert Esterhuysen",
+                    "wicket_code": "CAUGHT",
+                    "mins": 27,
+                    "dots": 23
+                },
+                {
+                    "player_id": 23361,
+                    "name": "Will Prestwidge",
+                    "short_name": "Will Prestwidge",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 90,
+                    "balls": 199,
+                    "fours": 8,
+                    "sixes": 0,
+                    "strike_rate": 45.23,
+                    "out_desc": "c and b Rocchiccioli",
+                    "wicket_code": "CAUGHTBOWLED",
+                    "mins": 230,
+                    "dots": 144
+                },
+                {
+                    "player_id": 13141,
+                    "name": "Matthew Kuhnemann",
+                    "short_name": "Matthew Kuhnemann",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 5,
+                    "balls": 44,
+                    "fours": 1,
+                    "sixes": 0,
+                    "strike_rate": 11.36,
+                    "out_desc": "c Jhye Richardson b Albert Esterhuysen",
+                    "wicket_code": "CAUGHT",
+                    "mins": 66,
+                    "dots": 42
+                }
+            ],
+            "yet_to_bat": [],
+            "bowlers": [
+                {
+                    "player_id": 10280,
+                    "name": "Jhye Richardson",
+                    "short_name": "Jhye Richardson",
+                    "is_captain": false,
+                    "overs": 24,
+                    "maidens": 10,
+                    "runs": 49,
+                    "wickets": 1,
+                    "no_balls": 0,
+                    "wides": 0,
+                    "economy": 2,
+                    "dots": 0
+                },
+                {
+                    "player_id": 1462973,
+                    "name": "Albert Esterhuysen",
+                    "short_name": "Albert Esterhuysen",
+                    "is_captain": false,
+                    "overs": 28,
+                    "maidens": 5,
+                    "runs": 72,
+                    "wickets": 3,
+                    "no_balls": 0,
+                    "wides": 2,
+                    "economy": 2.6,
+                    "dots": 0
+                },
+                {
+                    "player_id": 13170,
+                    "name": "Aaron Hardie",
+                    "short_name": "Aaron Hardie",
+                    "is_captain": true,
+                    "overs": 8,
+                    "maidens": 3,
+                    "runs": 18,
+                    "wickets": 2,
+                    "no_balls": 0,
+                    "wides": 0,
+                    "economy": 2.2,
+                    "dots": 0
+                },
+                {
+                    "player_id": 18607,
+                    "name": "Brody Couch",
+                    "short_name": "Brody Couch",
+                    "is_captain": false,
+                    "overs": 23,
+                    "maidens": 3,
+                    "runs": 91,
+                    "wickets": 1,
+                    "no_balls": 0,
+                    "wides": 2,
+                    "economy": 4,
+                    "dots": 0
+                },
+                {
+                    "player_id": 18480,
+                    "name": "Corey Rocchiccioli",
+                    "short_name": "Rocchiccioli",
+                    "is_captain": false,
+                    "overs": 24.2,
+                    "maidens": 5,
+                    "runs": 76,
+                    "wickets": 3,
+                    "no_balls": 0,
+                    "wides": 0,
+                    "economy": 3.1,
+                    "dots": 0
+                },
+                {
+                    "player_id": 15927,
+                    "name": "Cooper Connolly",
+                    "short_name": "Cooper Connolly",
+                    "is_captain": false,
+                    "overs": 6,
+                    "maidens": 1,
+                    "runs": 29,
+                    "wickets": 0,
+                    "no_balls": 0,
+                    "wides": 0,
+                    "economy": 4.8,
+                    "dots": 0
+                }
+            ],
+            "extras": "Extras: 11 (b 0, lb 7, w 4, nb 0, p 0)",
+            "extras_detail": {
+                "total": 11,
+                "byes": 0,
+                "leg_byes": 7,
+                "wides": 4,
+                "no_balls": 0,
+                "penalty": 0
+            },
+            "fall_of_wickets": [
+                {
+                    "wkt_num": 1,
+                    "player": "Tim Ward",
+                    "runs": 29,
+                    "over": 15.5
+                },
+                {
+                    "wkt_num": 10,
+                    "player": "Will Prestwidge",
+                    "runs": 342,
+                    "over": 113.2
+                },
+                {
+                    "wkt_num": 2,
+                    "player": "Caleb Jewell",
+                    "runs": 68,
+                    "over": 29.4
+                },
+                {
+                    "wkt_num": 3,
+                    "player": "Beau Webster",
+                    "runs": 84,
+                    "over": 35.1
+                },
+                {
+                    "wkt_num": 4,
+                    "player": "Jake Doran",
+                    "runs": 126,
+                    "over": 46.5
+                },
+                {
+                    "wkt_num": 5,
+                    "player": "Bradley Hope",
+                    "runs": 157,
+                    "over": 55.4
+                },
+                {
+                    "wkt_num": 6,
+                    "player": "Jordan Silk",
+                    "runs": 279,
+                    "over": 86.5
+                },
+                {
+                    "wkt_num": 7,
+                    "player": "Matthew Kuhnemann",
+                    "runs": 297,
+                    "over": 101.1
+                },
+                {
+                    "wkt_num": 8,
+                    "player": "Gabe Bell",
+                    "runs": 341,
+                    "over": 111.2
+                },
+                {
+                    "wkt_num": 9,
+                    "player": "Jackson Bird",
+                    "runs": 342,
+                    "over": 112.3
+                }
+            ],
+            "partnerships": [
+                {
+                    "bat1_name": "Teague Wyllie",
+                    "bat1_runs": 1,
+                    "bat2_name": "Caleb Jewell",
+                    "bat2_runs": 0,
+                    "total_runs": 1,
+                    "total_balls": 25
+                },
+                {
+                    "bat1_name": "Jackson Bird",
+                    "bat1_runs": 0,
+                    "bat2_name": "Will Prestwidge",
+                    "bat2_runs": 1,
+                    "total_runs": 1,
+                    "total_balls": 7
+                },
+                {
+                    "bat1_name": "Marcus Bean",
+                    "bat1_runs": 0,
+                    "bat2_name": "Will Prestwidge",
+                    "bat2_runs": 0,
+                    "total_runs": 0,
+                    "total_balls": 5
+                },
+                {
+                    "bat1_name": "Tim Ward",
+                    "bat1_runs": 12,
+                    "bat2_name": "Caleb Jewell",
+                    "bat2_runs": 16,
+                    "total_runs": 28,
+                    "total_balls": 71
+                },
+                {
+                    "bat1_name": "Jordan Silk",
+                    "bat1_runs": 11,
+                    "bat2_name": "Caleb Jewell",
+                    "bat2_runs": 24,
+                    "total_runs": 39,
+                    "total_balls": 83
+                },
+                {
+                    "bat1_name": "Jordan Silk",
+                    "bat1_runs": 7,
+                    "bat2_name": "Beau Webster",
+                    "bat2_runs": 9,
+                    "total_runs": 16,
+                    "total_balls": 33
+                },
+                {
+                    "bat1_name": "Jordan Silk",
+                    "bat1_runs": 35,
+                    "bat2_name": "Doran",
+                    "bat2_runs": 6,
+                    "total_runs": 42,
+                    "total_balls": 70
+                },
+                {
+                    "bat1_name": "Jordan Silk",
+                    "bat1_runs": 19,
+                    "bat2_name": "Bradley Hope",
+                    "bat2_runs": 11,
+                    "total_runs": 31,
+                    "total_balls": 53
+                },
+                {
+                    "bat1_name": "Jordan Silk",
+                    "bat1_runs": 56,
+                    "bat2_name": "Will Prestwidge",
+                    "bat2_runs": 62,
+                    "total_runs": 122,
+                    "total_balls": 187
+                },
+                {
+                    "bat1_name": "Matthew Kuhnemann",
+                    "bat1_runs": 5,
+                    "bat2_name": "Will Prestwidge",
+                    "bat2_runs": 12,
+                    "total_runs": 18,
+                    "total_balls": 86
+                },
+                {
+                    "bat1_name": "Gabe Bell",
+                    "bat1_runs": 29,
+                    "bat2_name": "Will Prestwidge",
+                    "bat2_runs": 15,
+                    "total_runs": 44,
+                    "total_balls": 61
+                }
+            ],
+            "innings_id": 0,
+            "is_declared": false,
+            "is_following_on": false
+        },
+        {
+            "bat_team": "Western Australia",
+            "bat_team_short": "WA",
+            "bowl_team": "Tasmania",
+            "score": "296/6 (104.3 ov)",
+            "run_rate": 2.83,
+            "batsmen": [
+                {
+                    "player_id": 8489,
+                    "name": "Cameron Bancroft",
+                    "short_name": "Bancroft",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 50,
+                    "balls": 85,
+                    "fours": 4,
+                    "sixes": 0,
+                    "strike_rate": 58.82,
+                    "out_desc": "c and b Beau Webster",
+                    "wicket_code": "CAUGHTBOWLED",
+                    "mins": 108,
+                    "dots": 59
+                },
+                {
+                    "player_id": 1480667,
+                    "name": "Tom Murray",
+                    "short_name": "Tom Murray",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 10,
+                    "balls": 18,
+                    "fours": 2,
+                    "sixes": 0,
+                    "strike_rate": 55.56,
+                    "out_desc": "c Caleb Jewell b Jackson Bird",
+                    "wicket_code": "CAUGHT",
+                    "mins": 23,
+                    "dots": 14
+                },
+                {
+                    "player_id": 15757,
+                    "name": "Jayden Goodwin",
+                    "short_name": "J Goodwin",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 34,
+                    "balls": 112,
+                    "fours": 4,
+                    "sixes": 0,
+                    "strike_rate": 30.36,
+                    "out_desc": "b Gabe Bell",
+                    "wicket_code": "BOWLED",
+                    "mins": 153,
+                    "dots": 94
+                },
+                {
+                    "player_id": 15927,
+                    "name": "Cooper Connolly",
+                    "short_name": "Cooper Connolly",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 9,
+                    "balls": 13,
+                    "fours": 2,
+                    "sixes": 0,
+                    "strike_rate": 69.23,
+                    "out_desc": "c Doran b Jackson Bird",
+                    "wicket_code": "CAUGHT",
+                    "mins": 21,
+                    "dots": 10
+                },
+                {
+                    "player_id": 10637,
+                    "name": "Josh Inglis",
+                    "short_name": "Josh Inglis",
+                    "is_captain": false,
+                    "is_keeper": true,
+                    "runs": 22,
+                    "balls": 63,
+                    "fours": 1,
+                    "sixes": 0,
+                    "strike_rate": 34.92,
+                    "out_desc": "c Doran b Jackson Bird",
+                    "wicket_code": "CAUGHT",
+                    "mins": 85,
+                    "dots": 49
+                },
+                {
+                    "player_id": 13170,
+                    "name": "Aaron Hardie",
+                    "short_name": "Aaron Hardie",
+                    "is_captain": true,
+                    "is_keeper": false,
+                    "runs": 37,
+                    "balls": 86,
+                    "fours": 1,
+                    "sixes": 0,
+                    "strike_rate": 43.02,
+                    "out_desc": "c Doran b Bradley Hope",
+                    "wicket_code": "CAUGHT",
+                    "mins": 116,
+                    "dots": 68
+                },
+                {
+                    "player_id": 53779,
+                    "name": "Corey Wasley",
+                    "short_name": "Corey Wasley",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 56,
+                    "balls": 142,
+                    "fours": 6,
+                    "sixes": 0,
+                    "strike_rate": 39.44,
+                    "out_desc": "batting",
+                    "wicket_code": "",
+                    "mins": 196,
+                    "dots": 111
+                },
+                {
+                    "player_id": 18480,
+                    "name": "Corey Rocchiccioli",
+                    "short_name": "Rocchiccioli",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 65,
+                    "balls": 113,
+                    "fours": 9,
+                    "sixes": 0,
+                    "strike_rate": 57.52,
+                    "out_desc": "batting",
+                    "wicket_code": "",
+                    "mins": 120,
+                    "dots": 82
+                }
+            ],
+            "yet_to_bat": [
+                "Brody Couch",
+                "Albert Esterhuysen",
+                "Jhye Richardson"
+            ],
+            "bowlers": [
+                {
+                    "player_id": 9422,
+                    "name": "Gabe Bell",
+                    "short_name": "Gabe Bell",
+                    "is_captain": false,
+                    "overs": 24,
+                    "maidens": 7,
+                    "runs": 49,
+                    "wickets": 1,
+                    "no_balls": 0,
+                    "wides": 0,
+                    "economy": 2,
+                    "dots": 0
+                },
+                {
+                    "player_id": 8165,
+                    "name": "Jackson Bird",
+                    "short_name": "Jackson Bird",
+                    "is_captain": false,
+                    "overs": 22,
+                    "maidens": 5,
+                    "runs": 59,
+                    "wickets": 3,
+                    "no_balls": 0,
+                    "wides": 0,
+                    "economy": 2.7,
+                    "dots": 0
+                },
+                {
+                    "player_id": 1449141,
+                    "name": "Marcus Bean",
+                    "short_name": "Marcus Bean",
+                    "is_captain": false,
+                    "overs": 17,
+                    "maidens": 2,
+                    "runs": 72,
+                    "wickets": 0,
+                    "no_balls": 0,
+                    "wides": 0,
+                    "economy": 4.2,
+                    "dots": 0
+                },
+                {
+                    "player_id": 8646,
+                    "name": "Beau Webster",
+                    "short_name": "Beau Webster",
+                    "is_captain": false,
+                    "overs": 18.3,
+                    "maidens": 2,
+                    "runs": 50,
+                    "wickets": 1,
+                    "no_balls": 0,
+                    "wides": 0,
+                    "economy": 2.7,
+                    "dots": 0
+                },
+                {
+                    "player_id": 13141,
+                    "name": "Matthew Kuhnemann",
+                    "short_name": "Matthew Kuhnemann",
+                    "is_captain": false,
+                    "overs": 19,
+                    "maidens": 3,
+                    "runs": 50,
+                    "wickets": 0,
+                    "no_balls": 0,
+                    "wides": 0,
+                    "economy": 2.6,
+                    "dots": 0
+                },
+                {
+                    "player_id": 14667,
+                    "name": "Bradley Hope",
+                    "short_name": "Bradley Hope",
+                    "is_captain": false,
+                    "overs": 4,
+                    "maidens": 0,
+                    "runs": 8,
+                    "wickets": 1,
+                    "no_balls": 0,
+                    "wides": 0,
+                    "economy": 2,
+                    "dots": 0
+                }
+            ],
+            "extras": "Extras: 13 (b 0, lb 8, w 0, nb 5, p 0)",
+            "extras_detail": {
+                "total": 13,
+                "byes": 0,
+                "leg_byes": 8,
+                "wides": 0,
+                "no_balls": 5,
+                "penalty": 0
+            },
+            "fall_of_wickets": [
+                {
+                    "wkt_num": 1,
+                    "player": "Tom Murray",
+                    "runs": 24,
+                    "over": 5.2
+                },
+                {
+                    "wkt_num": 2,
+                    "player": "Cameron Bancroft",
+                    "runs": 80,
+                    "over": 28.2
+                },
+                {
+                    "wkt_num": 3,
+                    "player": "Cooper Connolly",
+                    "runs": 97,
+                    "over": 33.2
+                },
+                {
+                    "wkt_num": 4,
+                    "player": "Jayden Goodwin",
+                    "runs": 118,
+                    "over": 43.6
+                },
+                {
+                    "wkt_num": 5,
+                    "player": "Josh Inglis",
+                    "runs": 140,
+                    "over": 53.1
+                },
+                {
+                    "wkt_num": 6,
+                    "player": "Aaron Hardie",
+                    "runs": 197,
+                    "over": 74.1
+                }
+            ],
+            "partnerships": [
+                {
+                    "bat1_name": "Bancroft",
+                    "bat1_runs": 14,
+                    "bat2_name": "Tom Murray",
+                    "bat2_runs": 10,
+                    "total_runs": 24,
+                    "total_balls": 32
+                },
+                {
+                    "bat1_name": "Bancroft",
+                    "bat1_runs": 36,
+                    "bat2_name": "Goodwin",
+                    "bat2_runs": 20,
+                    "total_runs": 56,
+                    "total_balls": 138
+                },
+                {
+                    "bat1_name": "Cooper Connolly",
+                    "bat1_runs": 9,
+                    "bat2_name": "Goodwin",
+                    "bat2_runs": 8,
+                    "total_runs": 17,
+                    "total_balls": 30
+                },
+                {
+                    "bat1_name": "Josh Inglis",
+                    "bat1_runs": 12,
+                    "bat2_name": "Goodwin",
+                    "bat2_runs": 6,
+                    "total_runs": 21,
+                    "total_balls": 64
+                },
+                {
+                    "bat1_name": "Josh Inglis",
+                    "bat1_runs": 10,
+                    "bat2_name": "Aaron Hardie",
+                    "bat2_runs": 11,
+                    "total_runs": 22,
+                    "total_balls": 55
+                },
+                {
+                    "bat1_name": "Corey Wasley",
+                    "bat1_runs": 28,
+                    "bat2_name": "Aaron Hardie",
+                    "bat2_runs": 26,
+                    "total_runs": 57,
+                    "total_balls": 126
+                },
+                {
+                    "bat1_name": "Corey Wasley",
+                    "bat1_runs": 28,
+                    "bat2_name": "Rocchiccioli",
+                    "bat2_runs": 65,
+                    "total_runs": 99,
+                    "total_balls": 182
+                }
+            ],
+            "innings_id": 0,
+            "is_declared": false,
+            "is_following_on": false
+        }
+    ],
+    "highlights": [
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        }
+    ],
+    "facts": {
+        "match_id": 166687,
+        "toss": "Tasmania won the toss and opt to Bat",
+        "venue": "Perth Stadium, Perth",
+        "umpires": "Gerard Abood, Roberto Howard",
+        "referee": "Kepler Wessels",
+        "day_night": false,
+        "series": "",
+        "raw": {
+            "success": true,
+            "data": {
+                "match_id": 166687,
+                "match_info": {
+                    "match_id": 166687,
+                    "series_id": 12717,
+                    "series_name": "Sheffield Shield 2026-27",
+                    "match_desc": "14th Match",
+                    "format": "TEST",
+                    "state": "In Progress",
+                    "status": "Day 3: 2nd Session - Western Australia trail by 46 runs",
+                    "start_date": "2026-11-23",
+                    "start_time_utc": 1795401000,
+                    "venue": "Perth Stadium, Perth",
+                    "venue_id": 512,
+                    "timezone": "+08:00",
+                    "team1": {
+                        "id": 166,
+                        "name": "Tasmania",
+                        "short": "TAS",
+                        "image_id": 172235
+                    },
+                    "team2": {
+                        "id": 87,
+                        "name": "Western Australia",
+                        "short": "WA",
+                        "image_id": 172180
+                    }
+                },
+                "toss": "Tasmania won the toss and opt to Bat",
+                "venue": "Perth Stadium, Perth",
+                "umpires": "Gerard Abood, Roberto Howard",
+                "referee": "Kepler Wessels",
+                "team1_squad": [],
+                "team2_squad": [],
+                "venue_details": {
+                    "ground": "Perth Stadium",
+                    "city": "Perth",
+                    "timezone": "+08:00"
+                },
+                "broadcast": null
+            }
+        }
+    },
+    "updated_at": "2026-11-25T05:21:59+00:00",
+    "timestamp": 1795584116
+}

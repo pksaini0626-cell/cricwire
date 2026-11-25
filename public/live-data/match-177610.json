@@ -1,0 +1,620 @@
+{
+    "match_id": 177610,
+    "series_name": "ICC Women's Emerging Nations Trophy, 2026",
+    "match_desc": "Final",
+    "format": "T20",
+    "poll_interval_seconds": 10,
+    "poll_ms": 10000,
+    "state": "Live",
+    "score": "23/2 (5.1 ov)",
+    "team_a": "Ireland Women",
+    "team_b": "Sri Lanka Women",
+    "team_a_short": "IW",
+    "team_b_short": "SLW",
+    "team_a_img": "https://cricketliveapi.com/images/team_images/189.jpg",
+    "team_b_img": "https://cricketliveapi.com/images/team_images/258.jpg",
+    "team_a_scores": "23/2 (5.1 ov)",
+    "team_b_scores": "",
+    "score_a": "23/2 (5.1 ov)",
+    "score_b": "",
+    "team_a_score": "23/2 (5.1 ov)",
+    "team_b_score": "",
+    "team_a_over": "",
+    "team_b_over": "",
+    "live_inning": "",
+    "status": "In Progress",
+    "result": "",
+    "latest_ball": {
+        "over": "5",
+        "ball": "2",
+        "runs": 0,
+        "type": "ball",
+        "text": "Chethana Vimukthi to Amy Hunter, 2 runs",
+        "batsman": "",
+        "bowler": ""
+    },
+    "recent_balls": [
+        {
+            "over": "5",
+            "ball": "2",
+            "runs": 0,
+            "type": "ball",
+            "text": "Chethana Vimukthi to Amy Hunter, 2 runs",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "5",
+            "ball": "2",
+            "runs": 0,
+            "type": "ball",
+            "text": "Chethana Vimukthi to Amy Hunter, 2 runs",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "5",
+            "ball": "2",
+            "runs": 0,
+            "type": "ball",
+            "text": "Chethana Vimukthi to Amy Hunter, <b>wide</b>",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "5",
+            "ball": "1",
+            "runs": 0,
+            "type": "ball",
+            "text": "Sugandika Kumari to Amy Hunter, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "4",
+            "ball": "6",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nimasha Meepage to Louise Little, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "4",
+            "ball": "5",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nimasha Meepage to Louise Little, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "4",
+            "ball": "4",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nimasha Meepage to Amy Hunter, 1 run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "4",
+            "ball": "3",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nimasha Meepage to Amy Hunter, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "4",
+            "ball": "2",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nimasha Meepage to Amy Hunter, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "4",
+            "ball": "1",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nimasha Meepage to Amy Hunter, 2 runs",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "",
+            "ball": "",
+            "runs": 0,
+            "type": "ball",
+            "text": "<b>Nimasha Meepage, Left arm orthodox, comes into the attack</b>",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "3",
+            "ball": "6",
+            "runs": 0,
+            "type": "ball",
+            "text": "Sugandika Kumari to Louise Little, <b>FOUR</b>",
+            "batsman": "",
+            "bowler": ""
+        }
+    ],
+    "commentary": [
+        {
+            "over": "5",
+            "ball": "2",
+            "runs": 0,
+            "type": "ball",
+            "text": "Chethana Vimukthi to Amy Hunter, 2 runs",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "5",
+            "ball": "2",
+            "runs": 0,
+            "type": "ball",
+            "text": "Chethana Vimukthi to Amy Hunter, 2 runs",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "5",
+            "ball": "2",
+            "runs": 0,
+            "type": "ball",
+            "text": "Chethana Vimukthi to Amy Hunter, <b>wide</b>",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "5",
+            "ball": "1",
+            "runs": 0,
+            "type": "ball",
+            "text": "Sugandika Kumari to Amy Hunter, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "4",
+            "ball": "6",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nimasha Meepage to Louise Little, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "4",
+            "ball": "5",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nimasha Meepage to Louise Little, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "4",
+            "ball": "4",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nimasha Meepage to Amy Hunter, 1 run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "4",
+            "ball": "3",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nimasha Meepage to Amy Hunter, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "4",
+            "ball": "2",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nimasha Meepage to Amy Hunter, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "4",
+            "ball": "1",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nimasha Meepage to Amy Hunter, 2 runs",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "",
+            "ball": "",
+            "runs": 0,
+            "type": "ball",
+            "text": "<b>Nimasha Meepage, Left arm orthodox, comes into the attack</b>",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "3",
+            "ball": "6",
+            "runs": 0,
+            "type": "ball",
+            "text": "Sugandika Kumari to Louise Little, <b>FOUR</b>",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "3",
+            "ball": "5",
+            "runs": 0,
+            "type": "ball",
+            "text": "Sugandika Kumari to Louise Little, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "3",
+            "ball": "4",
+            "runs": 0,
+            "type": "ball",
+            "text": "Sugandika Kumari to Amy Hunter, 1 run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "3",
+            "ball": "3",
+            "runs": 0,
+            "type": "ball",
+            "text": "Sugandika Kumari to Louise Little, 1 run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "3",
+            "ball": "2",
+            "runs": 0,
+            "type": "ball",
+            "text": "Sugandika Kumari to Louise Little, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "3",
+            "ball": "1",
+            "runs": 0,
+            "type": "ball",
+            "text": "Sugandika Kumari to Louise Little, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "",
+            "ball": "",
+            "runs": 0,
+            "type": "ball",
+            "text": "<b>Sugandika Kumari, Left arm orthodox, comes into the attack</b>",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "2",
+            "ball": "6",
+            "runs": 0,
+            "type": "ball",
+            "text": "Sathya Sandeepani to Louise Little, 1 run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "2",
+            "ball": "6",
+            "runs": 0,
+            "type": "ball",
+            "text": "Sathya Sandeepani to Louise Little, <b>wide</b>",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "2",
+            "ball": "5",
+            "runs": 0,
+            "type": "ball",
+            "text": "Sathya Sandeepani to Amy Hunter, 1 run",
+            "batsman": "",
+            "bowler": ""
+        }
+    ],
+    "scorecard": [
+        {
+            "bat_team": "Ireland Women",
+            "bat_team_short": "IREW",
+            "bowl_team": "Sri Lanka Women",
+            "score": "22/2 (4.2 ov)",
+            "run_rate": 5.08,
+            "batsmen": [
+                {
+                    "player_id": 19572,
+                    "name": "Amy Hunter",
+                    "short_name": "Amy Hunter",
+                    "is_captain": false,
+                    "is_keeper": true,
+                    "runs": 6,
+                    "balls": 9,
+                    "fours": 0,
+                    "sixes": 0,
+                    "strike_rate": 66.67,
+                    "out_desc": "batting",
+                    "wicket_code": "",
+                    "mins": 12,
+                    "dots": 4
+                },
+                {
+                    "player_id": 11258,
+                    "name": "Gaby Lewis",
+                    "short_name": "Gaby Lewis",
+                    "is_captain": true,
+                    "is_keeper": false,
+                    "runs": 4,
+                    "balls": 3,
+                    "fours": 1,
+                    "sixes": 0,
+                    "strike_rate": 133.33,
+                    "out_desc": "b Sathya Sandeepani",
+                    "wicket_code": "BOWLED",
+                    "mins": 0,
+                    "dots": 2
+                },
+                {
+                    "player_id": 12762,
+                    "name": "Lara Maritz",
+                    "short_name": "Lara Maritz",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 3,
+                    "balls": 6,
+                    "fours": 0,
+                    "sixes": 0,
+                    "strike_rate": 50,
+                    "out_desc": "c Imesha Dulani b Sathya Sandeepani",
+                    "wicket_code": "CAUGHT",
+                    "mins": 7,
+                    "dots": 3
+                },
+                {
+                    "player_id": 12760,
+                    "name": "Louise Little",
+                    "short_name": "Louise Little",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 6,
+                    "balls": 8,
+                    "fours": 1,
+                    "sixes": 0,
+                    "strike_rate": 75,
+                    "out_desc": "batting",
+                    "wicket_code": "",
+                    "mins": 5,
+                    "dots": 5
+                }
+            ],
+            "yet_to_bat": [
+                "Georgina Dempsey",
+                "Kia McCartney",
+                "Abbi Harrison",
+                "Aimee Maguire",
+                "Alana Dalzell",
+                "Cara Murray",
+                "Laura Delany"
+            ],
+            "bowlers": [
+                {
+                    "player_id": 16783,
+                    "name": "Sathya Sandeepani",
+                    "short_name": "Sathya Sandeepani",
+                    "is_captain": false,
+                    "overs": 2,
+                    "maidens": 0,
+                    "runs": 9,
+                    "wickets": 2,
+                    "no_balls": 0,
+                    "wides": 1,
+                    "economy": 4.5,
+                    "dots": 0
+                },
+                {
+                    "player_id": 1451047,
+                    "name": "Chethana Vimukthi",
+                    "short_name": "Chethana Vimukthi",
+                    "is_captain": false,
+                    "overs": 1,
+                    "maidens": 0,
+                    "runs": 4,
+                    "wickets": 0,
+                    "no_balls": 0,
+                    "wides": 1,
+                    "economy": 4,
+                    "dots": 0
+                },
+                {
+                    "player_id": 11354,
+                    "name": "Sugandika Kumari",
+                    "short_name": "Sugandika Kumari",
+                    "is_captain": false,
+                    "overs": 1,
+                    "maidens": 0,
+                    "runs": 6,
+                    "wickets": 0,
+                    "no_balls": 0,
+                    "wides": 0,
+                    "economy": 6,
+                    "dots": 0
+                },
+                {
+                    "player_id": 46345,
+                    "name": "Nimasha Meepage",
+                    "short_name": "Nimasha Meepage",
+                    "is_captain": false,
+                    "overs": 0.2,
+                    "maidens": 0,
+                    "runs": 2,
+                    "wickets": 0,
+                    "no_balls": 0,
+                    "wides": 0,
+                    "economy": 6,
+                    "dots": 0
+                }
+            ],
+            "extras": "Extras: 3 (b 0, lb 1, w 2, nb 0, p 0)",
+            "extras_detail": {
+                "total": 3,
+                "byes": 0,
+                "leg_byes": 1,
+                "wides": 2,
+                "no_balls": 0,
+                "penalty": 0
+            },
+            "fall_of_wickets": [
+                {
+                    "wkt_num": 1,
+                    "player": "Gaby Lewis",
+                    "runs": 5,
+                    "over": 0.4
+                },
+                {
+                    "wkt_num": 2,
+                    "player": "Lara Maritz",
+                    "runs": 10,
+                    "over": 2.2
+                }
+            ],
+            "partnerships": [
+                {
+                    "bat1_name": "Amy Hunter",
+                    "bat1_runs": 1,
+                    "bat2_name": "Gaby Lewis",
+                    "bat2_runs": 4,
+                    "total_runs": 5,
+                    "total_balls": 4
+                },
+                {
+                    "bat1_name": "Amy Hunter",
+                    "bat1_runs": 1,
+                    "bat2_name": "Lara Maritz",
+                    "bat2_runs": 3,
+                    "total_runs": 5,
+                    "total_balls": 10
+                },
+                {
+                    "bat1_name": "Amy Hunter",
+                    "bat1_runs": 4,
+                    "bat2_name": "Louise Little",
+                    "bat2_runs": 6,
+                    "total_runs": 12,
+                    "total_balls": 12
+                }
+            ],
+            "innings_id": 0,
+            "is_declared": false,
+            "is_following_on": false
+        }
+    ],
+    "highlights": [
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        }
+    ],
+    "facts": {
+        "match_id": 177610,
+        "toss": "Sri Lanka Women won the toss and opt to Bowl",
+        "venue": "Karwan Cricket Ground, Ajman",
+        "umpires": "",
+        "referee": "",
+        "day_night": false,
+        "series": "",
+        "raw": {
+            "success": true,
+            "data": {
+                "match_id": 177610,
+                "match_info": {
+                    "match_id": 177610,
+                    "series_id": 13420,
+                    "series_name": "ICC Women's Emerging Nations Trophy, 2026",
+                    "match_desc": "Final",
+                    "format": "T20",
+                    "state": "In Progress",
+                    "status": "Sri Lanka Women opt to bowl",
+                    "start_date": "2026-11-25",
+                    "start_time_utc": 1795582800,
+                    "venue": "Karwan Cricket Ground, Ajman",
+                    "venue_id": 1438490,
+                    "timezone": "+04:00",
+                    "team1": {
+                        "id": 189,
+                        "name": "Ireland Women",
+                        "short": "IREW",
+                        "image_id": 839468
+                    },
+                    "team2": {
+                        "id": 258,
+                        "name": "Sri Lanka Women",
+                        "short": "SLW",
+                        "image_id": 776267
+                    }
+                },
+                "toss": "Sri Lanka Women won the toss and opt to Bowl",
+                "venue": "Karwan Cricket Ground, Ajman",
+                "umpires": "",
+                "referee": "",
+                "team1_squad": [],
+                "team2_squad": [
+                    {
+                        "id": 4725,
+                        "name": "Jamie Siddons",
+                        "slug": "jamie-siddons",
+                        "profile_url": "/profiles/4725/jamie-siddons",
+                        "category": "support_staff"
+                    }
+                ],
+                "venue_details": {
+                    "ground": "Karwan Cricket Ground",
+                    "city": "Ajman",
+                    "timezone": "+04:00"
+                },
+                "broadcast": null
+            }
+        }
+    },
+    "updated_at": "2026-11-25T05:21:56+00:00",
+    "timestamp": 1795584112
+}

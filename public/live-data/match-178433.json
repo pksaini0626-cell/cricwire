@@ -1,0 +1,1072 @@
+{
+    "match_id": 178433,
+    "series_name": "Malaysia Women's T20I Tri-Series, 2026",
+    "match_desc": "6th Match",
+    "format": "T20",
+    "poll_interval_seconds": 10,
+    "poll_ms": 10000,
+    "state": "Live",
+    "score": "104/6 (19.6 ov)",
+    "team_a": "Malaysia Women",
+    "team_b": "China Women",
+    "team_a_short": "MW",
+    "team_b_short": "CW",
+    "team_a_img": "https://cricketliveapi.com/images/team_images/445.jpg",
+    "team_b_img": "https://cricketliveapi.com/images/team_images/486.jpg",
+    "team_a_scores": "104/6 (19.6 ov)",
+    "team_b_scores": "27/4 (5.6 ov)",
+    "score_a": "104/6 (19.6 ov)",
+    "score_b": "27/4 (5.6 ov)",
+    "team_a_score": "104/6 (19.6 ov)",
+    "team_b_score": "27/4 (5.6 ov)",
+    "team_a_over": "",
+    "team_b_over": "",
+    "live_inning": "",
+    "status": "In Progress",
+    "result": "",
+    "latest_ball": {
+        "over": "9",
+        "ball": "2",
+        "runs": 0,
+        "type": "ball",
+        "text": "Suabika Manivannan to Wei Haiting, no run",
+        "batsman": "",
+        "bowler": ""
+    },
+    "recent_balls": [
+        {
+            "over": "9",
+            "ball": "2",
+            "runs": 0,
+            "type": "ball",
+            "text": "Suabika Manivannan to Wei Haiting, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "6",
+            "ball": "5",
+            "runs": 0,
+            "type": "ball",
+            "text": "Mahirah Izzati Ismail to Wei Haiting, 1 run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "6",
+            "ball": "4",
+            "runs": 0,
+            "type": "ball",
+            "text": "Mahirah Izzati Ismail to Wei Haiting, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "6",
+            "ball": "3",
+            "runs": 0,
+            "type": "ball",
+            "text": "Mahirah Izzati Ismail to Wei Haiting, <b>FOUR</b>",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "6",
+            "ball": "2",
+            "runs": 0,
+            "type": "ball",
+            "text": "Mahirah Izzati Ismail to Wei Haiting, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "6",
+            "ball": "1",
+            "runs": 0,
+            "type": "ball",
+            "text": "Mahirah Izzati Ismail to Wei Haiting, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "",
+            "ball": "",
+            "runs": 0,
+            "type": "ball",
+            "text": "<b>Mahirah Izzati Ismail, right-arm off break, comes into the attack</b>",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "5",
+            "ball": "6",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nur Dania Syuhada to Gong Yuting, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "5",
+            "ball": "5",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nur Dania Syuhada to Gong Yuting, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "5",
+            "ball": "4",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nur Dania Syuhada to Wei Haiting, 1 run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "5",
+            "ball": "3",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nur Dania Syuhada to Gong Yuting, 1 run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "5",
+            "ball": "2",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nur Dania Syuhada to Gong Yuting, no run",
+            "batsman": "",
+            "bowler": ""
+        }
+    ],
+    "commentary": [
+        {
+            "over": "9",
+            "ball": "2",
+            "runs": 0,
+            "type": "ball",
+            "text": "Suabika Manivannan to Wei Haiting, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "6",
+            "ball": "5",
+            "runs": 0,
+            "type": "ball",
+            "text": "Mahirah Izzati Ismail to Wei Haiting, 1 run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "6",
+            "ball": "4",
+            "runs": 0,
+            "type": "ball",
+            "text": "Mahirah Izzati Ismail to Wei Haiting, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "6",
+            "ball": "3",
+            "runs": 0,
+            "type": "ball",
+            "text": "Mahirah Izzati Ismail to Wei Haiting, <b>FOUR</b>",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "6",
+            "ball": "2",
+            "runs": 0,
+            "type": "ball",
+            "text": "Mahirah Izzati Ismail to Wei Haiting, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "6",
+            "ball": "1",
+            "runs": 0,
+            "type": "ball",
+            "text": "Mahirah Izzati Ismail to Wei Haiting, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "",
+            "ball": "",
+            "runs": 0,
+            "type": "ball",
+            "text": "<b>Mahirah Izzati Ismail, right-arm off break, comes into the attack</b>",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "5",
+            "ball": "6",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nur Dania Syuhada to Gong Yuting, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "5",
+            "ball": "5",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nur Dania Syuhada to Gong Yuting, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "5",
+            "ball": "4",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nur Dania Syuhada to Wei Haiting, 1 run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "5",
+            "ball": "3",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nur Dania Syuhada to Gong Yuting, 1 run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "5",
+            "ball": "2",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nur Dania Syuhada to Gong Yuting, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "5",
+            "ball": "1",
+            "runs": 0,
+            "type": "ball",
+            "text": "<b>Gong Yuting, left handed bat, comes to the crease</b>",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "5",
+            "ball": "1",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nur Dania Syuhada to Mingyue Zhu, <b>out</b> Caught by Winifred Duraisingam!! <b>Mingyue Zhu c Winifred Duraisingam b Nur Dania Syuhada 9(7) [4s-2]</b>",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "",
+            "ball": "",
+            "runs": 0,
+            "type": "ball",
+            "text": "Nur Dania Syuhada to Mingyue Zhu, <b>THATS OUT!!</b> Caught!!",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "4",
+            "ball": "6",
+            "runs": 0,
+            "type": "ball",
+            "text": "Winifred Duraisingam to Mingyue Zhu, 1 run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "4",
+            "ball": "5",
+            "runs": 0,
+            "type": "ball",
+            "text": "Winifred Duraisingam to Mingyue Zhu, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "4",
+            "ball": "4",
+            "runs": 0,
+            "type": "ball",
+            "text": "Winifred Duraisingam to Mingyue Zhu, <b>FOUR</b>",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "4",
+            "ball": "3",
+            "runs": 0,
+            "type": "ball",
+            "text": "Winifred Duraisingam to Mingyue Zhu, <b>FOUR</b>",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "4",
+            "ball": "2",
+            "runs": 0,
+            "type": "ball",
+            "text": "Winifred Duraisingam to Mingyue Zhu, no run",
+            "batsman": "",
+            "bowler": ""
+        },
+        {
+            "over": "4",
+            "ball": "1",
+            "runs": 0,
+            "type": "ball",
+            "text": "Winifred Duraisingam to Wei Haiting, 1 run",
+            "batsman": "",
+            "bowler": ""
+        }
+    ],
+    "scorecard": [
+        {
+            "bat_team": "Malaysia Women",
+            "bat_team_short": "MLYW",
+            "bowl_team": "China Women",
+            "score": "104/6 (20 ov)",
+            "run_rate": 5.2,
+            "batsmen": [
+                {
+                    "player_id": 13723,
+                    "name": "Ainna Hamizah Hashim",
+                    "short_name": "Ainna Hamizah Hashim",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 17,
+                    "balls": 31,
+                    "fours": 1,
+                    "sixes": 0,
+                    "strike_rate": 54.84,
+                    "out_desc": "b Mingyue Zhu",
+                    "wicket_code": "BOWLED",
+                    "mins": 4,
+                    "dots": 18
+                },
+                {
+                    "player_id": 13722,
+                    "name": "Winifred Duraisingam",
+                    "short_name": "Winifred Duraisingam",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 7,
+                    "balls": 12,
+                    "fours": 0,
+                    "sixes": 0,
+                    "strike_rate": 58.33,
+                    "out_desc": "run out (Wei Haiting/Mingyue Zhu)",
+                    "wicket_code": "RUNOUT",
+                    "mins": 2,
+                    "dots": 5
+                },
+                {
+                    "player_id": 13725,
+                    "name": "Mahirah Izzati Ismail",
+                    "short_name": "Mahirah Izzati Ismail",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 5,
+                    "balls": 8,
+                    "fours": 0,
+                    "sixes": 0,
+                    "strike_rate": 62.5,
+                    "out_desc": "b Mingyue Zhu",
+                    "wicket_code": "BOWLED",
+                    "mins": 2,
+                    "dots": 4
+                },
+                {
+                    "player_id": 13733,
+                    "name": "Mas Elysa Yasmin",
+                    "short_name": "Mas Elysa",
+                    "is_captain": true,
+                    "is_keeper": false,
+                    "runs": 32,
+                    "balls": 29,
+                    "fours": 5,
+                    "sixes": 0,
+                    "strike_rate": 110.34,
+                    "out_desc": "c Wei Haiting b Gong Yuting",
+                    "wicket_code": "CAUGHT",
+                    "mins": 10,
+                    "dots": 14
+                },
+                {
+                    "player_id": 1471207,
+                    "name": "Nurin Imanina",
+                    "short_name": "Nurin Imanina",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 12,
+                    "balls": 18,
+                    "fours": 0,
+                    "sixes": 0,
+                    "strike_rate": 66.67,
+                    "out_desc": "c Cai Yuzhi b Gong Yuting",
+                    "wicket_code": "CAUGHT",
+                    "mins": 10,
+                    "dots": 8
+                },
+                {
+                    "player_id": 13727,
+                    "name": "Nur Arianna Natsya",
+                    "short_name": "Nur Arianna Natsya",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 6,
+                    "balls": 6,
+                    "fours": 1,
+                    "sixes": 0,
+                    "strike_rate": 100,
+                    "out_desc": "b Mingyue Zhu",
+                    "wicket_code": "BOWLED",
+                    "mins": 5,
+                    "dots": 3
+                },
+                {
+                    "player_id": 13730,
+                    "name": "Aina Najwa",
+                    "short_name": "Aina Najwa",
+                    "is_captain": false,
+                    "is_keeper": true,
+                    "runs": 8,
+                    "balls": 7,
+                    "fours": 0,
+                    "sixes": 0,
+                    "strike_rate": 114.29,
+                    "out_desc": "not out",
+                    "wicket_code": "",
+                    "mins": 5,
+                    "dots": 1
+                },
+                {
+                    "player_id": 23981,
+                    "name": "Nur Dania Syuhada",
+                    "short_name": "Nur Dania Syuhada",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 8,
+                    "balls": 9,
+                    "fours": 0,
+                    "sixes": 0,
+                    "strike_rate": 88.89,
+                    "out_desc": "not out",
+                    "wicket_code": "",
+                    "mins": 1,
+                    "dots": 2
+                }
+            ],
+            "yet_to_bat": [
+                "Nazatul Hidayah Husna",
+                "Suabika Manivannan",
+                "Musfirah Nur Ainaa"
+            ],
+            "bowlers": [
+                {
+                    "player_id": 1482923,
+                    "name": "Wang Chunjing",
+                    "short_name": "Wang Chunjing",
+                    "is_captain": false,
+                    "overs": 3,
+                    "maidens": 0,
+                    "runs": 13,
+                    "wickets": 0,
+                    "no_balls": 0,
+                    "wides": 2,
+                    "economy": 4.3,
+                    "dots": 0
+                },
+                {
+                    "player_id": 1431553,
+                    "name": "Wang Huiying",
+                    "short_name": "Wang Huiying",
+                    "is_captain": false,
+                    "overs": 4,
+                    "maidens": 0,
+                    "runs": 27,
+                    "wickets": 0,
+                    "no_balls": 0,
+                    "wides": 0,
+                    "economy": 6.8,
+                    "dots": 0
+                },
+                {
+                    "player_id": 45446,
+                    "name": "Mingyue Zhu",
+                    "short_name": "Mingyue Zhu",
+                    "is_captain": true,
+                    "overs": 4,
+                    "maidens": 0,
+                    "runs": 18,
+                    "wickets": 3,
+                    "no_balls": 0,
+                    "wides": 0,
+                    "economy": 4.5,
+                    "dots": 0
+                },
+                {
+                    "player_id": 45453,
+                    "name": "Jiaping Li",
+                    "short_name": "Jiaping Li",
+                    "is_captain": false,
+                    "overs": 3,
+                    "maidens": 0,
+                    "runs": 14,
+                    "wickets": 0,
+                    "no_balls": 0,
+                    "wides": 3,
+                    "economy": 4.7,
+                    "dots": 0
+                },
+                {
+                    "player_id": 1431587,
+                    "name": "Gong Yuting",
+                    "short_name": "Gong Yuting",
+                    "is_captain": false,
+                    "overs": 4,
+                    "maidens": 0,
+                    "runs": 16,
+                    "wickets": 2,
+                    "no_balls": 0,
+                    "wides": 3,
+                    "economy": 4,
+                    "dots": 0
+                },
+                {
+                    "player_id": 1431537,
+                    "name": "Wei Haiting",
+                    "short_name": "Wei Haiting",
+                    "is_captain": false,
+                    "overs": 2,
+                    "maidens": 0,
+                    "runs": 15,
+                    "wickets": 0,
+                    "no_balls": 0,
+                    "wides": 0,
+                    "economy": 7.5,
+                    "dots": 0
+                }
+            ],
+            "extras": "Extras: 9 (b 0, lb 1, w 8, nb 0, p 0)",
+            "extras_detail": {
+                "total": 9,
+                "byes": 0,
+                "leg_byes": 1,
+                "wides": 8,
+                "no_balls": 0,
+                "penalty": 0
+            },
+            "fall_of_wickets": [
+                {
+                    "wkt_num": 1,
+                    "player": "Winifred Duraisingam",
+                    "runs": 23,
+                    "over": 5.4
+                },
+                {
+                    "wkt_num": 2,
+                    "player": "Ainna Hamizah Hashim",
+                    "runs": 32,
+                    "over": 7.6
+                },
+                {
+                    "wkt_num": 3,
+                    "player": "Mahirah Izzati Ismail",
+                    "runs": 39,
+                    "over": 9.2
+                },
+                {
+                    "wkt_num": 4,
+                    "player": "Mas Elysa Yasmin",
+                    "runs": 80,
+                    "over": 16.1
+                },
+                {
+                    "wkt_num": 5,
+                    "player": "Nurin Imanina",
+                    "runs": 83,
+                    "over": 16.5
+                },
+                {
+                    "wkt_num": 6,
+                    "player": "Nur Arianna Natsya",
+                    "runs": 89,
+                    "over": 17.4
+                }
+            ],
+            "partnerships": [
+                {
+                    "bat1_name": "Ainna Hamizah Hashim",
+                    "bat1_runs": 14,
+                    "bat2_name": "Winifred Duraisingam",
+                    "bat2_runs": 7,
+                    "total_runs": 23,
+                    "total_balls": 34
+                },
+                {
+                    "bat1_name": "Ainna Hamizah Hashim",
+                    "bat1_runs": 3,
+                    "bat2_name": "Mahirah Izzati Ismail",
+                    "bat2_runs": 5,
+                    "total_runs": 9,
+                    "total_balls": 14
+                },
+                {
+                    "bat1_name": "Mas Elysa",
+                    "bat1_runs": 4,
+                    "bat2_name": "Mahirah Izzati Ismail",
+                    "bat2_runs": 0,
+                    "total_runs": 7,
+                    "total_balls": 8
+                },
+                {
+                    "bat1_name": "Mas Elysa",
+                    "bat1_runs": 28,
+                    "bat2_name": "Nurin Imanina",
+                    "bat2_runs": 12,
+                    "total_runs": 41,
+                    "total_balls": 41
+                },
+                {
+                    "bat1_name": "Nur Arianna Natsya",
+                    "bat1_runs": 1,
+                    "bat2_name": "Nurin Imanina",
+                    "bat2_runs": 0,
+                    "total_runs": 3,
+                    "total_balls": 4
+                },
+                {
+                    "bat1_name": "Nur Arianna Natsya",
+                    "bat1_runs": 5,
+                    "bat2_name": "Aina Najwa",
+                    "bat2_runs": 1,
+                    "total_runs": 6,
+                    "total_balls": 5
+                },
+                {
+                    "bat1_name": "Nur Dania Syuhada",
+                    "bat1_runs": 8,
+                    "bat2_name": "Aina Najwa",
+                    "bat2_runs": 7,
+                    "total_runs": 15,
+                    "total_balls": 14
+                }
+            ],
+            "innings_id": 0,
+            "is_declared": false,
+            "is_following_on": false
+        },
+        {
+            "bat_team": "China Women",
+            "bat_team_short": "CHNW",
+            "bowl_team": "Malaysia Women",
+            "score": "36/4 (8 ov)",
+            "run_rate": 4.5,
+            "batsmen": [
+                {
+                    "player_id": 1431553,
+                    "name": "Wang Huiying",
+                    "short_name": "",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 0,
+                    "balls": 1,
+                    "fours": 0,
+                    "sixes": 0,
+                    "strike_rate": 0,
+                    "out_desc": "c Nur Arianna Natsya b Ainna Hamizah Hashim",
+                    "wicket_code": "CAUGHT",
+                    "mins": 0,
+                    "dots": 0
+                },
+                {
+                    "player_id": 1431537,
+                    "name": "Wei Haiting",
+                    "short_name": "",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 14,
+                    "balls": 19,
+                    "fours": 1,
+                    "sixes": 0,
+                    "strike_rate": 73.68,
+                    "out_desc": "batting",
+                    "wicket_code": "",
+                    "mins": 0,
+                    "dots": 0
+                },
+                {
+                    "player_id": 45453,
+                    "name": "Jiaping Li",
+                    "short_name": "",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 5,
+                    "balls": 6,
+                    "fours": 1,
+                    "sixes": 0,
+                    "strike_rate": 83.33,
+                    "out_desc": "c Suabika Manivannan b Nur Dania Syuhada",
+                    "wicket_code": "CAUGHT",
+                    "mins": 0,
+                    "dots": 0
+                },
+                {
+                    "player_id": 1431569,
+                    "name": "Cai Yuzhi",
+                    "short_name": "",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 2,
+                    "balls": 6,
+                    "fours": 0,
+                    "sixes": 0,
+                    "strike_rate": 33.33,
+                    "out_desc": "c Mahirah Izzati Ismail b Nur Dania Syuhada",
+                    "wicket_code": "CAUGHT",
+                    "mins": 0,
+                    "dots": 0
+                },
+                {
+                    "player_id": 45446,
+                    "name": "Mingyue Zhu",
+                    "short_name": "",
+                    "is_captain": true,
+                    "is_keeper": false,
+                    "runs": 9,
+                    "balls": 7,
+                    "fours": 2,
+                    "sixes": 0,
+                    "strike_rate": 128.57,
+                    "out_desc": "c Winifred Duraisingam b Nur Dania Syuhada",
+                    "wicket_code": "CAUGHT",
+                    "mins": 0,
+                    "dots": 0
+                },
+                {
+                    "player_id": 1431587,
+                    "name": "Gong Yuting",
+                    "short_name": "",
+                    "is_captain": false,
+                    "is_keeper": false,
+                    "runs": 4,
+                    "balls": 9,
+                    "fours": 0,
+                    "sixes": 0,
+                    "strike_rate": 44.44,
+                    "out_desc": "batting",
+                    "wicket_code": "",
+                    "mins": 0,
+                    "dots": 0
+                }
+            ],
+            "yet_to_bat": [
+                "Wang Chunjing",
+                "Zhao Yihan",
+                "Lyu Yihan",
+                "Hong Yali",
+                "Wu Ruoruo"
+            ],
+            "bowlers": [
+                {
+                    "player_id": 13723,
+                    "name": "Ainna Hamizah Hashim",
+                    "short_name": "",
+                    "is_captain": false,
+                    "overs": 2,
+                    "maidens": 0,
+                    "runs": 11,
+                    "wickets": 1,
+                    "no_balls": 0,
+                    "wides": 1,
+                    "economy": 5.5,
+                    "dots": 0
+                },
+                {
+                    "player_id": 23981,
+                    "name": "Nur Dania Syuhada",
+                    "short_name": "",
+                    "is_captain": false,
+                    "overs": 4,
+                    "maidens": 0,
+                    "runs": 8,
+                    "wickets": 3,
+                    "no_balls": 0,
+                    "wides": 1,
+                    "economy": 2,
+                    "dots": 0
+                },
+                {
+                    "player_id": 13722,
+                    "name": "Winifred Duraisingam",
+                    "short_name": "",
+                    "is_captain": false,
+                    "overs": 1,
+                    "maidens": 0,
+                    "runs": 10,
+                    "wickets": 0,
+                    "no_balls": 0,
+                    "wides": 0,
+                    "economy": 10,
+                    "dots": 0
+                },
+                {
+                    "player_id": 13725,
+                    "name": "Mahirah Izzati Ismail",
+                    "short_name": "",
+                    "is_captain": false,
+                    "overs": 1,
+                    "maidens": 0,
+                    "runs": 7,
+                    "wickets": 0,
+                    "no_balls": 0,
+                    "wides": 0,
+                    "economy": 7,
+                    "dots": 0
+                }
+            ],
+            "extras": "Extras: 2 (b 0, lb 0, w 2, nb 0, p 0)",
+            "extras_detail": {
+                "total": 2,
+                "byes": 0,
+                "leg_byes": 0,
+                "wides": 2,
+                "no_balls": 0,
+                "penalty": 0
+            },
+            "fall_of_wickets": [
+                {
+                    "wkt_num": 1,
+                    "player": "Wang Huiying",
+                    "runs": 0,
+                    "over": 0.1
+                },
+                {
+                    "wkt_num": 2,
+                    "player": "Jiaping Li",
+                    "runs": 5,
+                    "over": 1.1
+                },
+                {
+                    "wkt_num": 3,
+                    "player": "Cai Yuzhi",
+                    "runs": 15,
+                    "over": 3.5
+                },
+                {
+                    "wkt_num": 4,
+                    "player": "Mingyue Zhu",
+                    "runs": 25,
+                    "over": 5.1
+                }
+            ],
+            "partnerships": [
+                {
+                    "bat1_name": "Wang Huiying",
+                    "bat1_runs": 0,
+                    "bat2_name": "Wei Haiting",
+                    "bat2_runs": 0,
+                    "total_runs": 0,
+                    "total_balls": 1
+                },
+                {
+                    "bat1_name": "Jiaping Li",
+                    "bat1_runs": 5,
+                    "bat2_name": "Wei Haiting",
+                    "bat2_runs": 0,
+                    "total_runs": 5,
+                    "total_balls": 6
+                },
+                {
+                    "bat1_name": "Cai Yuzhi",
+                    "bat1_runs": 2,
+                    "bat2_name": "Wei Haiting",
+                    "bat2_runs": 6,
+                    "total_runs": 10,
+                    "total_balls": 16
+                },
+                {
+                    "bat1_name": "Mingyue Zhu",
+                    "bat1_runs": 9,
+                    "bat2_name": "Wei Haiting",
+                    "bat2_runs": 1,
+                    "total_runs": 10,
+                    "total_balls": 8
+                },
+                {
+                    "bat1_name": "Gong Yuting",
+                    "bat1_runs": 4,
+                    "bat2_name": "Wei Haiting",
+                    "bat2_runs": 7,
+                    "total_runs": 11,
+                    "total_balls": 17
+                }
+            ],
+            "innings_id": 0,
+            "is_declared": false,
+            "is_following_on": false
+        }
+    ],
+    "highlights": [
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        },
+        {
+            "title": "Match Highlight",
+            "thumbnail": "",
+            "hls_url": "",
+            "duration": ""
+        }
+    ],
+    "facts": {
+        "match_id": 178433,
+        "toss": "China Women won the toss and opt to Bowl",
+        "venue": "Bayuemas Oval, Kuala Lumpur",
+        "umpires": "",
+        "referee": "",
+        "day_night": false,
+        "series": "",
+        "raw": {
+            "success": true,
+            "data": {
+                "match_id": 178433,
+                "match_info": {
+                    "match_id": 178433,
+                    "series_id": 13553,
+                    "series_name": "Malaysia Women's T20I Tri-Series, 2026",
+                    "match_desc": "6th Match",
+                    "format": "T20",
+                    "state": "In Progress",
+                    "status": "China Women need 71 runs in 77 balls",
+                    "start_date": "2026-11-25",
+                    "start_time_utc": 1795572000,
+                    "venue": "Bayuemas Oval, Kuala Lumpur",
+                    "venue_id": 394,
+                    "timezone": "+08:00",
+                    "team1": {
+                        "id": 445,
+                        "name": "Malaysia Women",
+                        "short": "MLYW",
+                        "image_id": 776323
+                    },
+                    "team2": {
+                        "id": 486,
+                        "name": "China Women",
+                        "short": "CHNW",
+                        "image_id": 172534
+                    }
+                },
+                "toss": "China Women won the toss and opt to Bowl",
+                "venue": "Bayuemas Oval, Kuala Lumpur",
+                "umpires": "",
+                "referee": "",
+                "team1_squad": [],
+                "team2_squad": [],
+                "venue_details": {
+                    "ground": "Bayuemas Oval",
+                    "city": "Kuala Lumpur",
+                    "timezone": "+08:00"
+                },
+                "broadcast": null
+            }
+        }
+    },
+    "updated_at": "2026-11-25T05:22:05+00:00",
+    "timestamp": 1795584119
+}
