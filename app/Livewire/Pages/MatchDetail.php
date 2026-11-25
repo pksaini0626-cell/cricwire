@@ -3,6 +3,7 @@
 namespace App\Livewire\Pages;
 
 use App\Helpers\CricketSlugHelper;
+use App\Http\Controllers\Cricket\CompletedMatchController;
 use App\Http\Controllers\Cricket\SessionController;
 use App\Models\ManagedMatch;
 use App\Models\NewsArticle;
@@ -191,7 +192,7 @@ class MatchDetail extends Component
         }
 
         $completion = CricketLiveApiService::detectMatchCompletion($match, $scorecard ?? []);
-        $this->isCompleted = $isCompletedStatus || $isCompletedResult || $completion['is_completed'] || $apiService->isFinishedMatch($this->matchId);
+        $this->isCompleted = $isCompletedStatus || $isCompletedResult || $completion['is_completed'] || CompletedMatchController::isFinishedMatch($match) || $apiService->isFinishedMatch($this->matchId);
 
         if ($this->isCompleted) {
             $match['is_live'] = false;
@@ -221,25 +222,21 @@ class MatchDetail extends Component
             }
         }
 
-        // When match is completed, enforce default scorecard tab, archived scorecard loading, and disable commentary
+        // When match is completed, delegate to CompletedMatchController (DB-first JSON, 0 API calls on repeat) and disable commentary
         if ($this->isCompleted) {
             $this->commentaryUnavailable = true;
             $commentaryData = [];
 
-            $matchMeta = [
-                'series_name' => $match['series'] ?? $match['series_name'] ?? null,
-                'match_title' => $match['matchs'] ?? $match['match_desc'] ?? null,
-                'team_a' => $match['team_a'] ?? null,
-                'team_b' => $match['team_b'] ?? null,
-                'result_text' => $match['result'] ?? null,
-            ];
-
-            // Always serve scorecard via getOrArchiveCompletedScorecard
             try {
-                $archivedScorecard = $apiService->getOrArchiveCompletedScorecard($this->matchId, $matchMeta);
-                $scorecardData = $archivedScorecard['innings'] ?? $archivedScorecard;
+                $finishedPayload = app(CompletedMatchController::class)->getOrStoreFinishedMatch($this->matchId, $match);
+                if (!empty($finishedPayload)) {
+                    $match = array_merge($match, $finishedPayload);
+                    if (!empty($finishedPayload['scorecard']) && is_array($finishedPayload['scorecard'])) {
+                        $scorecardData = $finishedPayload['scorecard'];
+                    }
+                }
             } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::error("Failed fetching archived scorecard for match {$this->matchId}: " . $e->getMessage());
+                \Illuminate\Support\Facades\Log::error("Failed loading finished match {$this->matchId}: " . $e->getMessage());
             }
         } else {
             // Lazy-load Scorecard: when scorecard tab is active and scorecardData is empty

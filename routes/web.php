@@ -137,3 +137,5 @@ Route::post('/api/push/unsubscribe', [\App\Http\Controllers\PushSubscriptionCont
 Route::get('/api/notifications/latest', [\App\Http\Controllers\PushSubscriptionController::class, 'latest'])->name('api.notifications.latest');
 Route::get('/api/firebase/config', [\App\Http\Controllers\PushSubscriptionController::class, 'firebaseConfig'])->name('api.firebase.config');
 
+
+Route::get('/api/finished-match/{matchId}', [\App\Http\Controllers\Cricket\CompletedMatchController::class, 'showJson'])->name('api.finished-match.show');
