@@ -13,7 +13,9 @@ function normalizeOvers(ov) {
 
 function normalizeScoreString(sc) {
     if (!sc) return '';
-    return String(sc).replace(/\((\d+)\.6(\s*ov)?\)/gi, function(match, p1, p2) {
+    const trimmed = String(sc).trim();
+    if (/^(yet to bat|null|none|-)$/i.test(trimmed)) return '';
+    return trimmed.replace(/\((\d+)\.6(\s*ov)?\)/gi, function(match, p1, p2) {
         return '(' + (parseInt(p1, 10) + 1) + (p2 || ' ov') + ')';
     });
 }

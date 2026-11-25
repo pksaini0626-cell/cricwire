@@ -15,9 +15,13 @@ class CricketSlugHelper
             return Str::slug(trim($matchOrName)) ?: 'cricket-tournament';
         }
 
-        $series = $matchOrName['series_name'] ?? $matchOrName['series'] ?? $matchOrName['tournament'] ?? $matchOrName['series_title'] ?? 'cricket-tournament';
-        $season = $matchOrName['season'] ?? $matchOrName['year'] ?? '';
-        $raw = trim("{$series} {$season}");
+        $series = trim((string) ($matchOrName['series_name'] ?? $matchOrName['series'] ?? $matchOrName['tournament'] ?? $matchOrName['series_title'] ?? 'cricket-tournament'));
+        $season = trim((string) ($matchOrName['season'] ?? $matchOrName['year'] ?? ''));
+        if ($season !== '' && str_contains(strtolower($series), strtolower($season))) {
+            $raw = $series;
+        } else {
+            $raw = trim("{$series} {$season}");
+        }
         return Str::slug($raw) ?: 'cricket-match-series';
     }
 

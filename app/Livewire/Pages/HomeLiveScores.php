@@ -89,20 +89,35 @@ class HomeLiveScores extends Component
         $upcomingMatches = $sanitized['upcoming'];
         $finishedMatches = $sanitized['finished'];
 
-        // Exclude any match where ManagedMatch::where('is_covered', false) has skipped it
+        // Exclude any match where ManagedMatch is not covered or series is skipped
         $skippedMatchIds = ManagedMatch::where('is_covered', false)
+            ->orWhere('series_skipped', true)
             ->pluck('match_id')
             ->map(fn ($id) => (int) $id)
             ->flip()
             ->all();
 
-        $filterAndFormat = function (array $matches) use ($skippedMatchIds) {
-            $filtered = array_filter($matches, function ($m) use ($skippedMatchIds) {
+        $skippedSeriesNames = \App\Models\SkippedSeries::where('is_skipped', true)
+            ->pluck('series_name')
+            ->map(fn ($name) => strtolower(trim((string) $name)))
+            ->filter()
+            ->flip()
+            ->all();
+
+        $filterAndFormat = function (array $matches) use ($skippedMatchIds, $skippedSeriesNames) {
+            $filtered = array_filter($matches, function ($m) use ($skippedMatchIds, $skippedSeriesNames) {
                 if (!is_array($m)) {
                     return false;
                 }
                 $mId = (int) ($m['match_id'] ?? $m['id'] ?? 0);
-                return !isset($skippedMatchIds[$mId]);
+                if (isset($skippedMatchIds[$mId])) {
+                    return false;
+                }
+                $seriesName = strtolower(trim((string) ($m['series_name'] ?? $m['series'] ?? $m['series_title'] ?? '')));
+                if ($seriesName !== '' && isset($skippedSeriesNames[$seriesName])) {
+                    return false;
+                }
+                return true;
             });
 
             return array_values(array_map(function ($m) {

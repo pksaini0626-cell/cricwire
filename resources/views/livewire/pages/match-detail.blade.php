@@ -518,8 +518,13 @@
                             <span class="text-[10px] text-slate-400 font-medium truncate hidden sm:inline" title="{{ $teamAName }}">({{ $teamAName }})</span>
                         </div>
                         <span class="text-[9px] text-slate-400 font-medium block truncate max-w-[120px] sm:hidden" title="{{ $teamAName }}">{{ $teamAName }}</span>
+                        @php
+                            $hasActivePlay = !empty($liveBatters) || !empty($targetVal) || !empty($runsNeededVal) || !empty($ballsRemVal) || !empty($combinedScore) || $isSecondInnings;
+                            $scoreAFallback = $scoreA ?: ($combinedScore ?: ($hasActivePlay ? 'In Progress' : 'Yet to Bat'));
+                            $scoreBFallback = $scoreB ?: ($hasActivePlay ? ($isSecondInnings && $targetVal ? 'Chasing ' . $targetVal : 'In Progress') : 'Yet to Bat');
+                        @endphp
                         <div class="text-sm sm:text-base font-black text-white tracking-tight flex items-center gap-1 flex-wrap">
-                            <span x-text="live.score_a || live.team_a_scores || live.team_a_score || '{{ $scoreA ?: ($combinedScore ?: 'Yet to Bat') }}'">{{ $scoreA ?: ($combinedScore ?: 'Yet to Bat') }}</span>
+                            <span x-text="live.score_a || live.team_a_scores || live.team_a_score || '{{ $scoreAFallback }}'">{{ $scoreAFallback }}</span>
                             <span class="text-[10px] sm:text-xs font-normal text-slate-400" x-show="live.team_a_over || '{{ $teamAOver }}'" x-text="'(' + (live.team_a_over || '{{ $teamAOver }}') + ' ov)'">@if($teamAOver)({{ $teamAOver }} ov)@endif</span>
                         </div>
                     </div>
@@ -541,7 +546,7 @@
                         <span class="text-[9px] text-slate-400 font-medium block truncate max-w-[120px] sm:hidden text-right ml-auto" title="{{ $teamBName }}">{{ $teamBName }}</span>
                         <div class="text-sm sm:text-base font-black tracking-tight flex items-center justify-end gap-1 flex-wrap"
                              :class="(live.score_b || live.team_b_scores || live.team_b_score || '{{ $scoreB }}') ? 'text-amber-400' : 'text-rose-400 text-xs sm:text-sm font-extrabold'">
-                            <span x-text="live.score_b || live.team_b_scores || live.team_b_score || '{{ $scoreB ?: 'Yet to Bat' }}'">{{ $scoreB ?: 'Yet to Bat' }}</span>
+                            <span x-text="live.score_b || live.team_b_scores || live.team_b_score || '{{ $scoreBFallback }}'">{{ $scoreBFallback }}</span>
                             <span class="text-[10px] sm:text-xs font-normal text-slate-400" x-show="live.team_b_over || '{{ $teamBOver }}'" x-text="'(' + (live.team_b_over || '{{ $teamBOver }}') + ' ov)'">@if($teamBOver)({{ $teamBOver }} ov)@endif</span>
                         </div>
                     </div>

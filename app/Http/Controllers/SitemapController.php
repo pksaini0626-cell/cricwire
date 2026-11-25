@@ -83,13 +83,29 @@ class SitemapController extends Controller
                 }
             } catch (\Throwable $e) {}
 
+            $skippedMatchIds = ManagedMatch::where('is_covered', false)
+                ->orWhere('series_skipped', true)
+                ->pluck('match_id')
+                ->map(fn ($id) => (string) $id)
+                ->flip()
+                ->all();
+
+            $skippedSeriesNames = \App\Models\SkippedSeries::where('is_skipped', true)
+                ->pluck('series_name')
+                ->map(fn ($name) => strtolower(trim((string) $name)))
+                ->filter()
+                ->flip()
+                ->all();
+
             $uniqueMatches = [];
             $seenIds = [];
 
             foreach ($matchesList as $m) {
                 if (!is_array($m)) continue;
                 $matchId = $m['match_id'] ?? $m['id'] ?? null;
-                if (!$matchId || isset($seenIds[$matchId])) continue;
+                if (!$matchId || isset($seenIds[$matchId]) || isset($skippedMatchIds[(string) $matchId])) continue;
+                $seriesName = strtolower(trim((string) ($m['series_name'] ?? $m['series'] ?? $m['series_title'] ?? '')));
+                if ($seriesName !== '' && isset($skippedSeriesNames[$seriesName])) continue;
                 $seenIds[$matchId] = true;
 
                 $seriesSlug = CricketSlugHelper::makeSeriesSlug($m);
