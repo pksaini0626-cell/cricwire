@@ -258,15 +258,6 @@ class MatchDetail extends Component
                     $commentaryData = [];
                 }
             }
-
-            // Lazy-load Highlights: when highlights tab is active and highlights is empty
-            if ($this->tab === 'highlights' && empty($highlights)) {
-                try {
-                    $highlights = $apiService->getHighlights($this->matchId);
-                } catch (\Throwable $e) {
-                    $highlights = [];
-                }
-            }
         }
 
         // Lazy-load Squads: ONLY when the squad/playing-xi tab is active
@@ -298,11 +289,16 @@ class MatchDetail extends Component
         }
 
         // Lazy-load Highlights: ONLY when the highlights tab is active
-        if ($this->tab === 'highlights' && empty($highlights)) {
-            try {
-                $highlights = $apiService->getHighlights($this->matchId);
-            } catch (\Throwable $e) {
-                $highlights = [];
+        if ($this->tab === 'highlights') {
+            if (empty($highlights) && !empty($match['highlights']) && is_array($match['highlights'])) {
+                $highlights = CricketLiveApiService::normalizeHighlights($match['highlights']);
+            }
+            if (empty($highlights)) {
+                try {
+                    $highlights = $apiService->getHighlights($this->matchId);
+                } catch (\Throwable $e) {
+                    $highlights = [];
+                }
             }
         }
 
@@ -469,7 +465,7 @@ class MatchDetail extends Component
             'scorecardData' => $payload['scorecard'] ?? [],
             'commentaryData' => $payload['commentary'] ?? [],
             'matchFacts' => $payload['facts'] ?? [],
-            'highlights' => $payload['highlights'] ?? [],
+            'highlights' => CricketLiveApiService::normalizeHighlights(is_array($payload['highlights'] ?? null) ? $payload['highlights'] : []),
             'liveBatters' => $liveBatters,
             'liveBowler' => $liveBowler,
             'liveBowlers' => $liveBowlers,

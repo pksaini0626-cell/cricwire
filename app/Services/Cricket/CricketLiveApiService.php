@@ -1318,28 +1318,118 @@ class CricketLiveApiService
 
     /**
      * GET /cricket/highlights/{$matchId}
-     * Maps title, thumbnail, hls_url, duration.
+     * Normalizes playable video highlight clips and filters out non-video stubs.
      */
     public function getHighlights(int|string $matchId): array
     {
         $res = $this->get("/cricket/highlights/{$matchId}");
-        if (!$res) {
+        if (!$res || !is_array($res)) {
             return [];
         }
 
-        $items = $res['data']['highlights'] ?? $res['highlights'] ?? $res['data'] ?? (array_is_list($res) ? $res : [$res]);
+        $items = $res['data']['highlights']
+            ?? $res['highlights']
+            ?? $res['data']['clips']
+            ?? $res['clips']
+            ?? $res['data']['videos']
+            ?? $res['videos']
+            ?? $res['data']
+            ?? (array_is_list($res) ? $res : []);
+
+        if (!is_array($items)) {
+            return [];
+        }
+
+        return self::normalizeHighlights($items);
+    }
+
+    /**
+     * Normalize highlight clip items from heterogeneous API payloads and drop unplayable stubs.
+     */
+    public static function normalizeHighlights(array $items): array
+    {
         $output = [];
 
-        if (is_array($items)) {
-            foreach ($items as $h) {
-                if (!is_array($h)) continue;
-                $output[] = [
-                    'title' => $h['title'] ?? 'Match Highlight',
-                    'thumbnail' => $h['thumbnail'] ?? $h['thumb'] ?? $h['image'] ?? '',
-                    'hls_url' => $h['hls_url'] ?? $h['stream_url'] ?? $h['video_url'] ?? '',
-                    'duration' => $h['duration'] ?? $h['time'] ?? '',
-                ];
+        foreach (array_values($items) as $index => $clip) {
+            if (!is_array($clip)) {
+                continue;
             }
+
+            $videoUrl = trim((string) (
+                $clip['video_url']
+                ?? $clip['stream_url']
+                ?? $clip['hls_url']
+                ?? $clip['mp4_url']
+                ?? $clip['url']
+                ?? $clip['link']
+                ?? ''
+            ));
+
+            // Drop non-playable items (e.g., ball-by-ball text events with no video stream/link)
+            if ($videoUrl === '') {
+                continue;
+            }
+
+            $rawTitle = trim((string) (
+                $clip['title']
+                ?? $clip['name']
+                ?? $clip['headline']
+                ?? $clip['caption']
+                ?? $clip['description']
+                ?? ''
+            ));
+
+            if ($rawTitle === '' || strcasecmp($rawTitle, 'Match Highlight') === 0) {
+                if (!empty($clip['over'])) {
+                    $title = "Over {$clip['over']} Highlight";
+                } elseif (!empty($clip['category'])) {
+                    $title = (string) $clip['category'];
+                } elseif (!empty($clip['event'])) {
+                    $eventLabel = ucwords(strtolower(str_replace(['_', '-', ','], ' ', (string) $clip['event'])));
+                    $title = trim($eventLabel) !== '' ? "{$eventLabel} Highlight" : 'Clip #' . ($index + 1);
+                } else {
+                    $title = 'Clip #' . ($index + 1);
+                }
+            } else {
+                $title = $rawTitle;
+            }
+
+            $thumbnail = trim((string) (
+                $clip['thumbnail']
+                ?? $clip['thumb']
+                ?? $clip['image']
+                ?? $clip['image_url']
+                ?? $clip['poster']
+                ?? $clip['banner']
+                ?? ''
+            ));
+
+            $duration = trim((string) (
+                $clip['duration']
+                ?? $clip['length']
+                ?? $clip['time']
+                ?? ''
+            ));
+
+            $subtitle = trim((string) (
+                $clip['subtitle']
+                ?? $clip['category']
+                ?? $clip['timestamp']
+                ?? $clip['published_at']
+                ?? $clip['date']
+                ?? ''
+            ));
+
+            $output[] = [
+                'title' => $title,
+                'thumbnail' => $thumbnail,
+                'video_url' => $videoUrl,
+                'hls_url' => $videoUrl,
+                'duration' => $duration,
+                'subtitle' => $subtitle,
+                'over' => $clip['over'] ?? null,
+                'category' => $clip['category'] ?? null,
+            ];
         }
 
         return $output;

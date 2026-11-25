@@ -1772,62 +1772,85 @@
 
         @elseif($tab === 'highlights')
             <!-- HIGHLIGHTS TAB: Video Highlights & Replays -->
+            @php
+                $rawHighlights = !empty($highlights) ? $highlights : ($match['highlights'] ?? []);
+                $highlightsList = \App\Services\Cricket\CricketLiveApiService::normalizeHighlights(is_array($rawHighlights) ? $rawHighlights : []);
+                $clipCount = count($highlightsList);
+            @endphp
             <div class="space-y-4">
                 <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg">
-                    <h3 class="text-xs sm:text-sm font-black text-amber-400 uppercase tracking-wider mb-4 pb-2.5 border-b border-slate-800 flex items-center justify-between">
+                    <h3 class="text-xs sm:text-sm font-black text-amber-400 uppercase tracking-wider mb-4 pb-2.5 border-b border-slate-800 flex items-center justify-between gap-2">
                         <span class="flex items-center gap-2">
                             <span>🎬</span>
                             <span>Match Highlights & Video Clips</span>
                         </span>
-                        <span class="text-[10px] text-slate-400 font-mono">HLS STREAM READY</span>
+                        @if($clipCount > 0)
+                            <span class="text-[11px] font-semibold text-slate-400 normal-case tracking-normal">
+                                {{ $clipCount }} {{ \Illuminate\Support\Str::plural('Clip', $clipCount) }}
+                            </span>
+                        @endif
                     </h3>
 
-                    @php
-                        $highlightsList = $highlights ?? $match['highlights'] ?? [];
-                    @endphp
-
-                    @if(!empty($highlightsList))
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            @foreach($highlightsList as $hl)
+                    @if($clipCount > 0)
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            @foreach($highlightsList as $clip)
                                 @php
-                                    $hlTitle = $hl['title'] ?? 'Match Highlight';
-                                    $hlThumb = $hl['thumbnail'] ?? '';
-                                    $hlUrl = $hl['hls_url'] ?? '';
-                                    $hlDuration = $hl['duration'] ?? '';
+                                    $clipTitle = $clip['title'];
+                                    $clipThumb = $clip['thumbnail'] ?? '';
+                                    $clipUrl = $clip['video_url'] ?? $clip['hls_url'] ?? '';
+                                    $clipDuration = $clip['duration'] ?? '';
+                                    $clipMeta = $clip['subtitle'] ?: ($series ?? '');
                                 @endphp
-                                <div class="bg-slate-950 border border-slate-800/80 rounded-xl overflow-hidden group hover:border-amber-400/40 transition">
-                                    @if($hlThumb)
-                                        <div class="relative aspect-video bg-slate-900 overflow-hidden">
-                                            <img src="{{ $hlThumb }}" alt="{{ $hlTitle }}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-                                            @if($hlDuration)
-                                                <span class="absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-black/80 text-white">
-                                                    {{ $hlDuration }}
-                                                </span>
-                                            @endif
-                                            @if($hlUrl)
-                                                <a href="{{ $hlUrl }}" target="_blank" rel="noopener noreferrer" class="absolute inset-0 flex items-center justify-center bg-black/40 group-hover:bg-black/20 transition">
-                                                    <span class="w-10 h-10 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center shadow-lg font-bold pl-0.5">▶</span>
-                                                </a>
-                                            @endif
+                                <a href="{{ $clipUrl }}"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="group flex flex-col bg-slate-950/70 border border-slate-800/80 rounded-2xl p-2 hover:border-amber-400/50 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300">
+                                    <div class="relative aspect-video rounded-xl overflow-hidden bg-slate-950 border border-slate-800">
+                                        <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-amber-950/30 flex items-center justify-center p-3 text-center">
+                                            <span class="text-[11px] font-black uppercase tracking-widest text-slate-400/90">
+                                                {{ $teamAShort }} vs {{ $teamBShort }}
+                                            </span>
                                         </div>
-                                    @endif
-                                    <div class="p-3">
-                                        <h4 class="text-xs font-bold text-white line-clamp-2 mb-2">{{ $hlTitle }}</h4>
-                                        @if($hlUrl)
-                                            <a href="{{ $hlUrl }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-400 hover:underline">
-                                                <span>Watch Stream</span>
-                                                <span>→</span>
-                                            </a>
+
+                                        @if($clipThumb !== '')
+                                            <img src="{{ $clipThumb }}"
+                                                 alt="{{ $clipTitle }}"
+                                                 loading="lazy"
+                                                 class="relative z-10 w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                                                 onerror="this.style.display='none'" />
+                                        @endif
+
+                                        <div class="absolute inset-0 z-20 flex items-center justify-center bg-black/25 group-hover:bg-black/10 transition">
+                                            <span class="w-11 h-11 rounded-full bg-slate-950/80 border border-amber-400/50 text-amber-400 group-hover:bg-amber-400 group-hover:text-slate-950 group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(251,191,36,0.45)] flex items-center justify-center transition-all duration-300 text-sm font-bold pl-0.5">
+                                                ▶
+                                            </span>
+                                        </div>
+
+                                        @if($clipDuration !== '')
+                                            <span class="absolute bottom-2 right-2 z-20 px-1.5 py-0.5 rounded bg-slate-950/85 border border-slate-700/70 text-[10px] font-mono font-bold text-slate-100">
+                                                {{ $clipDuration }}
+                                            </span>
                                         @endif
                                     </div>
-                                </div>
+
+                                    <div class="pt-2.5 px-1 pb-1 flex-1 flex flex-col justify-between gap-1">
+                                        <h4 class="text-xs sm:text-sm font-bold text-slate-100 line-clamp-2 group-hover:text-amber-400 transition">
+                                            {{ $clipTitle }}
+                                        </h4>
+                                        @if($clipMeta !== '')
+                                            <p class="text-[11px] text-slate-400 truncate">
+                                                {{ $clipMeta }}
+                                            </p>
+                                        @endif
+                                    </div>
+                                </a>
                             @endforeach
                         </div>
                     @else
-                        <div class="text-center py-12 bg-slate-950/60 rounded-xl border border-slate-800/60">
-                            <span class="text-3xl block mb-2">📹</span>
-                            <p class="text-slate-400 text-xs font-medium">No video highlights uploaded for this fixture yet.</p>
-                            <p class="text-slate-600 text-[11px] mt-1">Highlights will appear once video streams are processed.</p>
+                        <div class="rounded-xl border border-slate-800/70 bg-slate-950/60 px-4 py-8 text-center">
+                            <p class="text-xs sm:text-sm font-medium text-slate-400">
+                                No video highlights available for this match yet.
+                            </p>
                         </div>
                     @endif
                 </div>
