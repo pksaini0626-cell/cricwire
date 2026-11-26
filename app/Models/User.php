@@ -26,6 +26,14 @@ class User extends Authenticatable implements FilamentUser
         'avatar',
         'role',
         'last_login_at',
+        'player_code',
+        'referred_by_user_id',
+        'referral_rewarded',
+        'cric_gems',
+        'login_streak',
+        'last_streak_date',
+        'battles_played',
+        'battles_won',
     ];
 
     /**
@@ -49,6 +57,12 @@ class User extends Authenticatable implements FilamentUser
             'email_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
             'password' => 'hashed',
+            'referral_rewarded' => 'boolean',
+            'cric_gems' => 'integer',
+            'login_streak' => 'integer',
+            'last_streak_date' => 'date:Y-m-d',
+            'battles_played' => 'integer',
+            'battles_won' => 'integer',
         ];
     }
 
@@ -65,5 +79,45 @@ class User extends Authenticatable implements FilamentUser
     public function pollVotes()
     {
         return $this->hasMany(PollVote::class);
+    }
+
+    public function referrer()
+    {
+        return $this->belongsTo(User::class, 'referred_by_user_id');
+    }
+
+    public function referrals()
+    {
+        return $this->hasMany(User::class, 'referred_by_user_id');
+    }
+
+    public function gemTransactions()
+    {
+        return $this->hasMany(CricGemTransaction::class);
+    }
+
+    public function sentFriendRequests()
+    {
+        return $this->hasMany(Friendship::class, 'sender_id');
+    }
+
+    public function receivedFriendRequests()
+    {
+        return $this->hasMany(Friendship::class, 'receiver_id');
+    }
+
+    public function createdBattles()
+    {
+        return $this->hasMany(Battle::class, 'creator_id');
+    }
+
+    public function joinedBattles()
+    {
+        return $this->hasMany(Battle::class, 'opponent_id');
+    }
+
+    public function wonBattles()
+    {
+        return $this->hasMany(Battle::class, 'winner_id');
     }
 }

@@ -8,9 +8,11 @@ use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 
 class NewsArticleResource extends Resource
@@ -21,6 +23,18 @@ class NewsArticleResource extends Resource
     protected static ?string $navigationLabel = 'Cricket News';
     protected static ?string $navigationGroup = 'Editorial';
     protected static ?int $navigationSort = 1;
+
+    public static function getNavigationBadge(): ?string
+    {
+        $count = NewsArticle::where('status', 'pending_review')->count();
+
+        return $count > 0 ? (string) $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'warning';
+    }
 
     public static function form(Form $form): Form
     {
@@ -141,7 +155,9 @@ class NewsArticleResource extends Resource
                             ->label('Publication Status')
                             ->options([
                                 'draft' => 'Draft',
+                                'pending_review' => 'Pending Review',
                                 'published' => 'Published',
+                                'rejected' => 'Rejected',
                             ])
                             ->default('draft')
                             ->required()
@@ -203,6 +219,37 @@ class NewsArticleResource extends Resource
                             ->dehydrated(),
                     ])->columns(2),
 
+                Forms\Components\Section::make('Guest Author Details')
+                    ->description('Community contributor attribution and moderation notes for guest submissions.')
+                    ->schema([
+                        Forms\Components\Toggle::make('is_guest_post')
+                            ->label('Guest Contributor Article')
+                            ->default(false),
+
+                        Forms\Components\TextInput::make('author_name')
+                            ->label('Author Display Name')
+                            ->maxLength(100)
+                            ->nullable(),
+
+                        Forms\Components\TextInput::make('author_social_url')
+                            ->label('Author Social / Profile URL')
+                            ->url()
+                            ->maxLength(255)
+                            ->nullable(),
+
+                        Forms\Components\TextInput::make('rejection_reason')
+                            ->label('Rejection Reason')
+                            ->maxLength(255)
+                            ->nullable(),
+
+                        Forms\Components\Textarea::make('author_bio')
+                            ->label('Author Bio')
+                            ->rows(2)
+                            ->maxLength(250)
+                            ->nullable()
+                            ->columnSpanFull(),
+                    ])->columns(2)->collapsible(),
+
                 Forms\Components\Section::make('SEO & Metadata')
                     ->description('Search engine optimization fields for Google News and search ranking.')
                     ->schema([
@@ -253,14 +300,37 @@ class NewsArticleResource extends Resource
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'published' => 'success',
-                        'draft' => 'warning',
+                        'pending_review' => 'warning',
+                        'rejected' => 'danger',
+                        'draft' => 'gray',
                         default => 'gray',
+                    })
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        'pending_review' => 'Pending Review',
+                        'published' => 'Published',
+                        'rejected' => 'Rejected',
+                        'draft' => 'Draft',
+                        default => ucfirst($state),
                     }),
 
                 Tables\Columns\TextColumn::make('source_name')
-                    ->label('Source')
+                    ->label('Source / Author')
                     ->color('gray')
                     ->placeholder('Manual')
+                    ->formatStateUsing(function (?string $state, NewsArticle $record): HtmlString {
+                        $label = e($record->is_guest_post && $record->author_name ? $record->author_name : ($state ?: 'Manual'));
+                        if ($record->is_guest_post) {
+                            return new HtmlString(
+                                '<span class="inline-flex items-center gap-1.5">'
+                                . '<span>' . $label . '</span>'
+                                . '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">Guest</span>'
+                                . '</span>'
+                            );
+                        }
+
+                        return new HtmlString('<span>' . $label . '</span>');
+                    })
+                    ->searchable(['source_name', 'author_name'])
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('published_at')
@@ -280,11 +350,64 @@ class NewsArticleResource extends Resource
                     ]),
                 Tables\Filters\SelectFilter::make('status')
                     ->options([
+                        'pending_review' => 'Pending Review',
                         'draft' => 'Draft',
                         'published' => 'Published',
+                        'rejected' => 'Rejected',
                     ]),
+                Tables\Filters\TernaryFilter::make('is_guest_post')
+                    ->label('Guest Posts')
+                    ->trueLabel('Guest Contributors Only')
+                    ->falseLabel('Editorial Staff Only'),
             ])
             ->actions([
+                Tables\Actions\Action::make('approvePublish')
+                    ->label('✅ Approve & Publish')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->modalHeading('Approve & Publish Guest Article')
+                    ->modalDescription('External links will remain protected with rel="nofollow noopener noreferrer" and this article will be published live.')
+                    ->visible(fn (NewsArticle $record): bool => $record->status === 'pending_review')
+                    ->action(function (NewsArticle $record): void {
+                        $record->update([
+                            'status' => 'published',
+                            'is_published' => true,
+                            'published_at' => now(),
+                            'rejection_reason' => null,
+                        ]);
+
+                        Notification::make()
+                            ->title('Article Approved & Published')
+                            ->body("\"{$record->title}\" is now live.")
+                            ->success()
+                            ->send();
+                    }),
+
+                Tables\Actions\Action::make('rejectGuestPost')
+                    ->label('❌ Reject')
+                    ->color('danger')
+                    ->visible(fn (NewsArticle $record): bool => $record->status === 'pending_review')
+                    ->form([
+                        Forms\Components\Textarea::make('rejection_reason')
+                            ->label('Rejection Reason')
+                            ->required()
+                            ->maxLength(255)
+                            ->placeholder('Explain why this submission was rejected (e.g., off-topic, promotional links, low depth).'),
+                    ])
+                    ->action(function (NewsArticle $record, array $data): void {
+                        $record->update([
+                            'status' => 'rejected',
+                            'is_published' => false,
+                            'rejection_reason' => $data['rejection_reason'],
+                        ]);
+
+                        Notification::make()
+                            ->title('Guest Post Rejected')
+                            ->body('Rejection reason saved for the contributor.')
+                            ->warning()
+                            ->send();
+                    }),
+
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make(),
             ])

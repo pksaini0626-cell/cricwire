@@ -23,6 +23,7 @@ class MatchDetail extends Component
     public ?string $matchSlug = null;
     public bool $isCompleted = false;
     public bool $commentaryUnavailable = false;
+    public array $recentBalls = [];
 
     /**
      * Mount component supporting both:
@@ -63,6 +64,15 @@ class MatchDetail extends Component
             if (in_array($fastState, ['finished', 'completed', 'complete', '3'], true) || !empty($fastData['result'])) {
                 $isFinishedMatch = true;
             }
+            $this->recentBalls = $apiService->extractRecentBalls(
+                !empty($fastData['commentary']) && is_array($fastData['commentary'])
+                    ? $fastData['commentary']
+                    : (is_array($fastData['recent_balls'] ?? null) ? $fastData['recent_balls'] : []),
+                is_array($fastData['over_history'] ?? $fastData['overHistory'] ?? $fastData['recent_overs'] ?? null)
+                    ? ($fastData['over_history'] ?? $fastData['overHistory'] ?? $fastData['recent_overs'])
+                    : [],
+                18
+            );
         }
 
         if ($requestedTab === 'live-line' && $isFinishedMatch) {
@@ -263,8 +273,11 @@ class MatchDetail extends Component
                 }
             }
 
-            // Lazy-load Commentary: when commentary tab is active and commentaryData is empty
-            if ($this->tab === 'commentary' && empty($commentaryData)) {
+            // Ensure commentary is loaded when commentary tab is active OR when live-line lacks recent_balls
+            $needsRecentBallSource = ($this->tab === 'live-line')
+                && empty($commentaryData)
+                && (empty($match['recent_balls']) || !is_array($match['recent_balls']) || !isset($match['recent_balls'][0]['event_type']));
+            if (($this->tab === 'commentary' && empty($commentaryData)) || ($needsRecentBallSource && !$apiService->isHardStopActive())) {
                 try {
                     $commRes = $apiService->getCommentary($this->matchId);
                     $commentaryData = $commRes['commentary'] ?? $commRes;
@@ -372,26 +385,32 @@ class MatchDetail extends Component
         $recentOvers = [];
         $recentBalls = [];
         try {
-            $recentOvers = $apiService->getNormalizedRecentOvers($this->matchId, $commentaryData);
-            // Collect flat recent balls (up to 18 balls)
-            foreach ($recentOvers as $ov) {
-                foreach ($ov['balls'] ?? [] as $b) {
-                    $recentBalls[] = [
-                        'label' => (string) ($b['label'] ?? $b),
-                        'runs' => is_array($b) ? ($b['runs'] ?? 0) : (is_numeric($b) ? (int)$b : 0),
-                        'wicket' => is_array($b) ? (!empty($b['wicket']) || ($b['label'] ?? '') === 'W') : ($b === 'W'),
-                        'wides' => is_array($b) ? (($b['label'] ?? '') === 'wd') : ($b === 'wd'),
-                        'noballs' => is_array($b) ? (($b['label'] ?? '') === 'nb') : ($b === 'nb'),
-                        'overs' => $ov['over_number'] ?? '',
-                    ];
-                    if (count($recentBalls) >= 18) {
-                        break 2;
+            $recentSource = !empty($commentaryData)
+                ? $commentaryData
+                : (is_array($match['recent_balls'] ?? null) ? $match['recent_balls'] : []);
+            $overHistorySource = is_array($match['over_history'] ?? $match['overHistory'] ?? $match['recent_overs'] ?? null)
+                ? ($match['over_history'] ?? $match['overHistory'] ?? $match['recent_overs'])
+                : [];
+
+            // Fallback to local static JSON cache if both commentary and recent_balls are empty
+            if (empty($recentSource) && empty($overHistorySource)) {
+                $staticFile = public_path("live-data/match-{$this->matchId}.json");
+                if (file_exists($staticFile)) {
+                    $staticJson = json_decode(@file_get_contents($staticFile), true);
+                    if (is_array($staticJson)) {
+                        $recentSource = !empty($staticJson['commentary']) ? $staticJson['commentary'] : ($staticJson['recent_balls'] ?? []);
                     }
                 }
             }
+
+            $recentBalls = $apiService->extractRecentBalls($recentSource, $overHistorySource, 18);
+            $this->recentBalls = $recentBalls;
+            $match['recent_balls'] = $recentBalls;
+            $recentOvers = $apiService->getNormalizedRecentOvers($this->matchId, !empty($commentaryData) ? $commentaryData : $recentBalls);
         } catch (\Throwable $e) {
             $recentOvers = [];
             $recentBalls = [];
+            $this->recentBalls = [];
         }
 
         $hasScores = !empty($match['score_a']) || !empty($match['score_b']) || !empty($match['score']) || !empty($match['team_a_scores']) || !empty($match['team_b_scores']);

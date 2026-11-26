@@ -12,6 +12,13 @@ class NewsShow extends Component
 
     public function mount(NewsArticle $article): void
     {
+        $isPublished = $article->status === 'published' || (bool) $article->is_published;
+        $isPrivileged = auth()->check() && in_array(auth()->user()->role, ['admin', 'editor'], true);
+
+        if (!$isPublished && !$isPrivileged) {
+            abort(404);
+        }
+
         $this->article = $article;
     }
 

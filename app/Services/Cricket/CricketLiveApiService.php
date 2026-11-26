@@ -1133,7 +1133,13 @@ class CricketLiveApiService
             ];
         }
 
-        $recentBalls = array_slice($commentaryData, 0, 12);
+        $recentBalls = $this->extractRecentBalls(
+            $commentaryData,
+            is_array($baseMatch['over_history'] ?? $baseMatch['overHistory'] ?? $baseMatch['recent_overs'] ?? null)
+                ? ($baseMatch['over_history'] ?? $baseMatch['overHistory'] ?? $baseMatch['recent_overs'])
+                : [],
+            18
+        );
         $latestBall = !empty($commentaryData) ? $commentaryData[0] : null;
         $statusText = (string) ($miniscore['status'] ?? $baseMatch['result'] ?? $baseMatch['status_note'] ?? $baseMatch['status'] ?? $baseMatch['state'] ?? 'Live');
         $nowIso = now()->toIso8601String();
@@ -1222,7 +1228,13 @@ class CricketLiveApiService
                     $comm = $this->getCommentary($matchId);
                     $cached['commentary'] = $comm['commentary'] ?? [];
                 }
-                if (empty($cached['batters']) || empty($cached['bowler'])) {
+                $needsRecentBalls = $cachedBucket === 'live'
+                    && (empty($cached['recent_balls']) || !is_array($cached['recent_balls']) || !isset($cached['recent_balls'][0]['event_type']));
+                if ($needsRecentBalls && empty($cached['commentary']) && !$this->isHardStopActive()) {
+                    $comm = $this->getCommentary($matchId);
+                    $cached['commentary'] = $comm['commentary'] ?? [];
+                }
+                if (empty($cached['batters']) || empty($cached['bowler']) || $needsRecentBalls) {
                     $cached = $this->enrichFastMatchPayload($cached);
                 }
                 if ($cachedBucket === 'upcoming' || empty($cached['toss']) || self::isUndecidedToss($cached['toss'] ?? '')) {
@@ -1305,6 +1317,13 @@ class CricketLiveApiService
             if ($includeCommentary && empty($liveCached['commentary'])) {
                 $comm = $this->getCommentary($matchId);
                 $liveCached['commentary'] = $comm['commentary'] ?? [];
+            }
+            if (empty($liveCached['recent_balls']) || !is_array($liveCached['recent_balls']) || !isset($liveCached['recent_balls'][0]['event_type'])) {
+                if (empty($liveCached['commentary']) && !$this->isHardStopActive()) {
+                    $comm = $this->getCommentary($matchId);
+                    $liveCached['commentary'] = $comm['commentary'] ?? [];
+                }
+                $liveCached = $this->enrichFastMatchPayload($liveCached);
             }
             return $liveCached;
         }
@@ -1525,6 +1544,16 @@ class CricketLiveApiService
         }
         $payload['current_inning'] = count($scorecardInnings) ?: 1;
 
+        if (empty($payload['recent_balls']) || !is_array($payload['recent_balls']) || !isset($payload['recent_balls'][0]['event_type'])) {
+            $commSource = is_array($payload['commentary'] ?? null) && !empty($payload['commentary'])
+                ? $payload['commentary']
+                : (is_array($payload['recent_balls'] ?? null) ? $payload['recent_balls'] : []);
+            $overHistorySource = is_array($payload['over_history'] ?? $payload['overHistory'] ?? $payload['recent_overs'] ?? null)
+                ? ($payload['over_history'] ?? $payload['overHistory'] ?? $payload['recent_overs'])
+                : [];
+            $payload['recent_balls'] = $this->extractRecentBalls($commSource, $overHistorySource, 18);
+        }
+
         return $payload;
     }
 
@@ -1621,22 +1650,363 @@ class CricketLiveApiService
     }
 
     /**
+     * Extract and normalize the latest 12-18 deliveries chronologically (left-to-right)
+     * from commentary and/or overHistory / recent_overs payloads.
+     */
+    public function extractRecentBalls(array $commentaryData = [], array $overHistory = [], int $limit = 18): array
+    {
+        $rawItems = [];
+
+        // Flatten nested commentary structure if grouped by inning/over
+        $flattenCommentary = function (array $items) use (&$flattenCommentary, &$rawItems): void {
+            foreach ($items as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+                if (isset($item['data']) && is_array($item['data'])) {
+                    $rawItems[] = $item['data'];
+                    continue;
+                }
+                if (
+                    isset($item['over']) || isset($item['overs']) || isset($item['over_number'])
+                    || isset($item['ball']) || isset($item['ball_number']) || isset($item['ball_metric'])
+                    || isset($item['event_type']) || isset($item['text']) || isset($item['commentary'])
+                    || isset($item['comm']) || isset($item['title']) || isset($item['description'])
+                ) {
+                    $rawItems[] = $item;
+                    continue;
+                }
+                $flattenCommentary($item);
+            }
+        };
+
+        if (!empty($commentaryData)) {
+            $flattenCommentary($commentaryData);
+        }
+
+        // Fallback to overHistory / recent_overs when commentary items are absent
+        if (empty($rawItems) && !empty($overHistory)) {
+            $overGroups = isset($overHistory['data']) && is_array($overHistory['data'])
+                ? $overHistory['data']
+                : $overHistory;
+
+            // Handle innings-keyed overHistory: ["1" => [...], "2" => [...]]
+            if (isset($overGroups['1']) || isset($overGroups['2'])) {
+                $overGroups = !empty($overGroups['2']) && is_array($overGroups['2'])
+                    ? $overGroups['2']
+                    : (is_array($overGroups['1'] ?? null) ? $overGroups['1'] : []);
+            }
+
+            foreach ($overGroups as $ovItem) {
+                if (!is_array($ovItem)) {
+                    continue;
+                }
+                $ovNum = (string) ($ovItem['over_number'] ?? $ovItem['over'] ?? $ovItem['team']['over'] ?? '');
+                $balls = $ovItem['balls'] ?? $ovItem['over_summary'] ?? [];
+                if (is_string($balls)) {
+                    $balls = preg_split('/[\s,]+/', trim($balls)) ?: [];
+                }
+                if (is_array($balls)) {
+                    $ballIdx = 1;
+                    foreach ($balls as $b) {
+                        if (is_array($b)) {
+                            $b['over'] = $b['over'] ?? $ovNum;
+                            $b['ball'] = $b['ball'] ?? (string) $ballIdx;
+                            $rawItems[] = $b;
+                        } else {
+                            $rawItems[] = [
+                                'over' => $ovNum,
+                                'ball' => (string) $ballIdx,
+                                'raw_label' => (string) $b,
+                                'runs' => is_numeric($b) ? (int) $b : 0,
+                                'type' => (string) $b,
+                            ];
+                        }
+                        $ballIdx++;
+                    }
+                }
+            }
+        }
+
+        if (empty($rawItems)) {
+            return [];
+        }
+
+        $normalized = [];
+        $seenSignatures = [];
+
+        foreach ($rawItems as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            // Already normalized item? Keep valid deliveries
+            if (
+                isset($item['event_type'], $item['raw_label'], $item['over'], $item['ball'])
+                && trim((string) $item['over']) !== ''
+                && trim((string) $item['ball']) !== ''
+            ) {
+                $over = trim((string) $item['over']);
+                $ball = trim((string) $item['ball']);
+                $eventType = strtolower((string) $item['event_type']);
+                $runs = (int) ($item['runs'] ?? 0);
+                $label = (string) $item['raw_label'];
+                $sig = "{$over}.{$ball}|{$eventType}|{$runs}|{$label}";
+                if (isset($seenSignatures[$sig])) {
+                    continue;
+                }
+                $seenSignatures[$sig] = true;
+                $normalized[] = [
+                    'key' => "{$over}.{$ball}",
+                    'over' => $over,
+                    'ball' => $ball,
+                    'runs' => $runs,
+                    'raw_label' => $label,
+                    'event_type' => $eventType,
+                    'is_over_end' => (bool) ($item['is_over_end'] ?? false),
+                ];
+                continue;
+            }
+
+            $over = trim((string) ($item['over'] ?? $item['over_number'] ?? ''));
+            $ball = trim((string) ($item['ball'] ?? $item['ball_number'] ?? ''));
+
+            if (($over === '' || $ball === '') && !empty($item['overs'])) {
+                $oversStr = trim((string) $item['overs']);
+                if (str_contains($oversStr, '.')) {
+                    [$oPart, $bPart] = explode('.', $oversStr, 2);
+                    $over = $over !== '' ? $over : trim($oPart);
+                    $ball = $ball !== '' ? $ball : trim($bPart);
+                } elseif (is_numeric($oversStr)) {
+                    $over = $over !== '' ? $over : $oversStr;
+                }
+            }
+            if (($over === '' || $ball === '') && isset($item['ball_metric']) && is_numeric($item['ball_metric'])) {
+                $parts = explode('.', (string) $item['ball_metric']);
+                $over = $over !== '' ? $over : trim($parts[0] ?? '');
+                $ball = $ball !== '' ? $ball : trim($parts[1] ?? '');
+            }
+
+            // Skip non-delivery commentary announcements (bowler change, lunch break, etc.)
+            if ($over === '' && $ball === '') {
+                continue;
+            }
+            if ($ball === '') {
+                $ball = '0';
+            }
+            if ($over === '') {
+                $over = '0';
+            }
+
+            $rawHtmlText = (string) ($item['text'] ?? $item['commentary'] ?? $item['comm'] ?? $item['description'] ?? $item['title'] ?? '');
+            $cleanText = trim(preg_replace('/\s+/', ' ', strip_tags($rawHtmlText)));
+            $lowerText = strtolower($cleanText);
+            $rawType = strtolower(trim((string) ($item['type'] ?? $item['event'] ?? '')));
+            $rawLabelInput = trim((string) ($item['raw_label'] ?? $item['label'] ?? ''));
+            $upperLabelInput = strtoupper($rawLabelInput);
+            $explicitRuns = is_numeric($item['runs'] ?? $item['run'] ?? null) ? (int) ($item['runs'] ?? $item['run']) : null;
+
+            $classified = $this->classifyBallDelivery(
+                $rawType,
+                $lowerText,
+                $rawHtmlText,
+                $upperLabelInput,
+                $explicitRuns
+            );
+
+            $sig = "{$over}.{$ball}|{$classified['event_type']}|{$classified['runs']}|" . md5($lowerText . '|' . $upperLabelInput);
+            if (isset($seenSignatures[$sig])) {
+                continue;
+            }
+            $seenSignatures[$sig] = true;
+
+            $normalized[] = [
+                'key' => "{$over}.{$ball}",
+                'over' => $over,
+                'ball' => $ball,
+                'runs' => $classified['runs'],
+                'raw_label' => $classified['raw_label'],
+                'event_type' => $classified['event_type'],
+                'is_over_end' => false,
+            ];
+        }
+
+        if (empty($normalized)) {
+            return [];
+        }
+
+        // Commentary feeds are typically newest-first; detect order and take latest $limit deliveries
+        $firstKey = (float) ($normalized[0]['over'] . '.' . $normalized[0]['ball']);
+        $lastKey = (float) ($normalized[count($normalized) - 1]['over'] . '.' . $normalized[count($normalized) - 1]['ball']);
+
+        if ($firstKey >= $lastKey) {
+            // Descending (newest first): take first $limit, then reverse to chronological left-to-right
+            $latest = array_slice($normalized, 0, $limit);
+            $chronological = array_reverse($latest);
+        } else {
+            // Already ascending (oldest first): take last $limit
+            $chronological = array_slice($normalized, -$limit);
+        }
+
+        $chronological = array_values($chronological);
+        $total = count($chronological);
+        for ($i = 0; $i < $total; $i++) {
+            $curr = $chronological[$i];
+            $next = $chronological[$i + 1] ?? null;
+            $isLegal = !in_array($curr['event_type'], ['wide', 'noball'], true);
+            $overChanged = $next !== null && $next['over'] !== $curr['over'];
+            $isSixthBall = $isLegal && (string) $curr['ball'] === '6';
+            $chronological[$i]['is_over_end'] = $isSixthBall || $overChanged;
+        }
+
+        return $chronological;
+    }
+
+    /**
+     * Classify a single ball delivery into normalized runs, raw_label, and event_type.
+     *
+     * @return array{runs: int, raw_label: string, event_type: string}
+     */
+    protected function classifyBallDelivery(
+        string $rawType,
+        string $lowerText,
+        string $rawHtmlText,
+        string $upperLabelInput,
+        ?int $explicitRuns
+    ): array {
+        // Parse runs mentioned in commentary text when API returns runs=0
+        $textRuns = null;
+        if (preg_match('/\b(\d+)\s+runs?\b/i', $lowerText, $mRuns)) {
+            $textRuns = (int) $mRuns[1];
+        } elseif (preg_match('/(?:,\s*(?:leg\s+byes?,\s*|byes?,\s*)?six\b|<b>\s*six\s*<\/b>)/i', $rawHtmlText) || preg_match('/\bsix\b/i', $lowerText)) {
+            $textRuns = 6;
+        } elseif (preg_match('/(?:,\s*(?:leg\s+byes?,\s*|byes?,\s*)?four\b|<b>\s*four\s*<\/b>)/i', $rawHtmlText) || preg_match('/\bfour\b/i', $lowerText)) {
+            $textRuns = 4;
+        } elseif (preg_match('/\bno\s+runs?\b/i', $lowerText)) {
+            $textRuns = 0;
+        }
+
+        $runs = ($explicitRuns !== null && $explicitRuns > 0)
+            ? $explicitRuns
+            : ($textRuns ?? ($explicitRuns ?? 0));
+
+        // 1. Wicket
+        $isWicket = str_contains($rawType, 'wicket')
+            || str_contains($rawType, 'out')
+            || $upperLabelInput === 'W'
+            || preg_match('/<b>\s*(?:out|thats\s+out!?)\s*<\/b>/i', $rawHtmlText) === 1
+            || preg_match('/(?:,\s*out\b|\bthats\s+out\b|\bwicket\b|\bbowled\b|\blbw\b|\bstumped\b|\brun\s*out\b|\bhit\s*wicket\b|\bcaught\s+(?:by|behind|&|and)\b)/i', $lowerText) === 1;
+
+        if ($isWicket) {
+            return [
+                'runs' => 0,
+                'raw_label' => 'W',
+                'event_type' => 'wicket',
+            ];
+        }
+
+        // 2. No Ball
+        $isNoBall = str_contains($rawType, 'no ball')
+            || str_contains($rawType, 'noball')
+            || $rawType === 'nb'
+            || str_contains($upperLabelInput, 'NB')
+            || preg_match('/\b(no\s*-?\s*ball|noball)\b/i', $lowerText) === 1;
+
+        if ($isNoBall) {
+            $extraRuns = $runs > 0 ? $runs : 0;
+            return [
+                'runs' => $extraRuns,
+                'raw_label' => $extraRuns > 0 ? "{$extraRuns}NB" : 'NB',
+                'event_type' => 'noball',
+            ];
+        }
+
+        // 3. Wide
+        $isWide = str_contains($rawType, 'wide')
+            || $rawType === 'wd'
+            || str_contains($upperLabelInput, 'WD')
+            || preg_match('/<b>\s*(?:\d+\s+)?wides?\s*<\/b>/i', $rawHtmlText) === 1
+            || preg_match('/(?:,\s*(?:\d+\s+)?wides?\b|^\s*(?:\d+\s+)?wides?\b)/i', $lowerText) === 1;
+
+        if ($isWide) {
+            $wideRuns = $runs > 0 ? $runs : 0;
+            if ($wideRuns === 0 && preg_match('/\b(\d+)\s+wides?\b/i', $lowerText, $mWd)) {
+                $wideRuns = (int) $mWd[1];
+            }
+            return [
+                'runs' => $wideRuns,
+                'raw_label' => $wideRuns > 1 ? "{$wideRuns}WD" : 'WD',
+                'event_type' => 'wide',
+            ];
+        }
+
+        // 4. Six
+        if ($runs === 6 || $upperLabelInput === '6' || str_contains($rawType, 'six')) {
+            return [
+                'runs' => 6,
+                'raw_label' => '6',
+                'event_type' => 'six',
+            ];
+        }
+
+        // 5. Four
+        if ($runs === 4 || $upperLabelInput === '4' || str_contains($rawType, 'four')) {
+            return [
+                'runs' => 4,
+                'raw_label' => '4',
+                'event_type' => 'four',
+            ];
+        }
+
+        // 6. Normal Run (1, 2, 3, 5, etc.)
+        if ($runs > 0 || (is_numeric($upperLabelInput) && (int) $upperLabelInput > 0)) {
+            $r = $runs > 0 ? $runs : (int) $upperLabelInput;
+            return [
+                'runs' => $r,
+                'raw_label' => (string) $r,
+                'event_type' => 'run',
+            ];
+        }
+
+        // 7. Dot Ball
+        return [
+            'runs' => 0,
+            'raw_label' => '0',
+            'event_type' => 'dot',
+        ];
+    }
+
+    /**
      * Get normalized recent overs history from commentary data.
      */
     public function getNormalizedRecentOvers(int|string $matchId, array $commentaryData = []): array
     {
+        $balls = $this->extractRecentBalls($commentaryData, [], 18);
+        if (empty($balls)) {
+            return [];
+        }
+
         $overs = [];
-        foreach ($commentaryData as $comm) {
-            $overNum = (int) ($comm['over'] ?? 0);
+        foreach ($balls as $b) {
+            $overNum = (int) ($b['over'] ?? 0);
             if (!isset($overs[$overNum])) {
                 $overs[$overNum] = [
                     'over_number' => $overNum,
+                    'runs_in_over' => 0,
                     'balls' => [],
                 ];
             }
+            $overs[$overNum]['runs_in_over'] += (int) ($b['runs'] ?? 0);
+            if (in_array($b['event_type'], ['wide', 'noball'], true) && (int) ($b['runs'] ?? 0) === 0) {
+                $overs[$overNum]['runs_in_over'] += 1;
+            }
             $overs[$overNum]['balls'][] = [
-                'label' => (string) ($comm['runs'] ?? $comm['text'] ?? '•'),
-                'runs' => $comm['runs'] ?? 0,
+                'label' => $b['raw_label'],
+                'runs' => $b['runs'],
+                'wicket' => $b['event_type'] === 'wicket',
+                'wides' => $b['event_type'] === 'wide',
+                'noballs' => $b['event_type'] === 'noball',
+                'event_type' => $b['event_type'],
             ];
         }
 

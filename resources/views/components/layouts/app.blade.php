@@ -158,6 +158,38 @@
         <x-cricket-loader />
 
         <div class="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased selection:bg-amber-500 selection:text-black flex flex-col">
+            @if(session('cricgems_streak_toast'))
+                @php
+                    $toast = session('cricgems_streak_toast');
+                @endphp
+                <div
+                    x-data="{ show: true }"
+                    x-init="setTimeout(() => show = false, 6000)"
+                    x-show="show"
+                    x-transition:enter="transition ease-out duration-300"
+                    x-transition:enter-start="opacity-0 -translate-y-4 scale-95"
+                    x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                    x-transition:leave="transition ease-in duration-200"
+                    x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+                    x-transition:leave-end="opacity-0 -translate-y-4 scale-95"
+                    class="fixed top-4 right-4 z-[60] max-w-sm w-[calc(100%-2rem)] bg-gradient-to-r from-slate-900 via-emerald-950/90 to-slate-900 border border-emerald-500/50 rounded-2xl p-3.5 shadow-2xl shadow-emerald-500/20 flex items-center justify-between gap-3"
+                >
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-xl shrink-0">
+                            🔥
+                        </div>
+                        <div>
+                            <div class="text-xs font-black text-emerald-300 uppercase tracking-wider">
+                                Day {{ $toast['streak'] ?? 1 }} Login Streak!
+                            </div>
+                            <div class="text-xs text-slate-200 font-semibold mt-0.5">
+                                You earned <span class="text-amber-400 font-black">+{{ $toast['reward'] ?? 5 }} CricGems</span> 💎
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" @click="show = false" class="text-slate-400 hover:text-white text-xs font-bold px-2 py-1">✕</button>
+                </div>
+            @endif
             {{ $slot ?? '' }}
             @yield('content')
         </div>

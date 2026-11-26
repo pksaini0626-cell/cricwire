@@ -185,7 +185,7 @@ class SyncStaticCricketJson extends Command
                         'status' => $match['status'] ?? 'Live',
                         'result' => $match['result'] ?? '',
                         'latest_ball' => $latestBall,
-                        'recent_balls' => array_slice($commList, 0, 12),
+                        'recent_balls' => $api->extractRecentBalls($commList, [], 18),
                         'commentary' => $commList,
                         'scorecard' => $scorecard['innings'] ?? [],
                         'highlights' => $highlights,

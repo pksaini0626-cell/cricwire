@@ -33,6 +33,12 @@ function createMatchDetailEngine(config) {
         ? window.__cricwireLiveStore[matchIdStr]
         : null;
 
+    const initRecentBalls = Array.isArray(initialConfig.recentBalls) && initialConfig.recentBalls.length > 0
+        ? initialConfig.recentBalls
+        : (Array.isArray(initLive.recentBalls) && initLive.recentBalls.length > 0
+            ? initLive.recentBalls
+            : (Array.isArray(initLive.recent_balls) ? initLive.recent_balls : []));
+
     const baseLiveState = {
         scoreA: initLive.scoreA || initLive.score_a || initLive.team_a_scores || '',
         scoreB: initLive.scoreB || initLive.score_b || initLive.team_b_scores || '',
@@ -63,8 +69,8 @@ function createMatchDetailEngine(config) {
         batsman: initLive.batsman || initLive.batters || [],
         batters: initLive.batters || initLive.batsman || [],
         bowler: initLive.bowler || [],
-        recent_balls: initLive.recentBalls || initLive.recent_balls || [],
-        recentBalls: initLive.recentBalls || initLive.recent_balls || [],
+        recent_balls: initRecentBalls,
+        recentBalls: initRecentBalls,
         commentary: initLive.commentary || [],
         serverUpdatedAt: initialConfig.serverUpdatedAt || '',
         last_wicket: null,
@@ -72,6 +78,11 @@ function createMatchDetailEngine(config) {
     };
 
     const mergedInitialLive = persisted ? { ...baseLiveState, ...persisted } : baseLiveState;
+    const resolvedInitialRecentBalls = (Array.isArray(mergedInitialLive.recentBalls) && mergedInitialLive.recentBalls.length > 0 && mergedInitialLive.recentBalls[0]?.event_type)
+        ? mergedInitialLive.recentBalls
+        : initRecentBalls;
+    mergedInitialLive.recentBalls = resolvedInitialRecentBalls;
+    mergedInitialLive.recent_balls = resolvedInitialRecentBalls;
 
     return {
         soundEnabled: false,
@@ -107,6 +118,7 @@ function createMatchDetailEngine(config) {
         isPinned: false,
         isSkipped: false,
         userVotes: {},
+        recentBalls: resolvedInitialRecentBalls,
         live: mergedInitialLive,
 
         get activeBowlers() {
@@ -432,9 +444,12 @@ function createMatchDetailEngine(config) {
                                     }];
                                 }
 
-                                // Recent balls reactive state
-                                const recentBallsList = data.recentBalls || data.recent_balls || [];
-                                if (Array.isArray(recentBallsList) && recentBallsList.length) {
+                                // Recent balls reactive state (never overwrite with empty array)
+                                const recentBallsList = (Array.isArray(data.recent_balls) && data.recent_balls.length > 0)
+                                    ? data.recent_balls
+                                    : ((Array.isArray(data.recentBalls) && data.recentBalls.length > 0) ? data.recentBalls : null);
+                                if (recentBallsList) {
+                                    this.recentBalls = recentBallsList;
                                     updated.recentBalls = recentBallsList;
                                     updated.recent_balls = recentBallsList;
                                 }

@@ -187,6 +187,15 @@ class LiveMatchController extends Controller
             }
             $data['is_live'] = ($bucket === 'live');
             $data['is_completed'] = false;
+            if (empty($data['recent_balls']) || !is_array($data['recent_balls']) || !isset($data['recent_balls'][0]['event_type'])) {
+                $data['recent_balls'] = $this->apiService->extractRecentBalls(
+                    is_array($data['commentary'] ?? null) ? $data['commentary'] : ($data['recent_balls'] ?? []),
+                    is_array($data['over_history'] ?? $data['overHistory'] ?? $data['recent_overs'] ?? null)
+                        ? ($data['over_history'] ?? $data['overHistory'] ?? $data['recent_overs'])
+                        : [],
+                    18
+                );
+            }
             $data['server_updated_at'] = $data['server_updated_at'] ?? ($data['updated_at'] ?? now()->toIso8601String());
             $data['server_fetched_at'] = $data['server_updated_at'];
             $data['poll_interval_ms'] = $data['poll_interval_ms'] ?? ($bucket === 'live' ? 8000 : 15000);

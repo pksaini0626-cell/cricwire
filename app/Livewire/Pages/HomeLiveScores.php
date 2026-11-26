@@ -5,6 +5,8 @@ namespace App\Livewire\Pages;
 use App\Helpers\CricketMatchFormatter;
 use App\Models\ManagedMatch;
 use App\Services\Cricket\CricketLiveApiService;
+use App\Services\CricGemsService;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
 class HomeLiveScores extends Component
@@ -13,6 +15,13 @@ class HomeLiveScores extends Component
     public int $upcomingPage = 1;
     public int $finishedPage = 1;
     public int $perPage = 10;
+
+    public function mount(CricGemsService $cricGemsService): void
+    {
+        if (Auth::check()) {
+            $cricGemsService->syncOnAuthenticatedVisit(Auth::user());
+        }
+    }
 
     public function setTab(string $tab): void
     {

@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\HandleSeoRedirects::class,
         );
         $middleware->web(append: [
+            \App\Http\Middleware\CaptureReferralCode::class,
             \App\Http\Middleware\TrackSiteVisitors::class,
         ]);
     })

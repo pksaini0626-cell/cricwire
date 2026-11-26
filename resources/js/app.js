@@ -6,6 +6,11 @@ import './bootstrap';
 function createMatchDetailEngine(config) {
     const initialConfig = config || {};
     const initLive = initialConfig.live || {};
+    const initRecentBalls = Array.isArray(initialConfig.recentBalls) && initialConfig.recentBalls.length > 0
+        ? initialConfig.recentBalls
+        : (Array.isArray(initLive.recentBalls) && initLive.recentBalls.length > 0
+            ? initLive.recentBalls
+            : (Array.isArray(initLive.recent_balls) ? initLive.recent_balls : []));
 
     return {
         soundEnabled: false,
@@ -33,6 +38,7 @@ function createMatchDetailEngine(config) {
         isPinned: false,
         isSkipped: false,
         userVotes: {},
+        recentBalls: initRecentBalls,
         live: {
             team_a_scores: '',
             team_b_scores: '',
@@ -56,8 +62,8 @@ function createMatchDetailEngine(config) {
             batsman: [],
             batters: [],
             bowler: [],
-            recent_balls: [],
-            recentBalls: [],
+            recent_balls: initRecentBalls,
+            recentBalls: initRecentBalls,
             commentary: [],
             last_wicket: null,
             ...initLive
@@ -301,9 +307,12 @@ function createMatchDetailEngine(config) {
                     updated.bowler = [bowlerData];
                 }
 
-                // Recent balls reactive state
-                const recentBallsList = data.recentBalls || data.recent_balls || [];
-                if (Array.isArray(recentBallsList) && recentBallsList.length) {
+                // Recent balls reactive state (never overwrite with empty array)
+                const recentBallsList = (Array.isArray(data.recent_balls) && data.recent_balls.length > 0)
+                    ? data.recent_balls
+                    : ((Array.isArray(data.recentBalls) && data.recentBalls.length > 0) ? data.recentBalls : null);
+                if (recentBallsList) {
+                    this.recentBalls = recentBallsList;
                     updated.recentBalls = recentBallsList;
                     updated.recent_balls = recentBallsList;
                 }

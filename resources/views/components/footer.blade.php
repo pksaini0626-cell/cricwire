@@ -84,6 +84,7 @@
                     <li><a href="/cricket-schedule" wire:navigate class="hover:text-amber-400 transition">Schedule</a></li>
                     <li><a href="/cricket-schedule/upcoming/international" wire:navigate class="hover:text-amber-400 transition">Series</a></li>
                     <li><a href="/cricket-news" wire:navigate class="hover:text-amber-400 transition">News</a></li>
+                    <li><a href="{{ route('guest-post.create') }}" wire:navigate class="text-amber-400 hover:text-amber-300 font-semibold transition">Write for Us ✍️</a></li>
                     <li><a href="/cricket-rankings" wire:navigate class="hover:text-amber-400 transition">Rankings</a></li>
                     <li><a href="/polls" wire:navigate class="hover:text-amber-400 transition">Polls</a></li>
                 </ul>

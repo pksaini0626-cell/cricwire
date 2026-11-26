@@ -1,7 +1,60 @@
+@php
+    $isMatchCompleted = static function ($m): bool {
+        if (!is_array($m)) {
+            return true;
+        }
+        if (!empty($m['is_completed']) || !empty($m['isCompleted'])) {
+            return true;
+        }
+        $st = strtolower(trim((string) ($m['state'] ?? $m['status'] ?? $m['match_status'] ?? '')));
+        if (in_array($st, ['finished', 'completed', 'complete', 'abandoned', '3'], true)) {
+            return true;
+        }
+        if (!empty($m['result']) && trim((string) $m['result']) !== '') {
+            return true;
+        }
+        return \App\Services\Cricket\CricketLiveApiService::isCompletedMatch($m);
+    };
+
+    $activeLiveMatches = array_values(array_filter($liveMatches ?? [], fn ($m) => !$isMatchCompleted($m)));
+    $activeUpcomingMatches = array_values(array_filter($upcomingMatches ?? [], fn ($m) => !$isMatchCompleted($m)));
+
+    $activeLiveSeed = array_values(array_filter(array_map(static function ($m) {
+        $id = (string) ($m['match_id'] ?? $m['id'] ?? '');
+        return $id !== '' ? ['id' => $id, 'match_id' => $id, 'isCompleted' => false, 'status' => 'live'] : null;
+    }, $activeLiveMatches)));
+
+    $activeUpcomingSeed = array_values(array_filter(array_map(static function ($m) {
+        $id = (string) ($m['match_id'] ?? $m['id'] ?? '');
+        return $id !== '' ? ['id' => $id, 'match_id' => $id, 'isCompleted' => false, 'status' => 'upcoming'] : null;
+    }, $activeUpcomingMatches)));
+
+    $activePinnableMatches = [];
+    $seenPinIds = [];
+    foreach ($activeLiveMatches as $m) {
+        $id = (string) ($m['match_id'] ?? $m['id'] ?? '');
+        if ($id !== '' && !isset($seenPinIds[$id])) {
+            $seenPinIds[$id] = true;
+            $m['_bucket_status'] = 'live';
+            $activePinnableMatches[] = $m;
+        }
+    }
+    foreach ($activeUpcomingMatches as $m) {
+        $id = (string) ($m['match_id'] ?? $m['id'] ?? '');
+        if ($id !== '' && !isset($seenPinIds[$id])) {
+            $seenPinIds[$id] = true;
+            $m['_bucket_status'] = 'upcoming';
+            $activePinnableMatches[] = $m;
+        }
+    }
+@endphp
+
 <div 
     class="cricket-page"
     x-data="{
-        pinnedIds: [],
+        live: @js($activeLiveSeed),
+        upcoming: @js($activeUpcomingSeed),
+        pinnedMatches: [],
         skippedIds: [],
         liveTickerData: {},
         pollInterval: null,
@@ -10,6 +63,43 @@
         isLocal: @js(app()->environment('local')),
         hasAutoPollParam: new URLSearchParams(window.location.search).get('autopoll') === '1',
         isRefreshing: false,
+        get pinnedIds() {
+            return this.pinnedMatches;
+        },
+        get activeMatchIdSet() {
+            const ids = new Set();
+            const isActive = (m) => {
+                if (!m) return false;
+                if (m.isCompleted === true || m.is_completed === true) return false;
+                const st = String(m.state || m.status || m.match_status || '').trim().toLowerCase();
+                if (['finished', 'completed', 'complete', 'abandoned', '3'].includes(st)) return false;
+                if (m.result && String(m.result).trim() !== '') return false;
+                return true;
+            };
+            (this.live || []).forEach(m => {
+                const id = String(m?.match_id ?? m?.id ?? '');
+                if (id && isActive(m)) ids.add(id);
+            });
+            (this.upcoming || []).forEach(m => {
+                const id = String(m?.match_id ?? m?.id ?? '');
+                if (id && isActive(m)) ids.add(id);
+            });
+            return ids;
+        },
+        get activePinnedMatches() {
+            const activeIds = this.activeMatchIdSet;
+            const pinnedSet = new Set((this.pinnedMatches || []).map(id => String(id)));
+            const skippedSet = new Set((this.skippedIds || []).map(id => String(id)));
+            const seen = new Set();
+            const matched = [];
+            [...(this.live || []), ...(this.upcoming || [])].forEach(m => {
+                const id = String(m?.match_id ?? m?.id ?? '');
+                if (!id || seen.has(id) || !activeIds.has(id) || !pinnedSet.has(id) || skippedSet.has(id)) return;
+                seen.add(id);
+                matched.push(m);
+            });
+            return matched;
+        },
         setTab(tab) {
             this.activeTab = tab;
             $wire.setTab(tab);
@@ -17,6 +107,7 @@
         init() {
             this.syncPreferences();
             window.addEventListener('match-pin-updated', () => this.syncPreferences());
+            window.addEventListener('pinned-matches-updated', () => this.syncPreferences());
             window.addEventListener('match-skip-updated', () => this.syncPreferences());
 
             // Track user activity (mouse, touch, scroll, keydown) to pause polling after 120s (2 minutes) idle
@@ -80,7 +171,28 @@
                 const json = await res.json();
                 if (!json) return;
                 const data = (json && json.data) ? json.data : (json || {});
-                const liveList = data.live || [];
+                const liveList = Array.isArray(data.live) ? data.live : [];
+
+                // Update live (and upcoming if provided) and prune finished/absent pinned matches
+                this.live = liveList
+                    .filter(m => {
+                        if (!m || m.isCompleted === true || m.is_completed === true) return false;
+                        const st = String(m.state || m.status || m.match_status || '').trim().toLowerCase();
+                        return !['finished', 'completed', 'complete', 'abandoned', '3'].includes(st) && !(m.result && String(m.result).trim() !== '');
+                    })
+                    .map(m => {
+                        const mId = String(m.match_id || m.id || '');
+                        return { id: mId, match_id: mId, isCompleted: false, status: 'live', ...m };
+                    });
+                if (Array.isArray(data.upcoming)) {
+                    this.upcoming = data.upcoming
+                        .filter(m => !m?.isCompleted && !m?.is_completed && !(m?.result && String(m.result).trim() !== ''))
+                        .map(m => {
+                            const mId = String(m.match_id || m.id || '');
+                            return { id: mId, match_id: mId, isCompleted: false, status: 'upcoming', ...m };
+                        });
+                }
+                this.prunePinnedMatches();
 
                 // Dispatch updates ONLY for active live matches (never overwrite hydrated DB finished scores)
                 liveList.forEach(m => {
@@ -98,9 +210,37 @@
                 // Ignore transient network errors
             }
         },
+        prunePinnedMatches() {
+            let rawPinned = [];
+            try {
+                const parsed = JSON.parse(localStorage.getItem('pinned_matches') || '[]');
+                rawPinned = Array.isArray(parsed) ? parsed.map(id => String(id)).filter(Boolean) : [];
+            } catch (e) {
+                rawPinned = [];
+            }
+            const activeIds = this.activeMatchIdSet;
+            const pruned = [];
+            const seen = new Set();
+            rawPinned.forEach(id => {
+                if (!seen.has(id) && activeIds.has(id)) {
+                    seen.add(id);
+                    pruned.push(id);
+                }
+            });
+            this.pinnedMatches = pruned;
+            const prunedJson = JSON.stringify(pruned);
+            if (JSON.stringify(rawPinned) !== prunedJson) {
+                localStorage.setItem('pinned_matches', prunedJson);
+            }
+        },
         syncPreferences() {
-            this.pinnedIds = JSON.parse(localStorage.getItem('pinned_matches') || '[]');
-            this.skippedIds = JSON.parse(localStorage.getItem('skipped_matches') || '[]');
+            this.prunePinnedMatches();
+            try {
+                const skipped = JSON.parse(localStorage.getItem('skipped_matches') || '[]');
+                this.skippedIds = Array.isArray(skipped) ? skipped.map(id => String(id)).filter(Boolean) : [];
+            } catch (e) {
+                this.skippedIds = [];
+            }
         },
         resetSkipped() {
             localStorage.removeItem('skipped_matches');
@@ -376,21 +516,24 @@
                 </div>
 
                 <!-- User Pinned Matches Container -->
-                <div x-show="pinnedIds.length > 0" x-cloak class="cricket-pinned-wrap">
+                <div x-show="activePinnedMatches.length > 0" x-cloak class="cricket-pinned-wrap">
                     <div class="flex items-center justify-between px-1">
                         <span class="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
                             <span>📌</span> Pinned Matches
                         </span>
-                        <span class="text-[10px] text-[#94A3B8] font-semibold" x-text="pinnedIds.length + ' Pinned'"></span>
+                        <span class="text-[10px] text-[#94A3B8] font-semibold">
+                            <span x-text="activePinnedMatches.length"></span> Pinned
+                        </span>
                     </div>
                     
-                    @foreach($allCurrentMatches as $match)
+                    @foreach($activePinnableMatches as $match)
                         @php
                             $pId = (string) ($match['match_id'] ?? $match['id'] ?? '');
+                            $pStatus = $match['_bucket_status'] ?? 'live';
                         @endphp
                         @if($pId)
-                            <div x-show="pinnedIds.includes('{{ $pId }}') && !skippedIds.includes('{{ $pId }}')">
-                                <x-match-card :match="$match" :status="$activeTab === 'live' ? null : $activeTab" />
+                            <div wire:key="pinned-card-{{ $pId }}" x-show="pinnedMatches.includes('{{ $pId }}') && !skippedIds.includes('{{ $pId }}')">
+                                <x-match-card :match="$match" :status="$pStatus" />
                             </div>
                         @endif
                     @endforeach
@@ -401,7 +544,7 @@
                     @if($activeTab === 'live')
                         @forelse($liveMatches as $match)
                             @php $mId = (string) ($match['match_id'] ?? $match['id'] ?? ''); @endphp
-                            <div x-show="!pinnedIds.includes('{{ $mId }}') && !skippedIds.includes('{{ $mId }}')">
+                            <div x-show="!pinnedMatches.includes('{{ $mId }}') && !skippedIds.includes('{{ $mId }}')">
                                 <x-match-card :match="$match" />
                             </div>
                         @empty
@@ -414,7 +557,7 @@
                     @elseif($activeTab === 'upcoming')
                         @forelse($paginatedUpcomingMatches as $match)
                             @php $mId = (string) ($match['match_id'] ?? $match['id'] ?? ''); @endphp
-                            <div x-show="!pinnedIds.includes('{{ $mId }}') && !skippedIds.includes('{{ $mId }}')">
+                            <div x-show="!pinnedMatches.includes('{{ $mId }}') && !skippedIds.includes('{{ $mId }}')">
                                 <x-match-card :match="$match" status="upcoming" />
                             </div>
                         @empty
@@ -456,7 +599,7 @@
                     @elseif($activeTab === 'finished')
                         @forelse($paginatedFinishedMatches as $match)
                             @php $mId = (string) ($match['match_id'] ?? $match['id'] ?? ''); @endphp
-                            <div x-show="!pinnedIds.includes('{{ $mId }}') && !skippedIds.includes('{{ $mId }}')">
+                            <div x-show="!pinnedMatches.includes('{{ $mId }}') && !skippedIds.includes('{{ $mId }}')">
                                 <x-match-card :match="$match" status="finished" />
                             </div>
                         @empty

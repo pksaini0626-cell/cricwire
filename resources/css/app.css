@@ -14,3 +14,65 @@
 [x-cloak] {
     display: none !important;
 }
+
+@keyframes bounceOnce {
+    0% {
+        transform: scale(0.8);
+        opacity: 0.75;
+    }
+    45% {
+        transform: scale(1.16) translateY(-4px);
+        opacity: 1;
+    }
+    75% {
+        transform: scale(0.96) translateY(0);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+@keyframes sixShimmerPop {
+    0% {
+        transform: scale(0.84);
+        box-shadow: 0 0 0 rgba(245, 158, 11, 0);
+    }
+    50% {
+        transform: scale(1.14) translateY(-3px);
+        box-shadow: 0 0 18px rgba(245, 158, 11, 0.65);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 12px rgba(245, 158, 11, 0.35);
+    }
+}
+
+@keyframes wicketShake {
+    0%, 100% {
+        transform: translateX(0);
+    }
+    20% {
+        transform: translateX(-3px) rotate(-3deg);
+    }
+    40% {
+        transform: translateX(3px) rotate(3deg);
+    }
+    60% {
+        transform: translateX(-2px) rotate(-2deg);
+    }
+    80% {
+        transform: translateX(2px) rotate(2deg);
+    }
+}
+
+.animate-bounce-once {
+    animation: bounceOnce 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.animate-six-pop {
+    animation: sixShimmerPop 0.75s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.animate-wicket-shake {
+    animation: wicketShake 0.55s ease-in-out both;
+}

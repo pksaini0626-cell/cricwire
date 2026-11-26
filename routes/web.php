@@ -78,6 +78,7 @@ Route::get('/cricket-rankings/{gender}', fn () => redirect()->route('rankings', 
 // Editorial & Fan Engagement
 Route::get('/cricket-news', App\Livewire\Pages\NewsIndex::class)->name('news.index');
 Route::get('/cricket-news/{article:slug}', App\Livewire\Pages\NewsShow::class)->name('news.show');
+Route::get('/write-for-us', \App\Livewire\Pages\WriteForUsPage::class)->name('guest-post.create');
 Route::get('/polls', App\Livewire\Pages\PollsPage::class)->name('polls');
 
 // User Settings & More Hub (Formerly Profile)
@@ -92,6 +93,7 @@ Route::view('/about-us', 'legal.about')->name('about');
 Route::get('/privacy', fn () => redirect()->route('privacy.policy', [], 301))->name('privacy');
 
 // OAuth Authentication & Session Logout
+Route::get('/auth/google', [SocialiteController::class, 'redirect'])->name('auth.google');
 Route::get('/auth/google/redirect', [SocialiteController::class, 'redirect'])->name('google.redirect');
 Route::get('/auth/google/callback', [SocialiteController::class, 'callback'])->name('google.callback');
 Route::post('/logout', function () {

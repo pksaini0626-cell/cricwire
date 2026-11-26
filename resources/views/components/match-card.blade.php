@@ -112,19 +112,33 @@
         get shouldShowTossStrip() {
             return this.showTossBanner && this.status !== 'finished' && !this.hasRealScore && ['pending', 'delayed', 'decided'].includes(this.tossStatus);
         },
-        init() {
-            const pinned = JSON.parse(localStorage.getItem('pinned_matches') || '[]');
-            const skipped = JSON.parse(localStorage.getItem('skipped_matches') || '[]');
+        syncPinState() {
+            let pinned = [];
+            let skipped = [];
+            try {
+                const rawPinned = JSON.parse(localStorage.getItem('pinned_matches') || '[]');
+                pinned = Array.isArray(rawPinned) ? rawPinned.map(id => String(id)) : [];
+            } catch (e) { pinned = []; }
+            try {
+                const rawSkipped = JSON.parse(localStorage.getItem('skipped_matches') || '[]');
+                skipped = Array.isArray(rawSkipped) ? rawSkipped.map(id => String(id)) : [];
+            } catch (e) { skipped = []; }
 
             if (['finished', 'completed', 'abandoned'].includes(this.status)) {
-                const updated = pinned.filter(id => String(id) !== String(this.matchId));
-                localStorage.setItem('pinned_matches', JSON.stringify(updated));
+                const updated = pinned.filter(id => id !== String(this.matchId));
+                if (updated.length !== pinned.length) {
+                    localStorage.setItem('pinned_matches', JSON.stringify(updated));
+                }
                 this.isPinned = false;
             } else {
                 this.isPinned = pinned.includes(String(this.matchId));
             }
-
             this.isSkipped = skipped.includes(String(this.matchId));
+        },
+        init() {
+            this.syncPinState();
+            window.addEventListener('match-pin-updated', () => this.syncPinState());
+            window.addEventListener('pinned-matches-updated', () => this.syncPinState());
 
             if (this.status !== 'finished') {
                 window.addEventListener('ticker-score-updated', (event) => {
@@ -219,7 +233,11 @@
             }
         },
         togglePin() {
-            let pinned = JSON.parse(localStorage.getItem('pinned_matches') || '[]');
+            if (['finished', 'completed', 'abandoned'].includes(this.status)) {
+                this.isPinned = false;
+                return;
+            }
+            let pinned = (JSON.parse(localStorage.getItem('pinned_matches') || '[]') || []).map(i => String(i)).filter(Boolean);
             const id = String(this.matchId);
             if (pinned.includes(id)) {
                 pinned = pinned.filter(i => i !== id);

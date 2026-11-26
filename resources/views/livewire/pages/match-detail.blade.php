@@ -1,7 +1,7 @@
 <div 
     class="min-h-screen bg-slate-950 text-slate-100 pb-24 font-sans antialiased flex flex-col selection:bg-rose-500 selection:text-white transition-all duration-300"
     :class="{ 'ring-2 ring-amber-400': isFlashing }"
-    x-data="matchDetailEngine({ matchId: '{{ $matchId }}', tab: '{{ $tab }}', isLive: {{ (!empty($isLive) && empty($isCompleted)) ? 'true' : 'false' }}, isFinished: {{ (!empty($isFinished) || !empty($isCompleted)) ? 'true' : 'false' }}, pollSeconds: {{ $pollSeconds ?? 8 }}, pollMs: {{ ($pollSeconds ?? 8) * 1000 }}, serverUpdatedAt: @js($match['server_updated_at'] ?? $match['updated_at'] ?? ''), isLocal: @js(app()->environment('local')), allowPolling: {{ (empty($isCompleted) && empty($isFinished) && (!empty($isLive) || !empty($tossState['show_toss_banner']))) ? 'true' : 'false' }}, live: { scoreA: @js($match['score_a'] ?? $match['team_a_scores'] ?? ''), scoreB: @js($match['score_b'] ?? $match['team_b_scores'] ?? ''), combinedScore: @js($match['score'] ?? ''), statusText: @js($match['need_run_ball'] ?? $match['status'] ?? ''), toss: @js($match['toss'] ?? ''), show_toss_banner: @js((bool) ($tossState['show_toss_banner'] ?? false)), toss_status: @js((string) ($tossState['toss_status'] ?? 'none')), toss_text: @js((string) ($tossState['toss_text'] ?? '')), batsman: @js(array_values(array_slice($liveBatters ?? [], 0, 2))), bowler: @js(array_values(array_slice($liveBowlers ?? [], 0, 2))), recentBalls: @js(array_values(array_slice($match['recent_balls'] ?? [], 0, 12))), commentary: @js(array_values(array_slice($commentaryData ?? [], 0, 30))) } })"
+    x-data="matchDetailEngine({ matchId: '{{ $matchId }}', tab: '{{ $tab }}', isLive: {{ (!empty($isLive) && empty($isCompleted)) ? 'true' : 'false' }}, isFinished: {{ (!empty($isFinished) || !empty($isCompleted)) ? 'true' : 'false' }}, pollSeconds: {{ $pollSeconds ?? 8 }}, pollMs: {{ ($pollSeconds ?? 8) * 1000 }}, serverUpdatedAt: @js($match['server_updated_at'] ?? $match['updated_at'] ?? ''), isLocal: @js(app()->environment('local')), allowPolling: {{ (empty($isCompleted) && empty($isFinished) && (!empty($isLive) || !empty($tossState['show_toss_banner']))) ? 'true' : 'false' }}, recentBalls: @js($recentBalls ?? []), live: { scoreA: @js($match['score_a'] ?? $match['team_a_scores'] ?? ''), scoreB: @js($match['score_b'] ?? $match['team_b_scores'] ?? ''), combinedScore: @js($match['score'] ?? ''), statusText: @js($match['need_run_ball'] ?? $match['status'] ?? ''), toss: @js($match['toss'] ?? ''), show_toss_banner: @js((bool) ($tossState['show_toss_banner'] ?? false)), toss_status: @js((string) ($tossState['toss_status'] ?? 'none')), toss_text: @js((string) ($tossState['toss_text'] ?? '')), batsman: @js(array_values(array_slice($liveBatters ?? [], 0, 2))), bowler: @js(array_values(array_slice($liveBowlers ?? [], 0, 2))), recentBalls: @js($recentBalls ?? []), recent_balls: @js($recentBalls ?? []), commentary: @js(array_values(array_slice($commentaryData ?? [], 0, 30))) } })"
 >
     <script wire:ignore src="{{ asset('js/match-detail-engine.js') }}?v={{ @filemtime(public_path('js/match-detail-engine.js')) ?: 1 }}"></script>
 
@@ -354,7 +354,8 @@
             'batsman' => array_values(array_slice($liveBatters, 0, 2)),
             'batters' => array_values(array_slice($liveBatters, 0, 2)),
             'bowler' => array_values($activeBowlerList),
-            'recent_balls' => array_values(array_slice($allCommentaryItems, 0, 12)),
+            'recent_balls' => array_values($recentBalls ?? []),
+            'recentBalls' => array_values($recentBalls ?? []),
             'last_wicket' => $lastWicket,
         ];
     @endphp
@@ -1205,7 +1206,7 @@
     <main class="flex-1 p-3.5 space-y-3.5">
         @if($tab === 'live-line')
             <!-- Ball-by-ball Over Bubbles (Recent Overs & Live Ball Strip) -->
-            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-md space-y-3">
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 shadow-md space-y-3">
                 <div class="flex items-center justify-between text-[11px] font-semibold text-slate-400">
                     <span class="flex items-center gap-1.5">
                         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -1214,83 +1215,130 @@
                     <span class="text-slate-500 font-mono text-[10px] uppercase">Live Over History</span>
                 </div>
 
-                @if(!empty($recentOvers))
-                    <!-- Dynamic Polled Recent Balls Strip (replaces static snapshot once live poll arrives) -->
-                    <div x-show="live.recentBalls && live.recentBalls.length" x-cloak class="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar">
-                        <template x-for="(cBall, bIndex) in (live.recentBalls || live.recent_balls || [])" :key="bIndex">
-                            <span class="w-7 h-7 sm:w-8 sm:h-8 rounded-full border font-mono font-bold flex items-center justify-center shrink-0 shadow-sm text-xs"
-                                :class="{
-                                    'bg-rose-600 border-rose-500 text-white animate-pulse shadow-sm shadow-rose-600/50': (cBall.wicket && cBall.wicket != '0') || String(cBall.type || '').toLowerCase().includes('wicket'),
-                                    'bg-amber-500/20 border-amber-400 text-amber-300 text-[10px] lowercase': ((cBall.wides && cBall.wides != '0') || (cBall.noballs && cBall.noballs != '0')),
-                                    'bg-sky-500/20 border-sky-400 text-sky-300 shadow-sm shadow-sky-500/20': (String(cBall.runs) === '4'),
-                                    'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-sm shadow-emerald-500/30': (String(cBall.runs) === '6'),
-                                    'bg-slate-900 border-slate-700/60 text-slate-400': (String(cBall.runs) === '0' && !cBall.wicket && !cBall.wides && !cBall.noballs),
-                                    'bg-slate-800/80 border-slate-700/80 text-slate-200': (String(cBall.runs) !== '4' && String(cBall.runs) !== '6' && String(cBall.runs) !== '0' && !cBall.wicket && !cBall.wides && !cBall.noballs)
-                                }"
-                                x-text="((cBall.wicket && cBall.wicket != '0') || String(cBall.type || '').toLowerCase().includes('wicket')) ? 'W' : ((cBall.wides && cBall.wides != '0') ? 'wd' : ((cBall.noballs && cBall.noballs != '0') ? 'nb' : (cBall.runs ?? '•')))"
-                                :title="(cBall.over || cBall.overs || '') + ' ov'">
-                            </span>
-                        </template>
-                    </div>
-                    <!-- Grouped Over-by-Over History List (Latest First) -->
-                    <div x-show="!(live.recentBalls && live.recentBalls.length)" class="space-y-2">
-                        @foreach(array_slice($recentOvers, 0, 4) as $oData)
-                            <div class="flex items-center gap-2 overflow-x-auto py-1 border-b border-slate-800/40 pb-2 last:border-b-0 last:pb-0 no-scrollbar">
-                                <div class="shrink-0 flex items-center gap-1.5 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 text-xs">
-                                    <span class="font-bold text-amber-400 font-mono">Ov {{ $oData['over_number'] }}:</span>
-                                    @if(!empty($oData['bowler']))
-                                        <span class="text-slate-400 text-[10px] truncate max-w-[70px]">{{ $oData['bowler'] }}</span>
-                                    @endif
-                                    <span class="font-black text-slate-300 text-[10px] font-mono bg-slate-900 px-1 rounded">{{ $oData['runs_in_over'] ?? 0 }}r</span>
-                                </div>
+                <!-- Dynamic & SSR Synchronized Ball-by-Ball Strip (Chronological Left-to-Right, Auto-Scrolled to Newest) -->
+                <div
+                    x-ref="recentBallsStrip"
+                    x-init="
+                        $nextTick(() => {
+                            if ($refs.recentBallsStrip) {
+                                $refs.recentBallsStrip.scrollLeft = $refs.recentBallsStrip.scrollWidth;
+                            }
+                        });
+                        $watch('recentBalls', () => {
+                            $nextTick(() => {
+                                if ($refs.recentBallsStrip) {
+                                    $refs.recentBallsStrip.scrollTo({ left: $refs.recentBallsStrip.scrollWidth, behavior: 'smooth' });
+                                }
+                            });
+                        });
+                    "
+                    class="flex items-center gap-1.5 overflow-x-auto py-1.5 px-0.5 no-scrollbar scroll-smooth"
+                >
+                    <template x-if="recentBalls && recentBalls.length > 0">
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <template x-for="(ball, bIndex) in recentBalls" :key="(ball.key || bIndex) + '-' + bIndex">
                                 <div class="flex items-center gap-1.5 shrink-0">
-                                    @foreach($oData['balls'] as $b)
-                                        @php
-                                            $bLabel = is_array($b) ? ($b['label'] ?? '') : (string)$b;
-                                            $bRuns = is_array($b) ? ($b['runs'] ?? 0) : (is_numeric($b) ? (int)$b : 0);
-                                            $isW = is_array($b) ? (!empty($b['wicket']) || $bLabel === 'W') : ($bLabel === 'W');
-                                            $isWd = is_array($b) ? ($bLabel === 'wd') : ($bLabel === 'wd');
-                                            $isNb = is_array($b) ? ($bLabel === 'nb') : ($bLabel === 'nb');
-                                        @endphp
-                                        <span class="w-7 h-7 sm:w-8 sm:h-8 rounded-full border font-mono font-bold flex items-center justify-center shrink-0 shadow-sm text-xs
-                                            {{ $isW ? 'bg-rose-600 border-rose-500 text-white animate-pulse shadow-sm shadow-rose-600/50' : '' }}
-                                            {{ ($isWd || $isNb) ? 'bg-amber-500/20 border-amber-400 text-amber-300 text-[10px] lowercase' : '' }}
-                                            {{ (!$isW && !$isWd && !$isNb && (string)$bLabel === '6') ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-sm shadow-emerald-500/30' : '' }}
-                                            {{ (!$isW && !$isWd && !$isNb && (string)$bLabel === '4') ? 'bg-sky-500/20 border-sky-400 text-sky-300 shadow-sm shadow-sky-500/20' : '' }}
-                                            {{ (!$isW && !$isWd && !$isNb && ((string)$bLabel === '0' || $bLabel === '•')) ? 'bg-slate-900 border-slate-700/60 text-slate-400' : '' }}
-                                            {{ (!$isW && !$isWd && !$isNb && in_array((string)$bLabel, ['1','2','3','5'], true)) ? 'bg-slate-800/80 border-slate-700/80 text-slate-200' : '' }}
-                                        ">
-                                            {{ $bLabel ?: '•' }}
+                                    <!-- Over Badge at start of each over -->
+                                    <template x-if="bIndex === 0 || (recentBalls[bIndex - 1] && recentBalls[bIndex - 1].over !== ball.over)">
+                                        <span class="px-2 py-1 rounded-lg bg-slate-950 border border-slate-800 text-[10px] font-mono font-bold text-amber-400/90 shrink-0" x-text="'Ov ' + ball.over"></span>
+                                    </template>
+
+                                    <!-- Four (4 🎉) -->
+                                    <template x-if="ball.event_type === 'four'">
+                                        <span
+                                            class="inline-flex items-center gap-1 px-2.5 h-8 rounded-full border font-mono font-black text-xs shrink-0 bg-gradient-to-r from-emerald-500/25 to-cyan-500/25 border-emerald-400/70 text-emerald-200 shadow-[0_0_12px_rgba(16,185,129,0.35)] animate-bounce-once"
+                                            :class="{ 'ring-2 ring-emerald-400/60': bIndex === recentBalls.length - 1 }"
+                                            :title="'Over ' + ball.over + '.' + ball.ball + ' • FOUR!'"
+                                        >
+                                            <span x-text="ball.raw_label || '4'"></span>
+                                            <span class="text-xs leading-none">🎉</span>
                                         </span>
-                                    @endforeach
+                                    </template>
+
+                                    <!-- Six (6 🚀) -->
+                                    <template x-if="ball.event_type === 'six'">
+                                        <span
+                                            class="inline-flex items-center gap-1 px-2.5 h-8 rounded-full border font-mono font-black text-xs shrink-0 bg-gradient-to-r from-amber-500/30 to-yellow-500/25 border-amber-400/80 text-amber-200 shadow-[0_0_14px_rgba(245,158,11,0.45)] animate-six-pop"
+                                            :class="{ 'ring-2 ring-amber-400/70': bIndex === recentBalls.length - 1 }"
+                                            :title="'Over ' + ball.over + '.' + ball.ball + ' • SIX!'"
+                                        >
+                                            <span x-text="ball.raw_label || '6'"></span>
+                                            <span class="text-xs leading-none">🚀</span>
+                                        </span>
+                                    </template>
+
+                                    <!-- Wicket (W 😢) -->
+                                    <template x-if="ball.event_type === 'wicket'">
+                                        <span
+                                            class="inline-flex items-center gap-1 px-2.5 h-8 rounded-full border font-mono font-black text-xs shrink-0 bg-rose-600/90 border-rose-400 text-white shadow-[0_0_12px_rgba(244,63,94,0.5)] animate-wicket-shake"
+                                            :class="{ 'ring-2 ring-rose-400/70': bIndex === recentBalls.length - 1 }"
+                                            :title="'Over ' + ball.over + '.' + ball.ball + ' • WICKET!'"
+                                        >
+                                            <span x-text="ball.raw_label || 'W'"></span>
+                                            <span class="text-xs leading-none">😢</span>
+                                        </span>
+                                    </template>
+
+                                    <!-- No Ball (Blinking Red Dot + NB) -->
+                                    <template x-if="ball.event_type === 'noball'">
+                                        <span
+                                            class="inline-flex items-center gap-1.5 px-2.5 h-8 rounded-full border font-mono font-black text-[11px] shrink-0 bg-red-500/20 border-red-500/70 text-red-200 shadow-[0_0_10px_rgba(239,68,68,0.35)]"
+                                            :title="'Over ' + ball.over + '.' + ball.ball + ' • No Ball'"
+                                        >
+                                            <span class="relative flex h-2 w-2 shrink-0">
+                                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-85"></span>
+                                                <span class="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                                            </span>
+                                            <span x-text="ball.raw_label || 'NB'"></span>
+                                        </span>
+                                    </template>
+
+                                    <!-- Wide (WD) -->
+                                    <template x-if="ball.event_type === 'wide'">
+                                        <span
+                                            class="inline-flex items-center justify-center px-2.5 h-8 rounded-full border font-mono font-bold text-[11px] shrink-0 bg-orange-500/20 border-orange-400/60 text-orange-200"
+                                            :title="'Over ' + ball.over + '.' + ball.ball + ' • Wide'"
+                                            x-text="ball.raw_label || 'WD'"
+                                        ></span>
+                                    </template>
+
+                                    <!-- Dot Ball (• / 0) -->
+                                    <template x-if="ball.event_type === 'dot'">
+                                        <span
+                                            class="w-8 h-8 rounded-full border font-mono font-bold text-xs flex items-center justify-center shrink-0 bg-slate-900 border-slate-700/70 text-slate-400"
+                                            :class="{ 'ring-1 ring-slate-500/60': bIndex === recentBalls.length - 1 }"
+                                            :title="'Over ' + ball.over + '.' + ball.ball + ' • Dot ball'"
+                                        >•</span>
+                                    </template>
+
+                                    <!-- Normal Runs (1, 2, 3, 5) -->
+                                    <template x-if="ball.event_type === 'run'">
+                                        <span
+                                            class="w-8 h-8 rounded-full border font-mono font-bold text-xs flex items-center justify-center shrink-0 bg-slate-800 border-slate-700 text-slate-200 shadow-sm"
+                                            :class="{ 'ring-1 ring-amber-400/50 text-white': bIndex === recentBalls.length - 1 }"
+                                            :title="'Over ' + ball.over + '.' + ball.ball + ' • ' + ball.runs + ' run(s)'"
+                                            x-text="ball.raw_label"
+                                        ></span>
+                                    </template>
+
+                                    <!-- Over End Divider -->
+                                    <template x-if="ball.is_over_end && bIndex < recentBalls.length - 1">
+                                        <span class="h-5 w-px bg-slate-700/80 mx-1 shrink-0" aria-hidden="true"></span>
+                                    </template>
                                 </div>
-                            </div>
-                        @endforeach
-                    </div>
-                @else
-                    <!-- Fallback: Dynamic Ball-by-Ball Strip from Realtime Live / Commentary Items -->
-                    <div class="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar">
-                        <template x-for="(cBall, bIndex) in (live.recent_balls && live.recent_balls.length ? live.recent_balls : @js(array_values(array_slice($allCommentaryItems, 0, 12))))" :key="bIndex">
-                            <span class="w-7 h-7 sm:w-8 sm:h-8 rounded-full border font-mono font-bold flex items-center justify-center shrink-0 shadow-sm text-xs"
-                                :class="{
-                                    'bg-rose-600 border-rose-500 text-white animate-pulse shadow-sm shadow-rose-600/50': (cBall.wicket && cBall.wicket != '0'),
-                                    'bg-amber-500/20 border-amber-400 text-amber-300 text-[10px] lowercase': ((cBall.wides && cBall.wides != '0') || (cBall.noballs && cBall.noballs != '0')),
-                                    'bg-sky-500/20 border-sky-400 text-sky-300 shadow-sm shadow-sky-500/20': (String(cBall.runs) === '4'),
-                                    'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-sm shadow-emerald-500/30': (String(cBall.runs) === '6'),
-                                    'bg-slate-900 border-slate-700/60 text-slate-400': (String(cBall.runs) === '0' && !cBall.wicket && !cBall.wides && !cBall.noballs),
-                                    'bg-slate-800/80 border-slate-700/80 text-slate-200': (String(cBall.runs) !== '4' && String(cBall.runs) !== '6' && String(cBall.runs) !== '0' && !cBall.wicket && !cBall.wides && !cBall.noballs)
-                                }"
-                                x-text="(cBall.wicket && cBall.wicket != '0') ? 'W' : ((cBall.wides && cBall.wides != '0') ? 'wd' : ((cBall.noballs && cBall.noballs != '0') ? 'nb' : (cBall.runs ?? '•')))"
-                                :title="(cBall.overs || '') + ' ov'">
-                            </span>
-                        </template>
-                        <template x-if="!(live.recent_balls && live.recent_balls.length) && !{{ count($allCommentaryItems) }}">
-                            <span class="w-8 h-8 rounded-full bg-slate-900 border border-slate-700/60 text-slate-300 font-mono font-bold text-xs flex items-center justify-center shrink-0 shadow-sm" x-text="live.ball_event || live.current_ball || '{{ $currentBall }}'">
+                            </template>
+                        </div>
+                    </template>
+
+                    <template x-if="!recentBalls || recentBalls.length === 0">
+                        <div class="flex items-center gap-2 text-xs text-slate-400 py-0.5">
+                            <span class="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 text-slate-300 font-mono font-bold text-xs flex items-center justify-center shrink-0 shadow-sm" x-text="live.ball_event || live.current_ball || '{{ $currentBall }}'">
                                 {{ $currentBall }}
                             </span>
-                        </template>
-                    </div>
-                @endif
+                            <span class="text-slate-500 text-[11px]">Waiting for recent ball-by-ball deliveries...</span>
+                        </div>
+                    </template>
+                </div>
             </div>
 
         @elseif($tab === 'scorecard')

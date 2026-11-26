@@ -4,17 +4,35 @@ namespace App\Filament\Resources\NewsArticleResource\Pages;
 
 use App\Filament\Resources\NewsArticleResource;
 use App\Models\NewsApiConfig;
+use App\Models\NewsArticle;
 use App\Services\News\NewsIngestionService;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Notifications\Notification;
+use Filament\Resources\Components\Tab;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 
 class ListNewsArticles extends ListRecords
 {
     protected static string $resource = NewsArticleResource::class;
+
+    public function getTabs(): array
+    {
+        $pendingCount = NewsArticle::where('status', 'pending_review')->count();
+
+        return [
+            'all' => Tab::make('All Articles'),
+            'pending_guest_posts' => Tab::make('🕒 Pending Guest Posts')
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'pending_review'))
+                ->badge($pendingCount > 0 ? $pendingCount : null)
+                ->badgeColor('warning'),
+            'guest_contributors' => Tab::make('✍️ Guest Contributors')
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('is_guest_post', true)),
+        ];
+    }
 
     /**
      * Component property storing fetched preview articles across Livewire renders.

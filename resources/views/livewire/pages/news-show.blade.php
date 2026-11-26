@@ -82,8 +82,8 @@
             ['key' => 'fantasy_tips', 'label' => 'Fantasy XI Tips', 'icon' => '⭐'],
         ];
 
-        // Split HTML paragraphs to inject mid-article ad
-        $articleContent = $article->content ?? '';
+        // Split HTML paragraphs to inject mid-article ad (sanitize guest post links/HTML)
+        $articleContent = $article->is_guest_post ? $article->sanitized_content : ($article->content ?? '');
         $paragraphs = preg_split('/(<\/p>|<\/div>)/i', $articleContent, -1, PREG_SPLIT_DELIM_CAPTURE);
         $totalParts = count($paragraphs);
         $insertIndex = (int) floor($totalParts / 2);
@@ -134,13 +134,13 @@
                         </div>
                         <div>
                             <span class="font-extrabold text-white block">
-                                CricWire News Agency
+                                {{ $article->is_guest_post && $article->author_name ? $article->author_name : 'CricWire News Agency' }}
                             </span>
-                            <span class="text-[11px] text-amber-400/90 block -mt-0.5 flex items-center gap-1 font-medium">
-                                <svg class="w-3 h-3 text-amber-400 inline" fill="currentColor" viewBox="0 0 20 20">
+                            <span class="text-[11px] {{ $article->is_guest_post ? 'text-emerald-400/90' : 'text-amber-400/90' }} block -mt-0.5 flex items-center gap-1 font-medium">
+                                <svg class="w-3 h-3 {{ $article->is_guest_post ? 'text-emerald-400' : 'text-amber-400' }} inline" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
                                 </svg>
-                                Official Editorial Desk
+                                {{ $article->is_guest_post ? 'Community Cricket Contributor' : 'Official Editorial Desk' }}
                             </span>
                         </div>
                     </div>
@@ -216,6 +216,52 @@
                 <div class="pt-4">
                     <x-ad-slot slot="news_in_feed" />
                 </div>
+
+                <!-- Guest Author Credit Box -->
+                @if($article->is_guest_post && $article->author_name)
+                    <div class="p-5 sm:p-6 rounded-2xl bg-slate-900/90 border border-emerald-500/30 shadow-xl space-y-4">
+                        <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                            <div class="space-y-2">
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                    🏏 Community Cricket Contributor
+                                </span>
+
+                                <div>
+                                    <h3 class="text-base sm:text-lg font-black text-white">
+                                        {{ $article->author_name }}
+                                    </h3>
+                                    @if($article->author_bio)
+                                        <p class="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed">
+                                            {{ $article->author_bio }}
+                                        </p>
+                                    @endif
+                                </div>
+                            </div>
+
+                            @if($article->author_social_url)
+                                <a
+                                    href="{{ $article->author_social_url }}"
+                                    target="_blank"
+                                    rel="nofollow noopener noreferrer"
+                                    class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-700 hover:border-amber-400/50 text-amber-400 text-xs font-bold transition shrink-0"
+                                >
+                                    <span>Author Profile</span>
+                                    <span>↗</span>
+                                </a>
+                            @endif
+                        </div>
+
+                        <div class="pt-3 border-t border-slate-800 flex items-center justify-between">
+                            <a
+                                href="{{ route('guest-post.create') }}"
+                                wire:navigate
+                                class="text-xs font-bold text-amber-400 hover:text-amber-300 transition"
+                            >
+                                Want to publish your cricket analysis? Write for Cricwire →
+                            </a>
+                        </div>
+                    </div>
+                @endif
 
                 <!-- Bottom Social Share Bar (Under Article Body) -->
                 <x-news-social-share-bar :article="$article" />

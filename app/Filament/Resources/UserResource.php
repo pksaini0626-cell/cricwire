@@ -49,6 +49,21 @@ class UserResource extends Resource
                             ->label('Google ID')
                             ->placeholder('Standard Account')
                             ->disabled(),
+                        Forms\Components\TextInput::make('player_code')
+                            ->label('Player ID')
+                            ->disabled(),
+                        Forms\Components\TextInput::make('cric_gems')
+                            ->label('CricGems Balance')
+                            ->disabled(),
+                        Forms\Components\TextInput::make('login_streak')
+                            ->label('Login Streak (Days)')
+                            ->disabled(),
+                        Forms\Components\TextInput::make('battles_won')
+                            ->label('Battles Won')
+                            ->disabled(),
+                        Forms\Components\TextInput::make('battles_played')
+                            ->label('Battles Played')
+                            ->disabled(),
                         Forms\Components\DateTimePicker::make('email_verified_at')
                             ->label('Email Verified At')
                             ->disabled(),
@@ -72,6 +87,14 @@ class UserResource extends Resource
                     ->disk(fn (?User $record): ?string => $record && str_starts_with((string) $record->avatar, 'http') ? null : 'public')
                     ->defaultImageUrl(fn (?User $record): string => 'https://ui-avatars.com/api/?name=' . urlencode($record?->name ?? 'U') . '&color=7F9CF5&background=EBF4FF'),
 
+                Tables\Columns\TextColumn::make('player_code')
+                    ->label('Player ID')
+                    ->badge()
+                    ->color('warning')
+                    ->searchable()
+                    ->copyable()
+                    ->placeholder('—'),
+
                 Tables\Columns\TextColumn::make('name')
                     ->searchable()
                     ->sortable(),
@@ -80,6 +103,24 @@ class UserResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->copyable(),
+
+                Tables\Columns\TextColumn::make('cric_gems')
+                    ->label('CricGems')
+                    ->badge()
+                    ->color('success')
+                    ->numeric()
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('login_streak')
+                    ->label('Streak')
+                    ->numeric()
+                    ->suffix('d')
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('battles_won')
+                    ->label('Wins')
+                    ->numeric()
+                    ->sortable(),
 
                 Tables\Columns\TextColumn::make('login_provider')
                     ->label('Provider')

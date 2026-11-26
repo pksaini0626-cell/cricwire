@@ -44,6 +44,30 @@
                     </ul>
                 </section>
 
+                <!-- VIRTUAL LOYALTY POINTS (CRICGEMS) & FAN BATTLES POLICY -->
+                <section class="space-y-3 bg-emerald-500/10 border-2 border-emerald-500/40 rounded-2xl p-5 sm:p-6 text-emerald-100 shadow-xl">
+                    <h2 class="text-lg font-black text-emerald-400 uppercase tracking-wide flex items-center gap-2">
+                        <span>💎</span> Virtual Loyalty Points (CricGems) &amp; Fan Battles Policy
+                    </h2>
+                    <ul class="list-disc pl-5 space-y-2 text-xs sm:text-sm text-slate-200 leading-relaxed">
+                        <li>
+                            <strong class="text-white">100% Virtual &amp; No Monetary Value:</strong> CricGems are free virtual loyalty points awarded solely for in-app engagement (such as account registration, daily login streaks, referrals, and free-to-play cricket fan challenges). CricGems have zero real-world currency or monetary value.
+                        </li>
+                        <li>
+                            <strong class="text-white">No Redemption, Conversion, or Withdrawal:</strong> CricGems cannot be redeemed for cash, UPI transfers, bank payouts, gift vouchers, cryptocurrency, or any tangible goods, nor can they be converted into any fiat or digital currency.
+                        </li>
+                        <li>
+                            <strong class="text-white">Non-Transferable Between Users:</strong> Users cannot send, gift, trade, sell, or transfer CricGems to any other user account.
+                        </li>
+                        <li>
+                            <strong class="text-white">Account Deletion &amp; Forfeiture:</strong> Upon deleting your Cricwire account (via <em>More &rarr; Delete My Account</em>) or account termination for policy violations, your entire CricGems balance, streak progress, and battle history are permanently erased and forfeited without compensation.
+                        </li>
+                        <li>
+                            <strong class="text-white">No Gambling or Wagering:</strong> Cricwire does not accept real-money deposits or facilitate betting/wagering; all friend battles are strictly free recreational skill/prediction challenges.
+                        </li>
+                    </ul>
+                </section>
+
                 <!-- ACCEPTABLE USE -->
                 <section class="space-y-3 bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5">
                     <h2 class="text-lg font-bold text-white uppercase tracking-wider flex items-center gap-2">
