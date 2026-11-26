@@ -131,7 +131,7 @@ class PushNotificationResource extends Resource
                     ->label('🚀 Send Now')
                     ->icon('heroicon-o-paper-airplane')
                     ->color('success')
-                    ->visible(fn (PushNotification $record): bool => in_array($record->status, ['draft', 'failed']))
+                    ->visible(fn (PushNotification $record): bool => in_array($record->status, ['draft', 'queued', 'failed']))
                     ->requiresConfirmation()
                     ->modalHeading('Send Push Notification')
                     ->modalDescription('Are you sure you want to dispatch this push notification to all targeted users?')

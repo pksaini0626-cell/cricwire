@@ -163,7 +163,7 @@
         <x-push-permission-banner />
 
         <!-- Cricwire Push Messaging Helper -->
-        <script src="{{ asset('js/cricwire-push.js') }}" defer></script>
+        <script src="{{ asset('js/cricwire-push.js') }}" defer data-navigate-once></script>
 
         @livewireScripts
 

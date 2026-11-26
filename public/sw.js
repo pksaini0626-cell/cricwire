@@ -1,4 +1,11 @@
-const CACHE_NAME = 'cricwire-v2';
+// Unified Cricwire PWA + Firebase Cloud Messaging Service Worker
+try {
+    importScripts('/firebase-messaging-sw.js');
+} catch (err) {
+    console.warn('[SW] Firebase messaging SW import warning:', err);
+}
+
+const CACHE_NAME = 'cricwire-v3';
 const OFFLINE_URL = '/offline.html';
 
 // Core static assets to cache for offline support
@@ -11,10 +18,12 @@ const PRECACHE_ASSETS = [
     '/icons/cricwire_favicons/favicon.ico'
 ];
 
-// Patterns that must NEVER be cached (live cricket feeds, websockets, polling, APIs)
+// Patterns that must NEVER be cached (live cricket feeds, websockets, polling, APIs, dynamic SW)
 const EXCLUDE_URL_PATTERNS = [
     /\/api\//i,
     /\/api\/live\//i,
+    /\/api\/firebase\//i,
+    /\/firebase-messaging-sw\.js/i,
     /\/live-feed\//i,
     /\/livewire\//i,
     /\/js\/match-detail-engine\.js/i,
@@ -130,4 +139,3 @@ self.addEventListener('fetch', (event) => {
         );
     }
 });
-

@@ -2,15 +2,14 @@
     x-data="{
         showBanner: false,
         loading: false,
+        errorMessage: '',
         init() {
-            // Check Notification support and current permission state
-            if (!('Notification' in window)) return;
+            if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
 
             const dismissedUntil = localStorage.getItem('cricwire_push_prompt_dismissed_until');
             const now = new Date().getTime();
 
             if (Notification.permission === 'default' && (!dismissedUntil || now > parseInt(dismissedUntil))) {
-                // Delay banner display by 2.5s for seamless page load
                 setTimeout(() => {
                     this.showBanner = true;
                 }, 2500);
@@ -18,18 +17,27 @@
         },
         async enablePush() {
             this.loading = true;
+            this.errorMessage = '';
             try {
+                if (!window.CricwirePush) {
+                    throw new Error('Push client is still loading. Please try again.');
+                }
                 const permission = await Notification.requestPermission();
                 if (permission === 'granted') {
-                    if (window.CricwirePush) {
-                        await window.CricwirePush.subscribe();
+                    const success = await window.CricwirePush.subscribe();
+                    if (success) {
+                        this.showBanner = false;
                     }
-                    this.showBanner = false;
+                } else if (permission === 'denied') {
+                    this.errorMessage = 'Notifications were blocked by your browser.';
+                    console.error('[PushBanner] Notification permission denied by user.');
+                    this.dismiss(30);
                 } else {
-                    this.dismiss(30); // don't ask for 30 days if denied
+                    this.dismiss(7);
                 }
             } catch (err) {
-                console.error('Push permission request error:', err);
+                console.error('[PushBanner] Push permission/subscription error:', err);
+                this.errorMessage = err?.message || 'Unable to enable push notifications.';
             } finally {
                 this.loading = false;
             }
@@ -59,6 +67,9 @@
             <p class="text-[11px] sm:text-xs text-slate-300 mt-1 leading-snug">
                 Get instant toss updates, wicket alerts, and match-winning thrillers straight to your device.
             </p>
+            <template x-if="errorMessage">
+                <p class="text-[11px] text-rose-400 font-semibold mt-1.5" x-text="errorMessage"></p>
+            </template>
             <div class="flex items-center gap-2 mt-3">
                 <button 
                     @click="enablePush()" 

@@ -10,6 +10,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class SendPushNotificationJob implements ShouldQueue
 {
@@ -35,6 +36,29 @@ class SendPushNotificationJob implements ShouldQueue
             return;
         }
 
-        $fcmService->sendToNotification($notification);
+        try {
+            $fcmService->sendToNotification($notification);
+        } catch (Throwable $e) {
+            Log::error("SendPushNotificationJob: Exception sending notification #{$this->notificationId}: " . $e->getMessage(), [
+                'exception' => get_class($e),
+            ]);
+
+            if ($this->attempts() >= $this->tries || config('queue.default') === 'sync') {
+                $notification->update(['status' => 'failed']);
+            }
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Handle permanent job failure after retries are exhausted.
+     */
+    public function failed(Throwable $exception): void
+    {
+        Log::error("SendPushNotificationJob: Permanently failed for notification #{$this->notificationId}: " . $exception->getMessage());
+
+        PushNotification::where('id', $this->notificationId)
+            ->update(['status' => 'failed']);
     }
 }

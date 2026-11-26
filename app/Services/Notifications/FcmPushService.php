@@ -6,6 +6,7 @@ use App\Models\PushNotification;
 use App\Models\PushSubscription;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Kreait\Firebase\Factory;
 use Kreait\Firebase\Messaging\CloudMessage;
 use Kreait\Firebase\Messaging\Notification;
@@ -49,7 +50,6 @@ class FcmPushService
      */
     public function sendToNotification(PushNotification $notification): array
     {
-        // Query active push subscriptions
         $query = PushSubscription::query()->active();
 
         if ($notification->audience === 'logged_in') {
@@ -62,8 +62,8 @@ class FcmPushService
         $sentCount = 0;
         $failedCount = 0;
         $invalidTokensList = [];
+        $hadBatchException = false;
 
-        // If messaging is not initialized (e.g. missing credentials file) or no tokens, update and return gracefully
         if (! $this->messaging) {
             $notification->update([
                 'total_targeted' => $totalTargeted,
@@ -85,38 +85,47 @@ class FcmPushService
         }
 
         if ($totalTargeted > 0) {
-            $targetUrl = $notification->target_url ?: url('/');
+            $targetUrl = $this->resolveAbsoluteUrl($notification->target_url) ?: url('/');
             $iconUrl = asset('icons/icon-192x192.png');
+            $imageUrl = $this->resolveImageUrl($notification->image_url);
 
-            // Construct WebPushConfig
+            $webPushNotification = [
+                'title' => (string) $notification->title,
+                'body'  => (string) $notification->body,
+                'icon'  => $iconUrl,
+                'badge' => $iconUrl,
+            ];
+
+            if ($imageUrl !== null) {
+                $webPushNotification['image'] = $imageUrl;
+            }
+
             $webPushConfig = WebPushConfig::fromArray([
-                'notification' => [
-                    'icon'  => $iconUrl,
-                    'badge' => $iconUrl,
-                ],
+                'notification' => $webPushNotification,
                 'fcm_options' => [
                     'link' => $targetUrl,
                 ],
             ]);
 
-            // Construct Notification
             $fcmNotification = Notification::create(
-                $notification->title,
-                $notification->body,
-                $notification->image_url ?: null
+                (string) $notification->title,
+                (string) $notification->body,
+                $imageUrl
             );
 
-            // Construct Base CloudMessage
             $cloudMessage = CloudMessage::new()
                 ->withNotification($fcmNotification)
                 ->withWebPushConfig($webPushConfig)
                 ->withData([
+                    'title'           => (string) $notification->title,
+                    'body'            => (string) $notification->body,
+                    'icon'            => (string) $iconUrl,
+                    'image_url'       => (string) ($imageUrl ?? ''),
                     'url'             => (string) $targetUrl,
                     'type'            => (string) $notification->type,
                     'notification_id' => (string) $notification->id,
                 ]);
 
-            // Process tokens in chunks of 500
             $chunks = array_chunk($allTokens, 500);
 
             foreach ($chunks as $chunk) {
@@ -126,7 +135,19 @@ class FcmPushService
                     $sentCount += $report->successes()->count();
                     $failedCount += $report->failures()->count();
 
-                    // Collect invalid / unregistered tokens to deactivate
+                    foreach ($report->failures()->getItems() as $failure) {
+                        $tokenValue = $failure->target()->value();
+                        $tokenPreview = substr($tokenValue, 0, 14) . '...';
+                        $errorMessage = $failure->error()?->getMessage() ?? 'Unknown FCM error';
+
+                        Log::error("FCM Service: Token delivery failure [{$tokenPreview}]: {$errorMessage}", [
+                            'notification_id'    => $notification->id,
+                            'is_unknown_token'   => $failure->messageWasSentToUnknownToken(),
+                            'is_invalid_token'   => $failure->messageTargetWasInvalid(),
+                            'is_invalid_message' => $failure->messageWasInvalid(),
+                        ]);
+                    }
+
                     $unknown = $report->unknownTokens();
                     $invalid = $report->invalidTokens();
 
@@ -137,29 +158,62 @@ class FcmPushService
                             ->update(['is_active' => false]);
                     }
                 } catch (\Throwable $e) {
-                    Log::error('FCM Service: Error sending multicast batch: ' . $e->getMessage());
+                    $hadBatchException = true;
+                    Log::error('FCM Service: Error sending multicast batch: ' . $e->getMessage(), [
+                        'notification_id' => $notification->id,
+                        'exception'       => get_class($e),
+                    ]);
                     $failedCount += count($chunk);
                 }
             }
         }
 
+        $finalStatus = ($hadBatchException && $sentCount === 0 && $totalTargeted > 0) ? 'failed' : 'sent';
+
         $notification->update([
             'total_targeted' => $totalTargeted,
             'sent_count'     => $sentCount,
             'failed_count'   => $failedCount,
-            'status'         => 'sent',
-            'sent_at'        => now(),
+            'status'         => $finalStatus,
+            'sent_at'        => $finalStatus === 'sent' ? now() : null,
         ]);
 
-        // Flush In-App Bell notifications cache
         Cache::forget('in_app_notifications:latest');
 
         return [
-            'success'        => true,
+            'success'        => $finalStatus === 'sent',
             'total_targeted' => $totalTargeted,
             'sent_count'     => $sentCount,
             'failed_count'   => $failedCount,
             'deactivated'    => count($invalidTokensList),
         ];
+    }
+
+    protected function resolveAbsoluteUrl(?string $rawUrl): ?string
+    {
+        $trimmed = trim((string) $rawUrl);
+        if ($trimmed === '') {
+            return null;
+        }
+
+        if (Str::startsWith($trimmed, ['http://', 'https://'])) {
+            return $trimmed;
+        }
+
+        return url($trimmed);
+    }
+
+    protected function resolveImageUrl(?string $rawImage): ?string
+    {
+        $trimmed = trim((string) $rawImage);
+        if ($trimmed === '') {
+            return null;
+        }
+
+        if (Str::startsWith($trimmed, ['http://', 'https://'])) {
+            return $trimmed;
+        }
+
+        return asset('storage/' . ltrim($trimmed, '/'));
     }
 }

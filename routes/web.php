@@ -142,6 +142,7 @@ Route::get('/sitemap-news.xml', [SitemapController::class, 'news'])->name('sitem
 Route::get('/robots.txt', [SitemapController::class, 'robots'])->name('robots.txt');
 
 // Push Notifications & FCM Subscription API
+Route::get('/firebase-messaging-sw.js', [\App\Http\Controllers\PushSubscriptionController::class, 'serviceWorker'])->name('firebase.sw');
 Route::post('/api/push/subscribe', [\App\Http\Controllers\PushSubscriptionController::class, 'subscribe'])->name('api.push.subscribe');
 Route::post('/api/push/unsubscribe', [\App\Http\Controllers\PushSubscriptionController::class, 'unsubscribe'])->name('api.push.unsubscribe');
 Route::get('/api/notifications/latest', [\App\Http\Controllers\PushSubscriptionController::class, 'latest'])->name('api.notifications.latest');

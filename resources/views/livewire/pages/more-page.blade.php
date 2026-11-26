@@ -48,22 +48,21 @@
             if (this.loadingPush) return;
             this.loadingPush = true;
             try {
+                if (!window.CricwirePush) {
+                    throw new Error('Push notification client is not loaded yet. Please refresh and try again.');
+                }
                 if (!this.pushAlerts) {
-                    if (window.CricwirePush) {
-                        const success = await window.CricwirePush.subscribe();
-                        if (success) {
-                            this.pushAlerts = true;
-                        }
+                    const success = await window.CricwirePush.subscribe();
+                    if (success) {
+                        this.pushAlerts = true;
                     }
                 } else {
-                    if (window.CricwirePush) {
-                        await window.CricwirePush.unsubscribe();
-                        this.pushAlerts = false;
-                    }
+                    await window.CricwirePush.unsubscribe();
+                    this.pushAlerts = false;
                 }
             } catch (err) {
                 console.error('Error toggling push notifications:', err);
-                alert('Could not update notification preferences. Please check your browser notification permissions.');
+                alert(err?.message || 'Could not update notification preferences. Please check your browser notification permissions.');
             } finally {
                 this.loadingPush = false;
             }

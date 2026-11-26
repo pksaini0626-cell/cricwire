@@ -194,6 +194,12 @@
             @yield('content')
         </div>
 
+        <!-- Push Notification Permission Banner -->
+        <x-push-permission-banner />
+
+        <!-- Cricwire Push Messaging Helper -->
+        <script src="{{ asset('js/cricwire-push.js') }}" defer data-navigate-once></script>
+
         @livewireScripts
 
         <!-- Livewire 419 Auto-Recovery Handler -->
