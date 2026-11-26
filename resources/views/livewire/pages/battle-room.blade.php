@@ -7,7 +7,7 @@
 
 <div
     class="min-h-screen bg-slate-950 text-slate-100 pb-24 md:pb-8 flex flex-col justify-between"
-    @if($shouldPollRoom) wire:poll.3s="pollRoom" @elseif($shouldPollLive) wire:poll.15s="pollLiveScores" @endif
+    @if($shouldPollRoom) wire:poll.4s.visible="pollRoom" @elseif($shouldPollLive) wire:poll.15s.visible="pollLiveScores" @endif
     x-data="{
         locksAt: {{ $locksAtTimestamp }},
         nowTs: Math.floor(Date.now() / 1000),
@@ -155,32 +155,35 @@
             {{-- STATE 2: LIVE TURN-BY-TURN DRAFT ROOM                                 --}}
             {{-- ===================================================================== --}}
             @if($battle->status === 'drafting')
-                <!-- Toss + Turn Status Banner -->
-                <section class="rounded-2xl bg-slate-900/90 border border-cyan-500/30 p-4 sm:p-5 space-y-3 shadow-xl">
+                @php
+                    $myPicksCount = $currentUser ? $battle->picks->where('user_id', $currentUser->id)->count() : 0;
+                @endphp
+                <!-- Top Turn Status Strip + Toss Info -->
+                <section class="rounded-2xl border p-4 sm:p-5 space-y-3 shadow-xl {{ $isMyTurn ? 'bg-gradient-to-r from-emerald-950/70 via-slate-900 to-emerald-950/50 border-emerald-400/70' : 'bg-slate-900/90 border-slate-700' }}">
                     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-full bg-amber-500/20 border border-amber-400/50 flex items-center justify-center text-xl animate-bounce">
-                                🪙
+                            <div class="w-10 h-10 rounded-full {{ $isMyTurn ? 'bg-emerald-500/20 border-emerald-400 animate-pulse' : 'bg-amber-500/20 border-amber-400/50' }} border flex items-center justify-center text-xl shrink-0">
+                                {{ $isMyTurn ? '🟢' : '🪙' }}
                             </div>
                             <div>
                                 <div class="text-[11px] font-bold uppercase tracking-wider text-amber-300">
                                     System Coin Toss Winner: {{ $battle->tossWinner?->captainTitle() ?? 'Captain' }}
                                 </div>
-                                <div class="text-sm sm:text-base font-black text-white">
+                                <div class="text-sm sm:text-base font-black text-white mt-0.5">
                                     @if($isMyTurn)
-                                        <span class="text-emerald-400">🟢 YOUR TURN TO PICK (Pick #{{ $battle->picks->count() + 1 }} of {{ $battle->team_size * 2 }})</span>
+                                        <span class="text-emerald-300">🟢 YOUR TURN — Tap "+ Pick" on any available player below (Pick {{ $myPicksCount + 1 }} of {{ $battle->team_size }})</span>
                                     @elseif($isDraftPaused)
                                         <span class="text-amber-300">⏸️ Draft Paused — Waiting for {{ $otherCaptainName }}</span>
                                     @else
-                                        <span class="text-slate-300">⏳ Waiting for {{ $battle->currentTurnUser?->captainTitle() ?? 'Captain' }} to pick (Pick #{{ $battle->picks->count() + 1 }})...</span>
+                                        <span class="text-amber-200">⏳ Waiting for {{ $battle->currentTurnUser?->captainTitle() ?? ($otherCaptainName ?: 'opponent') }} to pick their player...</span>
                                     @endif
                                 </div>
                             </div>
                         </div>
 
-                        <div class="flex items-center gap-2 text-xs font-mono">
+                        <div class="flex items-center gap-2 text-xs font-mono shrink-0">
                             <span class="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-300">
-                                Picks: <strong class="text-amber-300">{{ $battle->picks->count() }}</strong> / {{ $battle->team_size * 2 }}
+                                Total Picks: <strong class="text-amber-300">{{ $battle->picks->count() }}</strong> / {{ $battle->team_size * 2 }}
                             </span>
                         </div>
                     </div>
@@ -285,44 +288,82 @@
                                     @php
                                         $pickKey = $player['norm_name'] . '|' . mb_strtolower(trim($player['team']));
                                         $pickedInfo = $pickedMap[$pickKey] ?? null;
+                                        $canSwapThis = $swappingPick && $player['is_playing_xi'] && $isBeforeLock && !$pickedInfo;
                                     @endphp
-                                    <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-2.5">
-                                        <div class="min-w-0">
-                                            <div class="flex items-center gap-1.5 flex-wrap">
-                                                <span class="text-xs font-bold text-white truncate">{{ $player['name'] }}</span>
-                                                <span class="px-1.5 py-0.5 rounded bg-slate-800 text-[9px] font-mono font-bold text-slate-300">{{ $player['role'] }}</span>
-                                                @if($player['is_playing_xi'])
-                                                    <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-[9px] font-black text-emerald-300">● Playing</span>
-                                                @endif
-                                            </div>
-                                        </div>
 
-                                        @if($pickedInfo)
-                                            <span class="px-2.5 py-1 rounded-lg bg-slate-800/90 border border-slate-700 text-[10px] font-bold text-slate-400 shrink-0">
-                                                LOCKED ({{ $pickedInfo['captain_title'] }})
+                                    @if($pickedInfo)
+                                        <!-- Already Picked (Locked) Card -->
+                                        <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 opacity-60 cursor-not-allowed flex items-center justify-between gap-2.5">
+                                            <div class="min-w-0">
+                                                <div class="flex items-center gap-1.5 flex-wrap">
+                                                    <span class="text-xs font-bold text-slate-300 truncate">{{ $player['name'] }}</span>
+                                                    <span class="px-1.5 py-0.5 rounded bg-slate-800 text-[9px] font-mono font-bold text-slate-400">{{ $player['role'] }}</span>
+                                                    @if($player['is_playing_xi'])
+                                                        <span class="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-[9px] font-black text-emerald-300">● Playing</span>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                            <span class="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-[10px] font-bold text-slate-400 shrink-0">
+                                                🔒 Picked by {{ $pickedInfo['captain_title'] }}
                                             </span>
-                                        @elseif($swappingPick && $player['is_playing_xi'] && $isBeforeLock)
+                                        </div>
+                                    @elseif($canSwapThis)
+                                        <!-- Available for Bench Swap -->
+                                        <div class="p-3 rounded-xl bg-slate-900 border border-emerald-500/60 hover:border-emerald-400 flex items-center justify-between gap-2.5 transition">
+                                            <div class="min-w-0">
+                                                <div class="flex items-center gap-1.5 flex-wrap">
+                                                    <span class="text-xs font-bold text-white truncate">{{ $player['name'] }}</span>
+                                                    <span class="px-1.5 py-0.5 rounded bg-slate-800 text-[9px] font-mono font-bold text-slate-300">{{ $player['role'] }}</span>
+                                                    <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-[9px] font-black text-emerald-300">● Playing</span>
+                                                </div>
+                                            </div>
                                             <button
                                                 type="button"
                                                 wire:click="confirmSwapPlayer('{{ $teamKey }}', {{ $idx }})"
-                                                class="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11px] font-black shrink-0 transition"
+                                                wire:loading.attr="disabled"
+                                                class="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 text-[11px] font-black shrink-0 transition"
                                             >
                                                 🔄 Swap In
                                             </button>
-                                        @elseif($isMyTurn)
+                                        </div>
+                                    @elseif($isMyTurn)
+                                        <!-- Available Player (Your Turn) -->
+                                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-700 hover:border-emerald-400 cursor-pointer flex items-center justify-between gap-2.5 transition shadow-sm">
+                                            <div class="min-w-0">
+                                                <div class="flex items-center gap-1.5 flex-wrap">
+                                                    <span class="text-xs sm:text-sm font-bold text-white truncate">{{ $player['name'] }}</span>
+                                                    <span class="px-1.5 py-0.5 rounded bg-slate-800 text-[9px] font-mono font-bold text-slate-300">{{ $player['role'] }}</span>
+                                                    @if($player['is_playing_xi'])
+                                                        <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-[9px] font-black text-emerald-300">● Playing</span>
+                                                    @endif
+                                                </div>
+                                            </div>
                                             <button
                                                 type="button"
                                                 wire:click="pickSquadPlayer('{{ $teamKey }}', {{ $idx }})"
-                                                class="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 text-[11px] font-black shrink-0 transition active:scale-95"
+                                                wire:loading.attr="disabled"
+                                                class="px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 text-[11px] font-black shrink-0 shadow-sm shadow-emerald-500/20 transition active:scale-95"
                                             >
                                                 + Pick
                                             </button>
-                                        @else
-                                            <span class="px-2.5 py-1 rounded-lg bg-slate-900 text-slate-500 text-[10px] font-semibold shrink-0">
-                                                {{ $isDraftPaused ? 'Paused' : 'Available' }}
+                                        </div>
+                                    @else
+                                        <!-- Available Player (Opponent's Turn / Paused) -->
+                                        <div class="p-3 rounded-xl bg-slate-950/90 border border-slate-800 flex items-center justify-between gap-2.5">
+                                            <div class="min-w-0">
+                                                <div class="flex items-center gap-1.5 flex-wrap">
+                                                    <span class="text-xs font-bold text-slate-200 truncate">{{ $player['name'] }}</span>
+                                                    <span class="px-1.5 py-0.5 rounded bg-slate-800 text-[9px] font-mono font-bold text-slate-300">{{ $player['role'] }}</span>
+                                                    @if($player['is_playing_xi'])
+                                                        <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-[9px] font-black text-emerald-300">● Playing</span>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                            <span class="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 text-[10px] font-semibold shrink-0">
+                                                {{ $isDraftPaused ? 'Paused' : 'Waiting Turn' }}
                                             </span>
-                                        @endif
-                                    </div>
+                                        </div>
+                                    @endif
                                 @empty
                                     <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-500 text-center">
                                         Squad data not cached yet for {{ $teamBlock['name'] }}.

@@ -6,8 +6,8 @@
         show() {
             this.isLoading = true;
             clearTimeout(this.safetyTimer);
-            // Safety fallback: auto-hide after 10s so user is never stuck
-            this.safetyTimer = setTimeout(() => { this.isLoading = false; }, 10000);
+            // Safety fallback: auto-hide after 4s so user is never stuck
+            this.safetyTimer = setTimeout(() => { this.isLoading = false; }, 4000);
         },
         hide() {
             clearTimeout(this.safetyTimer);
@@ -15,17 +15,15 @@
         }
      }"
      x-init="
-        // 1. Instant trigger on clicking any match card, internal link, or wire:click action
+        // 1. Trigger ONLY on actual SPA page navigation link clicks (never on wire:click or wire:poll)
         document.addEventListener('click', (e) => {
             const link = e.target.closest('a[href]');
-            const wireAction = e.target.closest('[wire\\:click]');
 
             // Trigger on internal navigation links (excluding # anchors, mailto, tel, target=_blank, and nested action buttons)
             if (link && !e.target.closest('button, [data-no-loader]')) {
                 const href = link.getAttribute('href');
                 const target = link.getAttribute('target');
                 if (href && !href.startsWith('#') && !href.startsWith('mailto:') && !href.startsWith('tel:') && target !== '_blank') {
-                    // Check if same origin
                     try {
                         const url = new URL(href, window.location.origin);
                         if (url.origin === window.location.origin && (url.pathname !== window.location.pathname || url.search !== window.location.search)) {
@@ -34,47 +32,15 @@
                     } catch (_) {}
                 }
             }
-
-            // Trigger on Livewire tab/filter clicks (e.g., setTab, switchTab, loadMore)
-            if (wireAction && !wireAction.hasAttribute('data-no-loader')) {
-                show();
-            }
         }, true);
 
-        // 2. Livewire 3 SPA Navigation Events
+        // 2. Livewire 3 SPA Page Navigation Events ONLY (never global Livewire.hook('request'))
         document.addEventListener('livewire:navigate', () => show());
         document.addEventListener('livewire:navigating', () => show());
         document.addEventListener('livewire:navigated', () => hide());
+        document.addEventListener('DOMContentLoaded', () => hide());
 
-        // 3. Official Livewire 3 Request Hook (covers all wire:click / API data fetches)
-        const registerLivewireHooks = () => {
-            if (window.Livewire) {
-                Livewire.hook('request', ({ uri, options, payload, respond, succeed, fail }) => {
-                    // Ignore background polling ($refresh) so live score ticks don't flash loader
-                    let isPoll = false;
-                    try {
-                        const parsed = JSON.parse(payload);
-                        const calls = parsed?.components?.[0]?.calls || [];
-                        isPoll = calls.length === 1 && calls[0].method === '$refresh';
-                    } catch (_) {}
-
-                    if (!isPoll) {
-                        show();
-                    }
-
-                    succeed(() => hide());
-                    fail(() => hide());
-                });
-            }
-        };
-
-        if (window.Livewire) {
-            registerLivewireHooks();
-        } else {
-            document.addEventListener('livewire:init', registerLivewireHooks);
-        }
-
-        // 4. Browser back/forward cache restore cleanup
+        // 3. Browser back/forward cache restore cleanup
         window.addEventListener('pageshow', () => hide());
      "
      x-show="isLoading"

@@ -145,13 +145,29 @@
                 </section>
             @endif
 
-            <!-- 3-Step Guided Challenge Creation Wizard -->
+            <!-- 3-Step Guided Challenge Creation Form -->
             @if($user)
-                <section class="rounded-2xl bg-slate-900/90 border border-slate-800 p-4 sm:p-6 shadow-xl space-y-6">
+                @php
+                    $selectedFriendObj = $selectedOpponentId ? $friends->firstWhere('id', $selectedOpponentId) : null;
+                    $selectedFriendLabel = $selectedFriendObj
+                        ? ($selectedFriendObj->captainTitle() . ' (' . $selectedFriendObj->player_code . ')')
+                        : '';
+                    $selectedMatchObj = $selectedMatchId ? collect($eligibleMatches)->firstWhere('match_id', (string) $selectedMatchId) : null;
+                    $canSubmitChallenge = $selectedFriendObj && $selectedMatchObj && (int) $user->cric_gems >= 100 && (int) ($selectedFriendObj->cric_gems ?? 0) >= 100;
+                @endphp
+                <section
+                    class="rounded-2xl bg-slate-900/90 border border-slate-800 p-4 sm:p-6 shadow-xl space-y-6"
+                    x-data="{
+                        friendPickerOpen: false,
+                        friendQuery: '',
+                        matchDropdownOpen: false,
+                    }"
+                    @keydown.escape.window="friendPickerOpen = false; matchDropdownOpen = false"
+                >
                     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-4 border-b border-slate-800">
                         <div>
                             <h2 class="text-base sm:text-lg font-black text-white flex items-center gap-2">
-                                <span>🚀</span> Create a New Squad Runs Battle
+                                <span>⚔️</span> Start a New Captain Battle
                             </h2>
                             <p class="text-xs text-slate-400 mt-0.5">
                                 Both Captains must hold 100+ CricGems. Only T20 &amp; ODI upcoming matches are eligible.
@@ -162,71 +178,139 @@
                         </span>
                     </div>
 
-                    <!-- STEP 1: Select Opponent -->
-                    <div class="space-y-3">
-                        <div class="flex items-center justify-between">
-                            <h3 class="text-xs font-black uppercase tracking-wider text-amber-400">
-                                Step 1 — Select Opponent (Accepted Friends)
-                            </h3>
+                    <!-- FIELD 1: Challenge Your Friend (Input + Select Button + Searchable Modal) -->
+                    <div class="space-y-2.5">
+                        <div class="flex items-center justify-between gap-2">
+                            <label class="text-xs font-black uppercase tracking-wider text-amber-400">
+                                1. Challenge Your Friend
+                            </label>
                             <a href="{{ route('more') }}" wire:navigate class="text-[11px] font-bold text-cyan-400 hover:text-cyan-300">
                                 + Add Friends on /more →
                             </a>
                         </div>
 
                         @if($friends->isEmpty())
-                            <div class="p-4 rounded-xl bg-slate-950/80 border border-slate-800 text-center space-y-2">
-                                <p class="text-xs font-bold text-slate-300">You haven't connected with any friends yet.</p>
-                                <p class="text-[11px] text-slate-400">Share your Player QR or search friends by CW Player ID to start challenging!</p>
-                                <a href="{{ route('more') }}" wire:navigate class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black transition">
-                                    Connect Friends on Player Hub →
+                            <div class="p-4 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <div>
+                                    <p class="text-xs font-bold text-slate-200">You haven't connected with any friends yet.</p>
+                                    <p class="text-[11px] text-slate-400 mt-0.5">Add a friend by CW Player ID or QR code first to challenge them.</p>
+                                </div>
+                                <a href="{{ route('more') }}" wire:navigate class="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black shrink-0 transition">
+                                    ➕ Add Friends on /more
                                 </a>
                             </div>
                         @else
-                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                                @foreach($friends as $friend)
-                                    @php
-                                        $isSelected = (int) $selectedOpponentId === (int) $friend->id;
-                                        $friendEligible = (int) $friend->cric_gems >= 100;
-                                    @endphp
-                                    <button
-                                        type="button"
-                                        wire:click="selectOpponent({{ $friend->id }})"
-                                        class="text-left p-3 rounded-xl border transition flex items-center justify-between gap-2.5 {{ $isSelected ? 'bg-amber-500/15 border-amber-400 ring-1 ring-amber-400/50' : 'bg-slate-950 border-slate-800 hover:border-slate-600' }}"
+                            <div class="flex items-center gap-2">
+                                <div class="relative flex-1 min-w-0">
+                                    <input
+                                        type="text"
+                                        readonly
+                                        @click="friendPickerOpen = true"
+                                        value="{{ $selectedFriendLabel }}"
+                                        placeholder="Tap Select to choose a friend..."
+                                        class="w-full cursor-pointer bg-slate-950 border {{ $selectedFriendObj ? 'border-emerald-500/60 text-white font-bold' : 'border-slate-700 text-slate-300' }} rounded-xl px-3.5 py-3 pr-24 text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:border-amber-400 transition"
                                     >
-                                        <div class="flex items-center gap-2.5 min-w-0">
-                                            <x-user-avatar :user="$friend" size="sm" />
-                                            <div class="min-w-0">
-                                                <div class="text-xs font-black text-white truncate">{{ $friend->captainTitle() }}</div>
-                                                <div class="text-[10px] font-mono text-slate-400">{{ $friend->player_code }} • 🏆 {{ (int) $friend->battles_won }} Wins</div>
-                                            </div>
-                                        </div>
-                                        <span class="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold shrink-0 {{ $friendEligible ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/15 text-rose-300 border border-rose-500/30' }}">
-                                            {{ $friendEligible ? number_format((int) $friend->cric_gems) . ' 💎' : '<100 💎' }}
+                                    @if($selectedFriendObj)
+                                        <span class="absolute right-3 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] font-black pointer-events-none">
+                                            ✓ Selected
                                         </span>
-                                    </button>
-                                @endforeach
+                                    @endif
+                                </div>
+                                <button
+                                    type="button"
+                                    @click="friendPickerOpen = true"
+                                    class="px-5 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs uppercase tracking-wider shrink-0 shadow-md shadow-amber-500/15 transition active:scale-95"
+                                >
+                                    Select
+                                </button>
+                            </div>
+
+                            @if($selectedFriendObj && (int) $selectedFriendObj->cric_gems < 100)
+                                <div class="text-[11px] font-semibold text-rose-300">
+                                    ⚠️ {{ $selectedFriendObj->captainTitle() }} currently has {{ number_format((int) $selectedFriendObj->cric_gems) }} 💎 (100+ 💎 required to accept).
+                                </div>
+                            @endif
+
+                            <!-- Searchable Friend Picker Modal -->
+                            <div
+                                x-show="friendPickerOpen"
+                                x-cloak
+                                x-transition.opacity
+                                class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
+                                @click.self="friendPickerOpen = false"
+                            >
+                                <div class="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl overflow-hidden">
+                                    <div class="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+                                        <h3 class="text-sm font-black text-white flex items-center gap-2">
+                                            <span>🤝</span> Select a Friend to Challenge
+                                        </h3>
+                                        <button type="button" @click="friendPickerOpen = false" class="px-2 py-1 rounded-lg text-slate-400 hover:text-white text-xs font-bold">✕</button>
+                                    </div>
+
+                                    <div class="p-3 border-b border-slate-800">
+                                        <input
+                                            type="text"
+                                            x-model="friendQuery"
+                                            placeholder="Search friend by Captain name or CW code..."
+                                            class="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+                                        >
+                                    </div>
+
+                                    <div class="max-h-72 overflow-y-auto p-3 space-y-2">
+                                        @foreach($friends as $friend)
+                                            @php
+                                                $isSelected = (int) $selectedOpponentId === (int) $friend->id;
+                                                $friendEligible = (int) $friend->cric_gems >= 100;
+                                                $searchText = strtolower($friend->captainTitle() . ' ' . $friend->name . ' ' . $friend->player_code);
+                                            @endphp
+                                            <button
+                                                type="button"
+                                                x-show="!friendQuery || @js($searchText).includes(friendQuery.toLowerCase())"
+                                                wire:click="selectOpponent({{ $friend->id }})"
+                                                @click="friendPickerOpen = false"
+                                                class="w-full text-left p-3 rounded-xl border transition flex items-center justify-between gap-2.5 {{ $isSelected ? 'bg-emerald-500/15 border-emerald-400' : 'bg-slate-950 border-slate-800 hover:border-amber-400/60' }}"
+                                            >
+                                                <div class="flex items-center gap-2.5 min-w-0">
+                                                    <x-user-avatar :user="$friend" size="sm" />
+                                                    <div class="min-w-0">
+                                                        <div class="text-xs font-black text-white truncate">{{ $friend->captainTitle() }}</div>
+                                                        <div class="text-[10px] font-mono text-slate-400">{{ $friend->player_code }} • 🏆 {{ (int) $friend->battles_won }} Wins</div>
+                                                    </div>
+                                                </div>
+                                                <div class="flex items-center gap-2 shrink-0">
+                                                    <span class="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold {{ $friendEligible ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/15 text-rose-300 border border-rose-500/30' }}">
+                                                        {{ number_format((int) $friend->cric_gems) }} 💎
+                                                    </span>
+                                                    <span class="px-2.5 py-1 rounded-lg text-[10px] font-black {{ $isSelected ? 'bg-emerald-400 text-slate-950' : 'bg-amber-400/20 text-amber-300' }}">
+                                                        {{ $isSelected ? '✓ Selected' : 'Select' }}
+                                                    </span>
+                                                </div>
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                </div>
                             </div>
                         @endif
                     </div>
 
-                    <!-- STEP 2: Select Upcoming Match (T20 & ODI ONLY) -->
-                    <div class="space-y-3 pt-2 border-t border-slate-800/80">
-                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                            <h3 class="text-xs font-black uppercase tracking-wider text-amber-400">
-                                Step 2 — Select Match (T20 &amp; ODI Only)
-                            </h3>
-                            <div class="inline-flex rounded-xl bg-slate-950 p-1 border border-slate-800 self-start">
+                    <!-- FIELD 2: Select Upcoming Match (T20 & ODI Only Dropdown) -->
+                    <div class="space-y-2.5 pt-3 border-t border-slate-800/80">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <label class="text-xs font-black uppercase tracking-wider text-amber-400">
+                                2. Select Upcoming Match <span class="text-slate-400 font-semibold normal-case">(T20 / ODI Only)</span>
+                            </label>
+                            <div class="inline-flex rounded-xl bg-slate-950 p-1 border border-slate-800">
                                 <button
                                     type="button"
                                     wire:click="setMatchFilter('today')"
-                                    class="px-3 py-1 rounded-lg text-xs font-bold transition {{ $matchFilter === 'today' ? 'bg-amber-400 text-slate-950' : 'text-slate-400 hover:text-white' }}"
+                                    class="px-3 py-1 rounded-lg text-[11px] font-bold transition {{ $matchFilter === 'today' ? 'bg-amber-400 text-slate-950' : 'text-slate-400 hover:text-white' }}"
                                 >
                                     Today's Matches
                                 </button>
                                 <button
                                     type="button"
                                     wire:click="setMatchFilter('top10')"
-                                    class="px-3 py-1 rounded-lg text-xs font-bold transition {{ $matchFilter === 'top10' ? 'bg-amber-400 text-slate-950' : 'text-slate-400 hover:text-white' }}"
+                                    class="px-3 py-1 rounded-lg text-[11px] font-bold transition {{ $matchFilter === 'top10' ? 'bg-amber-400 text-slate-950' : 'text-slate-400 hover:text-white' }}"
                                 >
                                     Top 10 Upcoming
                                 </button>
@@ -234,53 +318,93 @@
                         </div>
 
                         @if(empty($eligibleMatches))
-                            <div class="p-4 rounded-xl bg-slate-950/80 border border-slate-800 text-center space-y-2">
+                            <div class="p-4 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                 <p class="text-xs font-bold text-slate-300">
-                                    No eligible T20/ODI matches found for {{ $matchFilter === 'today' ? "Today (IST)" : 'Top 10 Upcoming' }}.
+                                    No eligible T20/ODI matches found for {{ $matchFilter === 'today' ? 'Today (IST)' : 'Top 10 Upcoming' }}.
                                 </p>
                                 @if($matchFilter === 'today')
                                     <button
                                         type="button"
                                         wire:click="setMatchFilter('top10')"
-                                        class="px-3.5 py-1.5 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/40 text-amber-300 text-xs font-bold transition"
+                                        class="px-4 py-2 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/40 text-amber-300 text-xs font-bold transition shrink-0"
                                     >
-                                        Switch to Top 10 Upcoming Matches →
+                                        Switch to Top 10 Upcoming →
                                     </button>
                                 @endif
                             </div>
                         @else
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5 max-h-96 overflow-y-auto pr-1">
-                                @foreach($eligibleMatches as $m)
-                                    @php
-                                        $mSelected = (string) $selectedMatchId === (string) $m['match_id'];
-                                    @endphp
-                                    <button
-                                        type="button"
-                                        wire:click="selectMatch('{{ $m['match_id'] }}')"
-                                        class="text-left p-3.5 rounded-xl border transition space-y-1.5 {{ $mSelected ? 'bg-emerald-500/10 border-emerald-400 ring-1 ring-emerald-400/50' : 'bg-slate-950 border-slate-800 hover:border-slate-600' }}"
-                                    >
-                                        <div class="flex items-center justify-between gap-2">
-                                            <span class="text-[10px] font-bold text-slate-400 truncate">{{ $m['series_name'] }}</span>
-                                            <span class="px-2 py-0.5 rounded-md text-[10px] font-black shrink-0 {{ $m['format'] === 'ODI' ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30' : 'bg-amber-500/15 text-amber-300 border border-amber-500/30' }}">
-                                                {{ $m['format'] }}
-                                            </span>
+                            <div class="relative" @click.outside="matchDropdownOpen = false">
+                                <button
+                                    type="button"
+                                    @click="matchDropdownOpen = !matchDropdownOpen"
+                                    class="w-full text-left bg-slate-950 border {{ $selectedMatchObj ? 'border-emerald-500/60' : 'border-slate-700 hover:border-amber-400/60' }} rounded-xl px-4 py-3 flex items-center justify-between gap-3 transition"
+                                >
+                                    @if($selectedMatchObj)
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <span class="text-xs sm:text-sm font-black text-white truncate">{{ $selectedMatchObj['match_title'] }}</span>
+                                                <span class="px-2 py-0.5 rounded text-[10px] font-black {{ $selectedMatchObj['format'] === 'ODI' ? 'bg-cyan-500/20 text-cyan-300' : 'bg-amber-500/20 text-amber-300' }}">
+                                                    {{ $selectedMatchObj['format'] }}
+                                                </span>
+                                                <span class="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] font-black">
+                                                    ✓ Selected
+                                                </span>
+                                            </div>
+                                            <div class="text-[11px] text-slate-400 truncate mt-0.5">
+                                                {{ $selectedMatchObj['series_name'] }} • {{ $selectedMatchObj['ist_time_label'] }} (Locks at {{ $selectedMatchObj['locks_at_label'] }})
+                                            </div>
                                         </div>
-                                        <div class="text-xs sm:text-sm font-black text-white">{{ $m['match_title'] }}</div>
-                                        <div class="flex items-center justify-between text-[11px] text-slate-400">
-                                            <span>🕒 {{ $m['ist_time_label'] }}</span>
-                                            <span class="text-amber-300 font-semibold">🔒 Locks {{ $m['locks_at_label'] }}</span>
-                                        </div>
-                                    </button>
-                                @endforeach
+                                    @else
+                                        <span class="text-xs sm:text-sm text-slate-400 font-medium">
+                                            🏏 Choose an upcoming T20 or ODI match...
+                                        </span>
+                                    @endif
+                                    <span class="text-slate-400 text-xs shrink-0 transition-transform" :class="{ 'rotate-180': matchDropdownOpen }">▼</span>
+                                </button>
+
+                                <!-- Dropdown Listbox -->
+                                <div
+                                    x-show="matchDropdownOpen"
+                                    x-cloak
+                                    x-transition
+                                    class="absolute left-0 right-0 mt-2 z-40 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl max-h-80 overflow-y-auto divide-y divide-slate-800/80"
+                                >
+                                    @foreach($eligibleMatches as $m)
+                                        @php
+                                            $mSelected = (string) $selectedMatchId === (string) $m['match_id'];
+                                        @endphp
+                                        <button
+                                            type="button"
+                                            wire:click="selectMatch('{{ $m['match_id'] }}')"
+                                            @click="matchDropdownOpen = false"
+                                            class="w-full text-left px-4 py-3 hover:bg-slate-800/80 transition flex items-center justify-between gap-3 {{ $mSelected ? 'bg-emerald-500/10' : '' }}"
+                                        >
+                                            <div class="min-w-0">
+                                                <div class="flex items-center gap-2 flex-wrap">
+                                                    <span class="text-xs sm:text-sm font-black text-white">{{ $m['match_title'] }}</span>
+                                                    <span class="px-2 py-0.5 rounded text-[10px] font-black {{ $m['format'] === 'ODI' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30' }}">
+                                                        {{ $m['format'] }}
+                                                    </span>
+                                                </div>
+                                                <div class="text-[11px] text-slate-400 mt-0.5">
+                                                    {{ $m['series_name'] }} • {{ $m['ist_time_label'] }} (Locks at {{ $m['locks_at_label'] }})
+                                                </div>
+                                            </div>
+                                            @if($mSelected)
+                                                <span class="text-emerald-400 text-xs font-black shrink-0">✓</span>
+                                            @endif
+                                        </button>
+                                    @endforeach
+                                </div>
                             </div>
                         @endif
                     </div>
 
-                    <!-- STEP 3: Select Team Size & Launch -->
-                    <div class="space-y-3 pt-2 border-t border-slate-800/80">
-                        <h3 class="text-xs font-black uppercase tracking-wider text-amber-400">
-                            Step 3 — Select Squad Size &amp; Send Challenge
-                        </h3>
+                    <!-- FIELD 3: Battle Mode (5v5 or 3v3) & Submit CTA -->
+                    <div class="space-y-3 pt-3 border-t border-slate-800/80">
+                        <label class="block text-xs font-black uppercase tracking-wider text-amber-400">
+                            3. Battle Mode (5v5 or 3v3)
+                        </label>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <button
                                 type="button"
@@ -288,8 +412,8 @@
                                 class="p-3.5 rounded-xl border text-left transition flex items-center justify-between {{ $selectedTeamSize === 5 ? 'bg-amber-500/15 border-amber-400 ring-1 ring-amber-400/50' : 'bg-slate-950 border-slate-800 hover:border-slate-600' }}"
                             >
                                 <div>
-                                    <div class="text-sm font-black text-white">5v5 Full Battle</div>
-                                    <div class="text-[11px] text-slate-400">5 Picks per Captain (10 Total Picks)</div>
+                                    <div class="text-sm font-black text-white">5v5 Squad Battle</div>
+                                    <div class="text-[11px] text-slate-400">Pick 5 players each • 1 Run = 1 CricGem</div>
                                 </div>
                                 <span class="px-2.5 py-1 rounded-lg bg-amber-400/20 text-amber-300 font-mono text-xs font-black">5v5</span>
                             </button>
@@ -299,23 +423,39 @@
                                 class="p-3.5 rounded-xl border text-left transition flex items-center justify-between {{ $selectedTeamSize === 3 ? 'bg-amber-500/15 border-amber-400 ring-1 ring-amber-400/50' : 'bg-slate-950 border-slate-800 hover:border-slate-600' }}"
                             >
                                 <div>
-                                    <div class="text-sm font-black text-white">3v3 Quick Clash</div>
-                                    <div class="text-[11px] text-slate-400">3 Picks per Captain (6 Total Picks)</div>
+                                    <div class="text-sm font-black text-white">3v3 Quick Battle</div>
+                                    <div class="text-[11px] text-slate-400">Pick 3 players each • 1 Run = 1 CricGem</div>
                                 </div>
                                 <span class="px-2.5 py-1 rounded-lg bg-cyan-400/20 text-cyan-300 font-mono text-xs font-black">3v3</span>
                             </button>
                         </div>
 
-                        <div class="pt-2">
+                        <div class="pt-2 space-y-2">
                             <button
                                 type="button"
                                 wire:click="sendChallenge"
                                 wire:loading.attr="disabled"
-                                class="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-300 hover:from-amber-300 hover:to-yellow-200 text-slate-950 text-xs sm:text-sm font-black uppercase tracking-wider shadow-lg shadow-amber-500/25 transition active:scale-95 disabled:opacity-50"
+                                @disabled(!$canSubmitChallenge)
+                                title="{{ !$selectedFriendObj ? 'Select a friend first' : (!$selectedMatchObj ? 'Select an upcoming T20/ODI match first' : ((int) $user->cric_gems < 100 ? '100+ CricGems required' : 'Send Battle Challenge')) }}"
+                                class="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-300 hover:from-amber-300 hover:to-yellow-200 disabled:opacity-45 disabled:cursor-not-allowed text-slate-950 text-xs sm:text-sm font-black uppercase tracking-wider shadow-lg shadow-amber-500/20 transition active:scale-[0.99]"
                             >
-                                <span wire:loading.remove wire:target="sendChallenge">⚔️ Send Challenge &amp; Open Draft Room</span>
-                                <span wire:loading wire:target="sendChallenge">Creating Battle Room...</span>
+                                <span wire:loading.remove wire:target="sendChallenge">⚔️ Send Battle Challenge</span>
+                                <span wire:loading wire:target="sendChallenge">Creating Live Draft Room...</span>
                             </button>
+
+                            @if(!$canSubmitChallenge)
+                                <p class="text-[11px] text-slate-400 text-center">
+                                    @if((int) $user->cric_gems < 100)
+                                        You need at least 100 CricGems to send a challenge.
+                                    @elseif(!$selectedFriendObj)
+                                        Select a friend in Step 1 to enable challenge creation.
+                                    @elseif((int) $selectedFriendObj->cric_gems < 100)
+                                        {{ $selectedFriendObj->captainTitle() }} needs at least 100 CricGems to play.
+                                    @elseif(!$selectedMatchObj)
+                                        Choose an upcoming T20 or ODI match in Step 2 to continue.
+                                    @endif
+                                </p>
+                            @endif
                         </div>
                     </div>
                 </section>
