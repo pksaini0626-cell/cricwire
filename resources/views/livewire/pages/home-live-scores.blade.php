@@ -409,6 +409,36 @@
     <!-- Top Global App Bar -->
     <x-header />
 
+    <!-- Homepage Top Sliding Battle Challenge Alert Bar (Logged-in Captains) -->
+    @if(($captainAlertBattles ?? collect())->isNotEmpty())
+        <div class="bg-gradient-to-r from-amber-500/20 via-emerald-500/15 to-amber-500/20 border-b border-amber-400/40 overflow-hidden">
+            <div class="max-w-[1480px] mx-auto px-3 sm:px-6 py-2 flex items-center gap-3 overflow-x-auto no-scrollbar">
+                <span class="px-2 py-0.5 rounded-md bg-amber-400 text-slate-950 text-[10px] font-black uppercase tracking-wider shrink-0 animate-pulse">
+                    LIVE ARENA
+                </span>
+                <div class="flex items-center gap-4 min-w-0 animate-none">
+                    @foreach($captainAlertBattles as $ab)
+                        @php
+                            $isPendingInvite = $ab->status === 'pending_accept';
+                            $challengerTag = $ab->challenger?->captainTitle() ?? 'Captain';
+                            $bannerMsg = $isPendingInvite
+                                ? "⚔️ {$challengerTag} challenged you for {$ab->match_title} ({$ab->modeLabel()})! Tap to Accept & Enter Draft Room"
+                                : "⚡ Live Draft Room Active: {$ab->match_title} ({$ab->modeLabel()})! Tap to Pick Your Squad →";
+                        @endphp
+                        <a
+                            href="{{ route('games.battle.show', $ab->slug) }}"
+                            wire:navigate
+                            class="inline-flex items-center gap-2 text-xs font-bold text-amber-200 hover:text-white whitespace-nowrap transition shrink-0"
+                        >
+                            <span>{{ $bannerMsg }}</span>
+                            <span class="px-2 py-0.5 rounded bg-emerald-500 text-slate-950 text-[10px] font-black">Join →</span>
+                        </a>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+    @endif
+
     @php
         $allCurrentMatches = match($activeTab) {
             'upcoming' => $upcomingMatches,
@@ -819,6 +849,61 @@
                         </div>
                     </section>
                 @endif
+
+                <!-- Live & Upcoming Captain Battles Horizontal Slider -->
+                <section class="cricket-card mt-2">
+                    <div class="cricket-card-header">
+                        <h2 class="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+                            <span>⚔️</span> Live &amp; Upcoming Captain Battles
+                        </h2>
+                        <a href="{{ route('games.index') }}" wire:navigate class="text-[11px] font-semibold text-[#94A3B8] hover:text-amber-400 transition">
+                            Open Games Hub →
+                        </a>
+                    </div>
+                    <div class="cricket-card-body">
+                        @if(($recentSquadBattles ?? collect())->isEmpty())
+                            <div class="p-4 rounded-xl bg-[#0D1422] border border-[#253248] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <div>
+                                    <div class="text-xs font-bold text-white">Challenge a friend to a 5v5 or 3v3 Squad Runs Battle!</div>
+                                    <div class="text-[11px] text-[#94A3B8] mt-0.5">Draft players live turn-by-turn and win 1 CricGem per Run.</div>
+                                </div>
+                                <a href="{{ route('games.index') }}" wire:navigate class="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black uppercase tracking-wider shrink-0 transition">
+                                    ⚔️ Start Battle
+                                </a>
+                            </div>
+                        @else
+                            <div class="flex items-stretch gap-3 overflow-x-auto pb-2 no-scrollbar">
+                                @foreach($recentSquadBattles as $sb)
+                                    <a
+                                        href="{{ route('games.battle.show', $sb->slug) }}"
+                                        wire:navigate
+                                        class="min-w-[260px] max-w-[280px] shrink-0 p-3.5 rounded-xl bg-[#0D1422] hover:bg-[#172337] border border-[#253248] hover:border-amber-500/40 transition flex flex-col justify-between gap-2.5 group"
+                                    >
+                                        <div class="flex items-center justify-between gap-2">
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-black {{ $sb->status === 'locked_live' ? 'bg-emerald-500/20 text-emerald-300' : ($sb->status === 'settled' ? 'bg-amber-500/20 text-amber-300' : 'bg-cyan-500/20 text-cyan-300') }}">
+                                                {{ $sb->status === 'locked_live' ? '⚡ LIVE' : ($sb->status === 'settled' ? '🏆 SETTLED' : '🪙 DRAFTING') }}
+                                            </span>
+                                            <span class="text-[10px] font-mono font-bold text-slate-400">{{ $sb->modeLabel() }} • {{ $sb->match_format }}</span>
+                                        </div>
+                                        <div>
+                                            <div class="text-xs font-black text-white group-hover:text-amber-300 transition truncate">
+                                                {{ $sb->challenger?->captainTitle() }} vs {{ $sb->opponent?->captainTitle() }}
+                                            </div>
+                                            <div class="text-[11px] text-[#94A3B8] truncate mt-0.5">{{ $sb->match_title }}</div>
+                                        </div>
+                                        <div class="flex items-center justify-between pt-2 border-t border-[#253248] text-xs font-mono font-black">
+                                            <span class="text-amber-300">{{ $sb->challenger_runs }}</span>
+                                            <span class="text-[10px] text-slate-500 font-sans">
+                                                {{ $sb->status === 'settled' && $sb->winner ? "Won by {$sb->run_margin}r" : 'Runs' }}
+                                            </span>
+                                            <span class="text-cyan-300">{{ $sb->opponent_runs }}</span>
+                                        </div>
+                                    </a>
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
+                </section>
 
                 <!-- Latest Cricket News Section (Main Feed: Mobile & All Screens) -->
                 @if(($featuredNews ?? collect())->isNotEmpty() || ($recentNews ?? collect())->isNotEmpty())

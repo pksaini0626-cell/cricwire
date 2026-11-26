@@ -25,6 +25,11 @@ class MorePage extends Component
     public ?int $confirmRemoveFriendId = null;
     public ?array $streakToast = null;
 
+    public string $captainUsername = '';
+    public bool $editingCaptainUsername = false;
+    public ?string $captainUsernameMessage = null;
+    public ?string $captainUsernameError = null;
+
     public function mount(CricGemsService $cricGemsService): void
     {
         $addFriend = request()->query('add_friend');
@@ -37,11 +42,52 @@ class MorePage extends Component
 
         if (Auth::check()) {
             $user = Auth::user();
+            $this->captainUsername = (string) ($user->captain_username ?? '');
             $toast = $cricGemsService->syncOnAuthenticatedVisit($user);
             if ($toast !== null) {
                 $this->streakToast = $toast;
             }
         }
+    }
+
+    public function toggleCaptainUsernameEditor(): void
+    {
+        $this->editingCaptainUsername = !$this->editingCaptainUsername;
+        $this->captainUsernameMessage = null;
+        $this->captainUsernameError = null;
+        if ($this->editingCaptainUsername && Auth::check()) {
+            $this->captainUsername = (string) (Auth::user()->captain_username ?? '');
+        }
+    }
+
+    public function saveCaptainUsername(): void
+    {
+        $this->captainUsernameMessage = null;
+        $this->captainUsernameError = null;
+
+        $user = Auth::user();
+        if (!$user) {
+            return;
+        }
+
+        $cleaned = trim($this->captainUsername);
+        if (!preg_match('/^[A-Za-z0-9_]{3,24}$/', $cleaned)) {
+            $this->captainUsernameError = 'Captain Username must be 3–24 characters (letters, numbers, underscores only).';
+            return;
+        }
+
+        $exists = User::whereRaw('LOWER(captain_username) = ?', [strtolower($cleaned)])
+            ->where('id', '!=', $user->id)
+            ->exists();
+
+        if ($exists) {
+            $this->captainUsernameError = 'That Captain Username is already taken.';
+            return;
+        }
+
+        $user->update(['captain_username' => $cleaned]);
+        $this->editingCaptainUsername = false;
+        $this->captainUsernameMessage = "Saved! You are now Captain {$cleaned}.";
     }
 
     public function togglePassbook(): void

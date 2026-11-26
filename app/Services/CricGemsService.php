@@ -76,6 +76,7 @@ class CricGemsService
 
     /**
      * Atomically debit CricGems from a user and record a double-entry transaction.
+     * When $allowNegative is true (used for post-match Squad Battle settlement), balance can go below zero.
      */
     public function debit(
         User $user,
@@ -83,16 +84,17 @@ class CricGemsService
         string $type,
         string $description,
         ?string $refType = null,
-        ?int $refId = null
+        ?int $refId = null,
+        bool $allowNegative = false
     ): CricGemTransaction {
         if ($amount <= 0) {
             throw new InvalidArgumentException('Debit amount must be greater than zero.');
         }
 
-        return DB::transaction(function () use ($user, $amount, $type, $description, $refType, $refId) {
+        return DB::transaction(function () use ($user, $amount, $type, $description, $refType, $refId, $allowNegative) {
             $lockedUser = User::where('id', $user->id)->lockForUpdate()->firstOrFail();
 
-            if ((int) $lockedUser->cric_gems < $amount) {
+            if (!$allowNegative && (int) $lockedUser->cric_gems < $amount) {
                 throw new RuntimeException('Insufficient CricGems balance.');
             }
 

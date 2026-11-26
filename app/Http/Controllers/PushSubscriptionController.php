@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\PushNotification;
 use App\Models\PushSubscription;
+use App\Models\UserNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 
 class PushSubscriptionController extends Controller
@@ -62,11 +64,11 @@ class PushSubscriptionController extends Controller
     }
 
     /**
-     * Return latest 15 sent notifications for In-App Bell drawer.
+     * Return latest 15 sent notifications (plus per-user battle alerts) for In-App Bell drawer.
      */
     public function latest(): JsonResponse
     {
-        $notifications = Cache::remember('in_app_notifications:latest', 60, function () {
+        $broadcasts = Cache::remember('in_app_notifications:latest', 60, function () {
             return PushNotification::query()
                 ->where('status', 'sent')
                 ->latest('sent_at')
@@ -83,10 +85,77 @@ class PushSubscriptionController extends Controller
                 ]);
         });
 
+        $merged = collect($broadcasts)->map(function ($n) {
+            return [
+                'id' => (int) $n->id,
+                'uid' => 'push-' . $n->id,
+                'source' => 'push',
+                'title' => $n->title,
+                'body' => $n->body,
+                'image_url' => $n->image_url,
+                'type' => $n->type,
+                'target_url' => $n->target_url,
+                'is_unread' => false,
+                'sent_at' => $n->sent_at?->toIso8601String(),
+                'created_at' => $n->created_at?->toIso8601String(),
+                'sort_ts' => ($n->sent_at ?? $n->created_at)?->timestamp ?? 0,
+            ];
+        });
+
+        $unreadUserCount = 0;
+
+        if (Auth::check()) {
+            $userAlerts = UserNotification::where('user_id', Auth::id())
+                ->latest('id')
+                ->take(15)
+                ->get();
+
+            $unreadUserCount = UserNotification::where('user_id', Auth::id())
+                ->whereNull('read_at')
+                ->count();
+
+            $mappedAlerts = $userAlerts->map(function (UserNotification $un) {
+                return [
+                    'id' => 1000000000 + (int) $un->id,
+                    'uid' => 'user-' . $un->id,
+                    'source' => 'user',
+                    'title' => $un->title,
+                    'body' => $un->body,
+                    'image_url' => null,
+                    'type' => $un->type,
+                    'target_url' => $un->action_url,
+                    'is_unread' => $un->read_at === null,
+                    'sent_at' => $un->created_at?->toIso8601String(),
+                    'created_at' => $un->created_at?->toIso8601String(),
+                    'sort_ts' => $un->created_at?->timestamp ?? 0,
+                ];
+            });
+
+            $merged = $mappedAlerts->concat($merged)
+                ->sortByDesc('sort_ts')
+                ->take(20)
+                ->values();
+        }
+
         return response()->json([
             'success' => true,
-            'data'    => $notifications,
-        ]);
+            'unread_user_count' => $unreadUserCount,
+            'data'    => $merged->values(),
+        ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    }
+
+    /**
+     * Mark authenticated user's in-app notifications as read.
+     */
+    public function markRead(): JsonResponse
+    {
+        if (Auth::check()) {
+            UserNotification::where('user_id', Auth::id())
+                ->whereNull('read_at')
+                ->update(['read_at' => now()]);
+        }
+
+        return response()->json(['success' => true]);
     }
 
     /**

@@ -186,6 +186,7 @@ class FinishedMatchController extends Controller
                     ]
                 );
                 Cache::forget('cricket:finished_matches:ids');
+                app(\App\Services\SquadBattleService::class)->syncBattlesForMatch($matchKey);
             } catch (\Throwable $e) {
                 Log::error("FinishedMatchController: failed to archive {$matchKey}: " . $e->getMessage());
             }

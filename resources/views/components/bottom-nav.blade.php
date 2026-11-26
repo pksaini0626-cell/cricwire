@@ -7,6 +7,7 @@
     // Auto detect active tab if not explicitly passed
     $active = $activeTab ?: match(true) {
         $currentRoute === 'more' || $currentPath === 'more' || $currentPath === 'profile' => 'more',
+        $currentRoute === 'games.index' || $currentRoute === 'games.battle.show' || str_starts_with($currentPath, 'games') => 'games',
         $currentRoute === 'polls' || $currentPath === 'polls' => 'polls',
         $currentRoute === 'news.index' || str_starts_with($currentPath, 'cricket-news') => 'news',
         $currentRoute === 'series.index' || $currentRoute === 'series.detail' || str_starts_with($currentPath, 'cricket-series') => 'series',
@@ -16,7 +17,7 @@
 @endphp
 
 <nav class="md:hidden lg:hidden fixed bottom-3 left-4 right-4 z-50 max-w-md mx-auto rounded-2xl bg-slate-900/90 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden">
-    <div class="grid grid-cols-5 h-14 items-center">
+    <div class="grid grid-cols-6 h-14 items-center">
         <!-- Live -->
         <a href="{{ url('/') }}" wire:navigate class="flex flex-col items-center justify-center transition-all group {{ $active === 'live' ? 'text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200' }}">
             <span class="text-base group-hover:scale-110 transition-transform {{ $active === 'live' ? 'drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]' : '' }}">
@@ -31,6 +32,14 @@
                 📅
             </span>
             <span class="text-[10px] {{ $active === 'schedule' ? 'font-black uppercase tracking-wider text-neon-gold' : 'font-medium tracking-tight' }} mt-0.5">Schedule</span>
+        </a>
+
+        <!-- Games -->
+        <a href="{{ route('games.index') }}" wire:navigate class="flex flex-col items-center justify-center transition-all group {{ $active === 'games' ? 'text-amber-400 font-bold' : 'text-slate-400 hover:text-slate-200' }}">
+            <span class="text-base group-hover:scale-110 transition-transform {{ $active === 'games' ? 'drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]' : '' }}">
+                🎮
+            </span>
+            <span class="text-[10px] {{ $active === 'games' ? 'font-black uppercase tracking-wider text-neon-gold' : 'font-medium tracking-tight' }} mt-0.5">Games</span>
         </a>
 
         <!-- News -->

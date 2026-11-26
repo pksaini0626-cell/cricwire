@@ -20,6 +20,7 @@ class User extends Authenticatable implements FilamentUser
      */
     protected $fillable = [
         'name',
+        'captain_username',
         'email',
         'password',
         'google_id',
@@ -119,5 +120,46 @@ class User extends Authenticatable implements FilamentUser
     public function wonBattles()
     {
         return $this->hasMany(Battle::class, 'winner_id');
+    }
+
+    public function squadBattlesAsChallenger()
+    {
+        return $this->hasMany(SquadBattle::class, 'challenger_id');
+    }
+
+    public function squadBattlesAsOpponent()
+    {
+        return $this->hasMany(SquadBattle::class, 'opponent_id');
+    }
+
+    public function squadBattlePicks()
+    {
+        return $this->hasMany(SquadBattlePick::class);
+    }
+
+    public function userNotifications()
+    {
+        return $this->hasMany(UserNotification::class);
+    }
+
+    /**
+     * Display username for Captain vs Captain battles, falling back to display name.
+     */
+    public function captainDisplayName(): string
+    {
+        $username = trim((string) ($this->captain_username ?? ''));
+        if ($username !== '') {
+            return $username;
+        }
+
+        return trim((string) ($this->name ?? '')) ?: 'Player';
+    }
+
+    /**
+     * Prefixed Captain label (e.g., "Captain KingKohli_99").
+     */
+    public function captainTitle(): string
+    {
+        return 'Captain ' . $this->captainDisplayName();
     }
 }

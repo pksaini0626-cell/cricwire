@@ -4,6 +4,7 @@ namespace App\Livewire\Pages;
 
 use App\Helpers\CricketMatchFormatter;
 use App\Models\ManagedMatch;
+use App\Models\SquadBattle;
 use App\Services\Cricket\CricketLiveApiService;
 use App\Services\CricGemsService;
 use Illuminate\Support\Facades\Auth;
@@ -151,6 +152,40 @@ class HomeLiveScores extends Component
                 'description' => 'Fastest live cricket score updates, ball-by-ball commentary, and match schedules.',
             ];
 
+        // Pending / Live Draft Captain Battles for Top Sliding Bar (logged-in users)
+        $captainAlertBattles = collect();
+        if (Auth::check()) {
+            $uid = Auth::id();
+            $captainAlertBattles = SquadBattle::with(['challenger', 'opponent'])
+                ->where(function ($q) use ($uid) {
+                    $q->where(function ($sub) use ($uid) {
+                        $sub->where('opponent_id', $uid)
+                            ->where('status', SquadBattle::STATUS_PENDING_ACCEPT);
+                    })->orWhere(function ($sub) use ($uid) {
+                        $sub->where(function ($p) use ($uid) {
+                            $p->where('challenger_id', $uid)->orWhere('opponent_id', $uid);
+                        })->where('status', SquadBattle::STATUS_DRAFTING);
+                    });
+                })
+                ->where(function ($q) {
+                    $q->whereNull('locks_at')->orWhere('locks_at', '>', now());
+                })
+                ->latest('id')
+                ->take(5)
+                ->get();
+        }
+
+        // Bottom Homepage Slider: Live, Upcoming Draft, & Recent Settled Captain Battles
+        $recentSquadBattles = SquadBattle::with(['challenger', 'opponent', 'winner'])
+            ->whereIn('status', [
+                SquadBattle::STATUS_DRAFTING,
+                SquadBattle::STATUS_LOCKED_LIVE,
+                SquadBattle::STATUS_SETTLED,
+            ])
+            ->latest('id')
+            ->take(10)
+            ->get();
+
         return view('livewire.pages.home-live-scores', [
             'activeTab' => $this->activeTab,
             'liveCount' => count($liveMatches),
@@ -171,6 +206,8 @@ class HomeLiveScores extends Component
             'featuredNews' => $featuredNews,
             'recentNews' => $recentNews,
             'seoData' => $seoData,
+            'captainAlertBattles' => $captainAlertBattles,
+            'recentSquadBattles' => $recentSquadBattles,
         ])->layout('layouts.app', [
             'seoData' => $seoData,
             'title' => $seoData['title'] ?? 'CricWire - Live Cricket Scores',

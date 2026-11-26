@@ -165,7 +165,7 @@
                                     </div>
                                     <p class="text-xs text-slate-400 truncate mt-0.5">{{ $user->email }}</p>
 
-                                    <!-- Unique Player ID Badge + 1-Tap Copy -->
+                                    <!-- Unique Player ID Badge + 1-Tap Copy + Captain Username Editor -->
                                     <div class="flex flex-wrap items-center gap-2 mt-2.5">
                                         <div class="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-slate-950/90 border border-amber-500/40 shadow-inner">
                                             <span class="text-[10px] uppercase font-bold tracking-wider text-slate-400">Player ID:</span>
@@ -179,7 +179,40 @@
                                             <span x-show="!copiedId">📋 Copy ID</span>
                                             <span x-show="copiedId" x-cloak class="text-emerald-400">✓ Copied!</span>
                                         </button>
+                                        <button
+                                            type="button"
+                                            wire:click="toggleCaptainUsernameEditor"
+                                            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-xs font-bold text-amber-300 transition"
+                                        >
+                                            <span>✏️</span>
+                                            <span>{{ $user->captain_username ? "Captain {$user->captain_username}" : 'Set Captain Username' }}</span>
+                                        </button>
                                     </div>
+
+                                    @if($editingCaptainUsername)
+                                        <form wire:submit="saveCaptainUsername" class="mt-2.5 flex flex-wrap items-center gap-2 max-w-md">
+                                            <input
+                                                type="text"
+                                                wire:model="captainUsername"
+                                                placeholder="e.g. KingKohli_99 (3-24 chars)"
+                                                maxlength="24"
+                                                class="flex-1 min-w-[180px] bg-slate-950 border border-amber-500/40 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                                            >
+                                            <button type="submit" class="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black transition">
+                                                Save
+                                            </button>
+                                            <button type="button" wire:click="toggleCaptainUsernameEditor" class="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold">
+                                                Cancel
+                                            </button>
+                                        </form>
+                                    @endif
+
+                                    @if($captainUsernameMessage)
+                                        <div class="mt-1.5 text-[11px] text-emerald-300 font-semibold">{{ $captainUsernameMessage }}</div>
+                                    @endif
+                                    @if($captainUsernameError)
+                                        <div class="mt-1.5 text-[11px] text-rose-300 font-semibold">{{ $captainUsernameError }}</div>
+                                    @endif
                                 </div>
                             </div>
 

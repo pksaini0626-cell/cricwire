@@ -1641,6 +1641,7 @@ class CricketLiveApiService
                         'scorecard_payload' => $payload,
                     ]
                 );
+                app(\App\Services\SquadBattleService::class)->syncBattlesForMatch($matchKey);
             } catch (\Throwable $e) {
                 Log::warning("CricketLiveApiService::getOrArchiveCompletedScorecard failed for {$matchKey}: " . $e->getMessage());
             }

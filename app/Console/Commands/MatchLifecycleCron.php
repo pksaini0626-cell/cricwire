@@ -4,7 +4,9 @@ namespace App\Console\Commands;
 
 use App\Models\ManagedMatch;
 use App\Models\SkippedSeries;
+use App\Models\SquadBattle;
 use App\Services\Cricket\CricketLiveApiService;
+use App\Services\SquadBattleService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
@@ -115,6 +117,22 @@ class MatchLifecycleCron extends Command
             if ($match->lifecycle_stage === 'live') {
                 $this->handleLiveThrottling($match, $apiService);
             }
+        }
+
+        // 3. Squad Battles: Expire incomplete drafts past lock deadline & sync live/final runs (0 API calls)
+        try {
+            $battleService = app(SquadBattleService::class);
+            $activeBattles = SquadBattle::whereIn('status', [
+                SquadBattle::STATUS_PENDING_ACCEPT,
+                SquadBattle::STATUS_DRAFTING,
+                SquadBattle::STATUS_LOCKED_LIVE,
+            ])->get();
+
+            foreach ($activeBattles as $battle) {
+                $battleService->syncLiveAndFinalScores($battle);
+            }
+        } catch (\Throwable $e) {
+            Log::error('MatchLifecycleCron: SquadBattle sync error: ' . $e->getMessage());
         }
 
         return Command::SUCCESS;

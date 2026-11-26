@@ -81,6 +81,10 @@ Route::get('/cricket-news/{article:slug}', App\Livewire\Pages\NewsShow::class)->
 Route::get('/write-for-us', \App\Livewire\Pages\WriteForUsPage::class)->name('guest-post.create');
 Route::get('/polls', App\Livewire\Pages\PollsPage::class)->name('polls');
 
+// Games Hub & Captain vs Captain Squad Battles
+Route::get('/games', App\Livewire\Pages\GamesHub::class)->name('games.index');
+Route::get('/games/battle/{slug}', App\Livewire\Pages\BattleRoom::class)->name('games.battle.show');
+
 // User Settings & More Hub (Formerly Profile)
 Route::get('/more', App\Livewire\Pages\MorePage::class)->name('more');
 Route::get('/profile', fn () => redirect()->route('more', [], 301))->name('profile');
@@ -146,6 +150,7 @@ Route::get('/firebase-messaging-sw.js', [\App\Http\Controllers\PushSubscriptionC
 Route::post('/api/push/subscribe', [\App\Http\Controllers\PushSubscriptionController::class, 'subscribe'])->name('api.push.subscribe');
 Route::post('/api/push/unsubscribe', [\App\Http\Controllers\PushSubscriptionController::class, 'unsubscribe'])->name('api.push.unsubscribe');
 Route::get('/api/notifications/latest', [\App\Http\Controllers\PushSubscriptionController::class, 'latest'])->name('api.notifications.latest');
+Route::post('/api/notifications/mark-read', [\App\Http\Controllers\PushSubscriptionController::class, 'markRead'])->name('api.notifications.mark-read');
 Route::get('/api/firebase/config', [\App\Http\Controllers\PushSubscriptionController::class, 'firebaseConfig'])->name('api.firebase.config');
 
 

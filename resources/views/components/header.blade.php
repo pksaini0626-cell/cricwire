@@ -16,6 +16,7 @@
                 ['label' => 'Live Scores', 'url' => url('/'), 'active' => request()->is('/') || $currentRoute === 'home'],
                 ['label' => 'Schedule', 'url' => route('schedule'), 'active' => str_starts_with($currentPath, 'cricket-schedule') || $currentRoute === 'schedule'],
                 ['label' => 'Series', 'url' => route('series.index'), 'active' => str_starts_with($currentPath, 'cricket-series') || $currentRoute === 'series.index' || $currentRoute === 'series.detail'],
+                ['label' => '🎮 Games', 'url' => route('games.index'), 'active' => str_starts_with($currentPath, 'games') || $currentRoute === 'games.index' || $currentRoute === 'games.battle.show'],
                 ['label' => 'News', 'url' => route('news.index'), 'active' => str_starts_with($currentPath, 'cricket-news') || $currentRoute === 'news.index'],
                 ['label' => 'Polls', 'url' => route('polls'), 'active' => str_starts_with($currentPath, 'polls') || $currentRoute === 'polls'],
                 ['label' => 'Rankings', 'url' => route('rankings'), 'active' => str_starts_with($currentPath, 'cricket-rankings') || $currentRoute === 'rankings'],
@@ -73,10 +74,10 @@
                             const json = await res.json();
                             if (json.success && json.data) {
                                 this.notifications = json.data;
-                                if (this.notifications.length > 0) {
-                                    const latestId = this.notifications[0].id;
-                                    this.hasUnread = latestId > this.lastSeenId;
-                                }
+                                const latestBroadcast = this.notifications.find(n => n.source !== 'user');
+                                const hasNewBroadcast = latestBroadcast ? (latestBroadcast.id > this.lastSeenId) : false;
+                                const hasUserUnread = (json.unread_user_count || 0) > 0 || this.notifications.some(n => n.is_unread);
+                                this.hasUnread = hasUserUnread || hasNewBroadcast;
                             }
                         } catch (e) {
                             console.error('Error fetching notifications:', e);
@@ -89,16 +90,27 @@
                             this.fetchLatest();
                         }
                     },
-                    markAsSeen() {
-                        if (this.notifications.length > 0) {
-                            const latestId = this.notifications[0].id;
-                            localStorage.setItem('cricwire_last_seen_notif_id', latestId.toString());
-                            this.lastSeenId = latestId;
-                            this.hasUnread = false;
+                    async markAsSeen() {
+                        const latestBroadcast = this.notifications.find(n => n.source !== 'user');
+                        if (latestBroadcast) {
+                            localStorage.setItem('cricwire_last_seen_notif_id', latestBroadcast.id.toString());
+                            this.lastSeenId = latestBroadcast.id;
                         }
+                        this.hasUnread = false;
+                        this.notifications = this.notifications.map(n => ({ ...n, is_unread: false }));
+                        try {
+                            const csrf = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || '';
+                            await fetch('/api/notifications/mark-read', {
+                                method: 'POST',
+                                headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' }
+                            });
+                        } catch (e) {}
                     },
                     getIcon(type) {
                         switch(type) {
+                            case 'battle_challenge': return '⚔️';
+                            case 'battle_accepted': return '🪙';
+                            case 'battle_result': return '🏆';
                             case 'match': return '🏏';
                             case 'poll': return '📊';
                             case 'news': return '🚨';
@@ -177,11 +189,11 @@
                             </div>
                         </template>
 
-                        <template x-for="item in notifications" :key="item.id">
+                        <template x-for="item in notifications" :key="item.uid || item.id">
                             <a 
                                 :href="item.target_url || '#'" 
                                 class="block p-3.5 hover:bg-white/[0.04] transition group"
-                                :class="{'bg-amber-500/[0.03]': item.id > lastSeenId}"
+                                :class="{'bg-amber-500/[0.06]': item.is_unread || (item.source !== 'user' && item.id > lastSeenId)}"
                             >
                                 <div class="flex items-start space-x-3">
                                     <div class="w-8 h-8 rounded-xl bg-slate-800 border border-white/10 flex items-center justify-center shrink-0 shadow-inner group-hover:border-amber-400/40 transition">
