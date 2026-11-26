@@ -13,6 +13,11 @@ use Illuminate\Support\Str;
 
 class CricketLiveApiService
 {
+    public const ICC_RANKING_CATEGORIES = ['batting', 'bowling', 'allrounder', 'teams'];
+    public const ICC_RANKING_FORMATS = ['t20', 'odi', 'test'];
+    public const ICC_RANKING_REDIS_PREFIX = 'cricket:redis:icc_rankings:';
+    public const ICC_RANKING_TTL = 172800; // 48 hours (refreshed daily by scheduler)
+
     protected string $baseUrl;
     protected string $token;
 
@@ -2434,12 +2439,257 @@ class CricketLiveApiService
     }
 
     /**
+     * Normalize an ICC ranking category slug to a valid upstream category.
+     */
+    public static function normalizeRankingCategory(?string $category): string
+    {
+        $clean = strtolower(trim((string) $category));
+
+        return match ($clean) {
+            'batting', 'batsmen', 'batsman', 'batter', 'batters' => 'batting',
+            'bowling', 'bowlers', 'bowler' => 'bowling',
+            'allrounder', 'allrounders', 'all_rounder', 'all-rounder', 'all-rounders' => 'allrounder',
+            'teams', 'team' => 'teams',
+            default => 'batting',
+        };
+    }
+
+    /**
+     * Normalize an ICC ranking format slug to a valid upstream format.
+     */
+    public static function normalizeRankingFormat(?string $format): string
+    {
+        $clean = strtolower(trim((string) $format));
+
+        return in_array($clean, self::ICC_RANKING_FORMATS, true) ? $clean : 't20';
+    }
+
+    /**
+     * Build the Redis cache key for a specific ICC rankings category and format.
+     */
+    public static function iccRankingCacheKey(string $category, string $format): string
+    {
+        $cat = self::normalizeRankingCategory($category);
+        $fmt = self::normalizeRankingFormat($format);
+
+        return self::ICC_RANKING_REDIS_PREFIX . "{$cat}:{$fmt}";
+    }
+
+    /**
+     * Build a player/team image URL from Cricbuzz/upstream faceImageId.
+     */
+    public static function resolveRankingImageUrl(mixed $faceImageId): ?string
+    {
+        $id = trim((string) ($faceImageId ?? ''));
+        if ($id === '' || $id === '0') {
+            return null;
+        }
+
+        if (str_starts_with($id, 'http://') || str_starts_with($id, 'https://')) {
+            return $id;
+        }
+
+        return "https://static.cricbuzz.com/a/img/v1/i1/c{$id}/i.jpg";
+    }
+
+    /**
+     * Read ICC Rankings strictly from Redis / Cache (Zero Live API Drain).
+     */
+    public function getIccRankingsFromRedis(string $category = 'batting', string $format = 't20'): array
+    {
+        $cat = self::normalizeRankingCategory($category);
+        $fmt = self::normalizeRankingFormat($format);
+        $cacheKey = self::iccRankingCacheKey($cat, $fmt);
+
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached) && !empty($cached['rankings'])) {
+            return $cached;
+        }
+
+        return [
+            'category' => $cat,
+            'format' => $fmt,
+            'category_type' => match ($cat) {
+                'bowling' => 'bowlers',
+                'allrounder' => 'allrounders',
+                'teams' => 'teams',
+                default => 'batsmen',
+            },
+            'available_formats' => self::ICC_RANKING_FORMATS,
+            'count' => 0,
+            'rankings' => [],
+            'synced_at' => Cache::get(self::ICC_RANKING_REDIS_PREFIX . 'meta')['last_synced_at'] ?? null,
+        ];
+    }
+
+    /**
+     * Fetch & normalize ICC Rankings from GET /cricket/icc-rankings/{category}/{format}.
+     * Used exclusively by scheduled sync / admin CLI — never called on live page requests.
+     */
+    public function fetchAndNormalizeIccRankings(string $category = 'batting', string $format = 't20'): ?array
+    {
+        $cat = self::normalizeRankingCategory($category);
+        $fmt = self::normalizeRankingFormat($format);
+
+        $res = $this->get("/cricket/icc-rankings/{$cat}/{$fmt}");
+        if (!is_array($res)) {
+            return null;
+        }
+
+        if (array_key_exists('success', $res) && !$res['success']) {
+            return null;
+        }
+
+        $data = is_array($res['data'] ?? null) ? $res['data'] : $res;
+        $rawRankings = $data['rankings'] ?? null;
+
+        if (!is_array($rawRankings) || empty($rawRankings)) {
+            return null;
+        }
+
+        $normalizedRows = [];
+        $fallbackRank = 1;
+
+        foreach ($rawRankings as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $name = trim((string) ($row['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+
+            $country = trim((string) ($row['country'] ?? ($cat === 'teams' ? $name : '')));
+            $rank = (int) ($row['rank'] ?? $fallbackRank);
+            if ($rank <= 0) {
+                $rank = $fallbackRank;
+            }
+            $fallbackRank++;
+
+            $rating = (int) ($row['rating'] ?? 0);
+            $points = (int) ($row['points'] ?? $rating);
+            $trendRaw = trim((string) ($row['trend'] ?? 'Flat'));
+            $trendLower = strtolower($trendRaw);
+            $trendDirection = match (true) {
+                str_contains($trendLower, 'up') || str_starts_with($trendLower, '+') => 'up',
+                str_contains($trendLower, 'down') || str_starts_with($trendLower, '-') => 'down',
+                default => 'flat',
+            };
+
+            $faceImageId = trim((string) ($row['faceImageId'] ?? $row['imageId'] ?? ''));
+
+            $normalizedRows[] = [
+                'id' => (string) ($row['id'] ?? ''),
+                'rank' => $rank,
+                'name' => $name,
+                'country' => $country,
+                'country_short' => $country !== '' ? self::generateTeamShort($country) : '',
+                'rating' => $rating,
+                'points' => $points,
+                'trend' => $trendRaw !== '' ? $trendRaw : 'Flat',
+                'trend_direction' => $trendDirection,
+                'face_image_id' => $faceImageId !== '' ? $faceImageId : null,
+                'image_url' => self::resolveRankingImageUrl($faceImageId),
+            ];
+        }
+
+        if (empty($normalizedRows)) {
+            return null;
+        }
+
+        usort($normalizedRows, fn (array $a, array $b) => $a['rank'] <=> $b['rank']);
+
+        $availableFormats = [];
+        foreach ((array) ($data['availableFormats'] ?? self::ICC_RANKING_FORMATS) as $avFmt) {
+            $normFmt = strtolower(trim((string) $avFmt));
+            if (in_array($normFmt, self::ICC_RANKING_FORMATS, true) && !in_array($normFmt, $availableFormats, true)) {
+                $availableFormats[] = $normFmt;
+            }
+        }
+        if (empty($availableFormats)) {
+            $availableFormats = self::ICC_RANKING_FORMATS;
+        }
+
+        return [
+            'category' => $cat,
+            'format' => $fmt,
+            'category_type' => (string) ($data['categoryType'] ?? $cat),
+            'available_formats' => $availableFormats,
+            'count' => count($normalizedRows),
+            'rankings' => $normalizedRows,
+            'synced_at' => now('Asia/Kolkata')->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Sync all (or filtered) ICC Rankings combinations into Redis with quota protection.
+     * Full matrix = 4 categories x 3 formats = 12 API calls/day.
+     */
+    public function syncIccRankingsToRedis(?string $onlyCategory = null, ?string $onlyFormat = null): array
+    {
+        $categories = $onlyCategory
+            ? [self::normalizeRankingCategory($onlyCategory)]
+            : self::ICC_RANKING_CATEGORIES;
+
+        $formats = $onlyFormat
+            ? [self::normalizeRankingFormat($onlyFormat)]
+            : self::ICC_RANKING_FORMATS;
+
+        $synced = [];
+        $failed = [];
+        $skippedDueToQuota = false;
+
+        foreach ($categories as $category) {
+            foreach ($formats as $format) {
+                if ($this->isHardStopActive()) {
+                    $skippedDueToQuota = true;
+                    $failed[] = "{$category}:{$format}";
+                    continue;
+                }
+
+                $payload = $this->fetchAndNormalizeIccRankings($category, $format);
+                if (is_array($payload) && !empty($payload['rankings'])) {
+                    Cache::put(
+                        self::iccRankingCacheKey($category, $format),
+                        $payload,
+                        self::ICC_RANKING_TTL
+                    );
+                    $synced["{$category}:{$format}"] = $payload['count'];
+                } else {
+                    $failed[] = "{$category}:{$format}";
+                }
+            }
+        }
+
+        $existingMeta = Cache::get(self::ICC_RANKING_REDIS_PREFIX . 'meta', []);
+        $meta = [
+            'last_synced_at' => !empty($synced)
+                ? now('Asia/Kolkata')->toIso8601String()
+                : ($existingMeta['last_synced_at'] ?? null),
+            'synced_count' => count($synced),
+            'failed_count' => count($failed),
+            'synced_tables' => array_merge($existingMeta['synced_tables'] ?? [], $synced),
+            'failed_tables' => $failed,
+            'quota_halted' => $skippedDueToQuota,
+        ];
+
+        Cache::put(self::ICC_RANKING_REDIS_PREFIX . 'meta', $meta, self::ICC_RANKING_TTL);
+
+        return [
+            'synced' => $synced,
+            'failed' => $failed,
+            'quota_halted' => $skippedDueToQuota,
+            'meta' => $meta,
+        ];
+    }
+
+    /**
      * GET /cricket/icc-rankings/{$category}/{$format}
      */
-    public function getIccRankings(string $category = 'men', string $format = 't20'): array
+    public function getIccRankings(string $category = 'batting', string $format = 't20'): array
     {
-        $res = $this->get("/cricket/icc-rankings/{$category}/{$format}");
-        return $res['data'] ?? $res ?? [];
+        return $this->getIccRankingsFromRedis($category, $format);
     }
 
     /**

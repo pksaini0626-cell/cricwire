@@ -2,7 +2,9 @@
 
 namespace App\Filament\Pages;
 
+use App\Services\Cricket\CricketLiveApiService;
 use App\Support\LiveEngineConfig;
+use Filament\Actions\Action;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -20,6 +22,41 @@ class LiveEngineSettings extends Page
     protected static string $view = 'filament.pages.live-engine-settings';
 
     public ?array $data = [];
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('syncIccRankings')
+                ->label('Sync ICC Rankings Now')
+                ->icon('heroicon-o-arrow-path')
+                ->color('warning')
+                ->requiresConfirmation()
+                ->modalHeading('Sync ICC Cricket Rankings to Redis')
+                ->modalDescription('Fetches all 12 ICC Ranking tables (batting, bowling, allrounder, teams across T20, ODI, Test) into Redis (12 API calls).')
+                ->action(function (CricketLiveApiService $apiService) {
+                    $result = $apiService->syncIccRankingsToRedis();
+                    $syncedCount = count($result['synced'] ?? []);
+                    $failedCount = count($result['failed'] ?? []);
+
+                    if ($syncedCount > 0 && $failedCount === 0) {
+                        Notification::make()
+                            ->title("ICC Rankings Synced ({$syncedCount}/12 tables cached in Redis)")
+                            ->success()
+                            ->send();
+                    } elseif ($syncedCount > 0) {
+                        Notification::make()
+                            ->title("Partial ICC Rankings Sync: {$syncedCount} synced, {$failedCount} failed")
+                            ->warning()
+                            ->send();
+                    } else {
+                        Notification::make()
+                            ->title('ICC Rankings sync failed or halted by quota protection.')
+                            ->danger()
+                            ->send();
+                    }
+                }),
+        ];
+    }
 
     public function mount(): void
     {

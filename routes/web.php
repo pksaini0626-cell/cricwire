@@ -65,7 +65,14 @@ Route::get('/cricket-series/{seriesSlug}/{tab?}', \App\Livewire\Pages\SeriesDeta
     ->where('tab', 'matches|points-table|news|squads')
     ->name('series.detail');
 
-Route::get('/cricket-rankings/{gender?}', App\Livewire\Pages\RankingsPage::class)->name('rankings');
+Route::get('/cricket-rankings/{category?}/{format?}', App\Livewire\Pages\RankingsPage::class)
+    ->whereIn('category', ['batting', 'bowling', 'allrounder', 'teams'])
+    ->whereIn('format', ['t20', 'odi', 'test'])
+    ->name('rankings');
+
+Route::get('/cricket-rankings/{gender}', fn () => redirect()->route('rankings', [], 301))
+    ->whereIn('gender', ['men', 'women'])
+    ->name('rankings.legacy');
 
 // Editorial & Fan Engagement
 Route::get('/cricket-news', App\Livewire\Pages\NewsIndex::class)->name('news.index');

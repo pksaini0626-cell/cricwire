@@ -356,6 +356,87 @@ class CricketSeoService
     }
 
     /**
+     * Generate complete SEO metadata & JSON-LD schema for ICC Cricket Rankings.
+     */
+    public static function forRankings(string $category = 'batting', string $format = 't20', array $rankings = []): array
+    {
+        $appUrl = config('app.url', 'https://cricwire.in');
+        $orgName = SeoConfig::get('seo_org_name', 'Cricwire');
+
+        $formatLabel = match (strtolower($format)) {
+            'odi' => 'ODI',
+            'test' => 'Test',
+            default => 'T20I',
+        };
+
+        $categoryLabel = match (strtolower($category)) {
+            'bowling' => 'Bowling',
+            'allrounder' => 'All-Rounder',
+            'teams' => 'Team',
+            default => 'Batting',
+        };
+
+        $isDefault = ($category === 'batting' && $format === 't20');
+        $canonicalUrl = $isDefault
+            ? route('rankings')
+            : route('rankings', ['category' => $category, 'format' => $format]);
+
+        $year = now('Asia/Kolkata')->year;
+        $title = "ICC {$formatLabel} {$categoryLabel} Rankings {$year} - Latest Points & Ratings | {$orgName}";
+        $description = "Official ICC {$formatLabel} {$categoryLabel} Rankings {$year} on {$orgName}. View updated player & team ratings, points, and rank movement trends.";
+
+        $breadcrumbSchema = [
+            '@context' => 'https://schema.org',
+            '@type' => 'BreadcrumbList',
+            'itemListElement' => [
+                [
+                    '@type' => 'ListItem',
+                    'position' => 1,
+                    'name' => 'Home',
+                    'item' => $appUrl,
+                ],
+                [
+                    '@type' => 'ListItem',
+                    'position' => 2,
+                    'name' => 'ICC Rankings',
+                    'item' => route('rankings'),
+                ],
+            ],
+        ];
+
+        $schemas = [$breadcrumbSchema];
+
+        if (!empty($rankings)) {
+            $itemListElements = [];
+            foreach (array_slice($rankings, 0, 10) as $row) {
+                $itemListElements[] = [
+                    '@type' => 'ListItem',
+                    'position' => (int) ($row['rank'] ?? (count($itemListElements) + 1)),
+                    'name' => (string) ($row['name'] ?? ''),
+                ];
+            }
+
+            $schemas[] = [
+                '@context' => 'https://schema.org',
+                '@type' => 'ItemList',
+                'name' => "ICC {$formatLabel} {$categoryLabel} Rankings",
+                'numberOfItems' => count($itemListElements),
+                'itemListElement' => $itemListElements,
+            ];
+        }
+
+        return [
+            'title' => $title,
+            'description' => $description,
+            'canonical' => $canonicalUrl,
+            'robots' => 'index, follow',
+            'og_type' => 'website',
+            'og_image' => self::resolveOgImage(SeoConfig::get('seo_og_default_image')),
+            'schemas' => $schemas,
+        ];
+    }
+
+    /**
      * Generate high-CTR Match FAQs for Schema + Visible Accordion.
      */
     public static function generateMatchFaqs(
