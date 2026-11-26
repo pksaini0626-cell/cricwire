@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\SocialiteController;
 use App\Http\Controllers\SitemapController;
 use App\Services\Cricket\CricketUrlService;
 use App\Services\Cricket\RapidApiCricketService;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
 // Home & Live Scores
@@ -90,9 +91,16 @@ Route::view('/about-us', 'legal.about')->name('about');
 // Backward compatibility route alias
 Route::get('/privacy', fn () => redirect()->route('privacy.policy', [], 301))->name('privacy');
 
-// OAuth Authentication
+// OAuth Authentication & Session Logout
 Route::get('/auth/google/redirect', [SocialiteController::class, 'redirect'])->name('google.redirect');
 Route::get('/auth/google/callback', [SocialiteController::class, 'callback'])->name('google.callback');
+Route::post('/logout', function () {
+    Auth::logout();
+    request()->session()->invalidate();
+    request()->session()->regenerateToken();
+
+    return redirect('/')->with('status', 'Logged out successfully.');
+})->name('logout');
 
 // Monetization Gateway
 Route::get('/go/{banner}', [AdRedirectController::class, 'trackAndRedirect'])->name('ad.redirect');

@@ -132,8 +132,8 @@
                                 <div class="truncate">
                                     <h2 class="text-sm sm:text-base font-extrabold text-white">Guest Cricket Fan</h2>
                                     <p class="text-xs text-slate-400">Sign in to sync pinned matches</p>
-                                    <a href="{{ route('google.redirect') }}" class="text-xs text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 mt-1 transition">
-                                        <span>Login with Google</span>
+                                    <a href="{{ route('google.redirect') }}" class="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black transition shadow-sm">
+                                        <span>Continue with Google</span>
                                         <span>→</span>
                                     </a>
                                 </div>
@@ -394,9 +394,36 @@
                         </div>
                     </div>
 
-                    <!-- Danger Zone (Delete Account Trigger) -->
+                    <!-- Account & Session (Safe Primary Action) -->
                     @auth
-                        <div class="bg-rose-950/20 border border-rose-500/20 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-md space-y-3">
+                            <div class="text-[11px] font-bold text-amber-400 uppercase tracking-wider pb-2 border-b border-slate-800/80 flex items-center justify-between">
+                                <span>Account &amp; Security</span>
+                                <span class="text-xs">🔐</span>
+                            </div>
+
+                            <button 
+                                type="button" 
+                                wire:click="logout" 
+                                wire:loading.attr="disabled"
+                                class="w-full bg-slate-800/90 hover:bg-slate-700 hover:border-amber-500/40 text-slate-100 border border-slate-700 rounded-xl px-4 py-3 font-bold text-sm flex items-center justify-between transition active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed group"
+                            >
+                                <div class="flex items-center space-x-3 text-left">
+                                    <svg class="w-5 h-5 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                                    </svg>
+                                    <div>
+                                        <div class="text-sm font-bold text-slate-100 group-hover:text-amber-300 transition">Logout</div>
+                                        <div class="text-[11px] font-normal text-slate-400">Sign out of this device</div>
+                                    </div>
+                                </div>
+                                <span wire:loading.remove wire:target="logout" class="text-slate-400 group-hover:text-amber-400 group-hover:translate-x-0.5 transition-transform text-sm">→</span>
+                                <span wire:loading wire:target="logout" class="text-xs text-amber-400 font-semibold">Signing out...</span>
+                            </button>
+                        </div>
+
+                        <!-- Danger Zone (Destructive Account Deletion Trigger) -->
+                        <div class="bg-rose-950/20 border border-rose-500/30 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
                                 <h3 class="text-xs sm:text-sm font-bold text-rose-400 flex items-center gap-1.5">
                                     <span>⚠️</span> Danger Zone • Account Deletion
@@ -408,7 +435,7 @@
                                 @click="showDeleteModal = true" 
                                 class="px-4 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600 border border-rose-500/40 text-rose-300 hover:text-white text-xs font-bold transition shrink-0"
                             >
-                                Delete Account
+                                Delete My Account
                             </button>
                         </div>
                     @endauth
@@ -464,7 +491,7 @@
                 <div class="text-3xl mb-2">⚠️</div>
                 <h3 class="text-base font-extrabold text-white mb-1">Permanently Delete Account?</h3>
                 <p class="text-xs text-slate-400 mb-5 leading-relaxed">
-                    Are you sure? This action is irreversible and will permanently delete your preferences, profile record, and session history.
+                    Are you sure? This will permanently delete your account and data.
                 </p>
 
                 <div class="grid grid-cols-2 gap-2">

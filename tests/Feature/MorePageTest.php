@@ -57,5 +57,55 @@ class MorePageTest extends TestCase
         ]);
         $this->assertGuest();
     }
+
+    public function test_guest_sees_google_cta_and_no_logout_or_delete_account(): void
+    {
+        $response = $this->get('/more');
+        $response->assertStatus(200);
+        $response->assertSee('Continue with Google');
+        $response->assertDontSee('Sign out of this device');
+        $response->assertDontSee('Delete My Account');
+    }
+
+    public function test_authenticated_user_sees_separated_logout_and_delete_account_and_can_logout_via_livewire(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'keep_me@example.com',
+        ]);
+
+        $this->actingAs($user);
+
+        $response = $this->get('/more');
+        $response->assertStatus(200);
+        $response->assertSee('Sign out of this device');
+        $response->assertSee('Delete My Account');
+
+        \Livewire\Livewire::test(\App\Livewire\Pages\MorePage::class)
+            ->call('logout')
+            ->assertRedirect('/');
+
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+        ]);
+        $this->assertGuest();
+    }
+
+    public function test_post_logout_route_logs_out_without_deleting_user(): void
+    {
+        $user = User::factory()->create([
+            'email' => 'post_logout@example.com',
+        ]);
+
+        $this->actingAs($user);
+
+        $response = $this->post(route('logout'));
+        $response->assertRedirect('/');
+        $response->assertSessionHas('status', 'Logged out successfully.');
+
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+        ]);
+        $this->assertGuest();
+    }
 }
 

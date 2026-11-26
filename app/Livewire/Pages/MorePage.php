@@ -19,6 +19,18 @@ class MorePage extends Component
     }
 
     /**
+     * Log out the current user, invalidate session, and redirect to home.
+     */
+    public function logout()
+    {
+        Auth::logout();
+        Session::invalidate();
+        Session::regenerateToken();
+
+        return $this->redirect('/', navigate: true);
+    }
+
+    /**
      * Delete user account, invalidate session, clear cookies, and redirect to home.
      */
     public function deleteAccount(): void
