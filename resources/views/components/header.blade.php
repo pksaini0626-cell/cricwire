@@ -110,6 +110,7 @@
                         switch(type) {
                             case 'battle_challenge': return '⚔️';
                             case 'battle_accepted': return '🪙';
+                            case 'battle_playing_xi': return '🏏';
                             case 'battle_result': return '🏆';
                             case 'match': return '🏏';
                             case 'poll': return '📊';

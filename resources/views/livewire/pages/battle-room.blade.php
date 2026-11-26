@@ -152,6 +152,108 @@
             @endif
 
             {{-- ===================================================================== --}}
+            {{-- PLAYING XI ANNOUNCED PRE-LOCK ALERT & TRADE/SWAP MODAL                --}}
+            {{-- ===================================================================== --}}
+            @if($playingXiAnnounced && $isBeforeLock && in_array($battle->status, ['drafting', 'locked_live'], true))
+                @php
+                    $myPicks = $currentUser ? $battle->picks->where('user_id', $currentUser->id) : collect();
+                    $myBenchedCount = $myPicks->where('is_playing_xi', false)->count();
+                @endphp
+                @if($isParticipant)
+                    <section class="rounded-2xl border p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-lg {{ $myBenchedCount > 0 ? 'bg-gradient-to-r from-rose-950/60 via-amber-950/40 to-slate-900 border-amber-400/70' : 'bg-gradient-to-r from-emerald-950/60 via-slate-900 to-emerald-950/40 border-emerald-500/50' }}">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <span class="text-2xl shrink-0">{{ $myBenchedCount > 0 ? '⚠️' : '✅' }}</span>
+                            <div class="text-xs sm:text-sm font-bold {{ $myBenchedCount > 0 ? 'text-amber-200' : 'text-emerald-200' }}">
+                                @if($myBenchedCount > 0)
+                                    Playing XI Announced! You have <strong class="text-white">{{ $myBenchedCount }} Benched player(s)</strong> — Tap <strong class="text-amber-300">'Trade / Swap'</strong> before {{ $battle->locks_at?->copy()->timezone('Asia/Kolkata')->format('h:i A') }} IST!
+                                @else
+                                    Playing XI Announced! All your picked players are in the <strong class="text-emerald-300">● Playing XI</strong>.
+                                @endif
+                            </div>
+                        </div>
+
+                        @if($myBenchedCount === 0 && $myPicks->count() >= $battle->team_size)
+                            @if($finalLineupConfirmed)
+                                <span class="px-3.5 py-2 rounded-xl bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-xs font-black shrink-0">
+                                    ✅ Final XI Confirmed
+                                </span>
+                            @else
+                                <button
+                                    type="button"
+                                    wire:click="confirmFinalLineup"
+                                    class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black uppercase tracking-wider shrink-0 transition"
+                                >
+                                    🔒 Confirm &amp; Lock Final XI
+                                </button>
+                            @endif
+                        @endif
+                    </section>
+                @endif
+            @endif
+
+            {{-- Trade / Swap Benched Player Modal --}}
+            @if($swappingPick && $isBeforeLock)
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm">
+                    <div class="w-full max-w-2xl rounded-2xl bg-slate-900 border border-amber-400/60 shadow-2xl overflow-hidden">
+                        <div class="px-4 py-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-950/80">
+                            <div>
+                                <h3 class="text-sm font-black text-white flex items-center gap-2">
+                                    <span>🔄</span> Trade / Swap Benched Player
+                                </h3>
+                                <p class="text-[11px] text-amber-300 mt-0.5">
+                                    Replacing <strong>{{ $swappingPick->player_name }}</strong> with an unpicked <strong>● Playing XI</strong> player
+                                </p>
+                            </div>
+                            <button type="button" wire:click="cancelSwap" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold">
+                                Cancel ✕
+                            </button>
+                        </div>
+
+                        <div class="p-4 max-h-[70vh] overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            @foreach(['team_a', 'team_b'] as $teamKey)
+                                @php
+                                    $tb = $squadsData[$teamKey] ?? ['name' => 'Team', 'players' => []];
+                                    $availablePlaying = collect($tb['players'])->filter(function ($pl) use ($pickedMap) {
+                                        $pk = $pl['norm_name'] . '|' . mb_strtolower(trim($pl['team']));
+                                        return !empty($pl['is_playing_xi']) && !isset($pickedMap[$pk]);
+                                    });
+                                @endphp
+                                <div class="space-y-2">
+                                    <div class="text-xs font-black uppercase tracking-wider text-amber-400 pb-1.5 border-b border-slate-800">
+                                        {{ $tb['name'] }} (Available ● Playing XI)
+                                    </div>
+                                    @forelse($tb['players'] as $idx => $pl)
+                                        @php $pk = $pl['norm_name'] . '|' . mb_strtolower(trim($pl['team'])); @endphp
+                                        @if(!empty($pl['is_playing_xi']) && !isset($pickedMap[$pk]))
+                                            <div class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-emerald-400 flex items-center justify-between gap-2 transition">
+                                                <div class="min-w-0">
+                                                    <div class="text-xs font-bold text-white truncate">{{ $pl['name'] }}</div>
+                                                    <div class="text-[10px] text-slate-400">{{ $pl['role'] }} • <span class="text-emerald-400 font-bold">● Playing XI</span></div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    wire:click="confirmSwapPlayer('{{ $teamKey }}', {{ $idx }})"
+                                                    wire:loading.attr="disabled"
+                                                    class="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11px] font-black shrink-0 transition"
+                                                >
+                                                    🔄 Swap In
+                                                </button>
+                                            </div>
+                                        @endif
+                                    @empty
+                                        <p class="text-xs text-slate-500">No players found.</p>
+                                    @endforelse
+                                    @if($availablePlaying->isEmpty() && !empty($tb['players']))
+                                        <p class="text-[11px] text-slate-500">All Playing XI players from {{ $tb['name'] }} are already picked.</p>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+            @endif
+
+            {{-- ===================================================================== --}}
             {{-- STATE 2: LIVE TURN-BY-TURN DRAFT ROOM                                 --}}
             {{-- ===================================================================== --}}
             @if($battle->status === 'drafting')
@@ -197,18 +299,6 @@
                     @endif
                 </section>
 
-                <!-- Swapping Active Banner -->
-                @if($swappingPick)
-                    <div class="p-4 rounded-2xl bg-amber-500/15 border border-amber-400 text-amber-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div class="text-xs sm:text-sm font-bold">
-                            🔄 Replacing benched player <strong class="text-white">{{ $swappingPick->player_name }}</strong> — click <strong class="text-emerald-300">Swap In</strong> on any unpicked <span class="text-emerald-300">● Playing</span> player below!
-                        </div>
-                        <button type="button" wire:click="cancelSwap" class="px-3 py-1.5 rounded-xl bg-slate-900 text-slate-200 text-xs font-bold shrink-0">
-                            Cancel Swap
-                        </button>
-                    </div>
-                @endif
-
                 <!-- Selected Squads Tracker (Team 1 vs Team 2) -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     @foreach([
@@ -244,7 +334,7 @@
                                                 wire:click="startSwap({{ $p->id }})"
                                                 class="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 text-[10px] font-black shrink-0 transition"
                                             >
-                                                🔄 Replace Now
+                                                🔄 Trade / Swap Player
                                             </button>
                                         @else
                                             <span class="text-[10px] font-mono text-slate-500 shrink-0">Pick #{{ $p->pick_order }}</span>
@@ -298,8 +388,12 @@
                                                 <div class="flex items-center gap-1.5 flex-wrap">
                                                     <span class="text-xs font-bold text-slate-300 truncate">{{ $player['name'] }}</span>
                                                     <span class="px-1.5 py-0.5 rounded bg-slate-800 text-[9px] font-mono font-bold text-slate-400">{{ $player['role'] }}</span>
-                                                    @if($player['is_playing_xi'])
-                                                        <span class="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-[9px] font-black text-emerald-300">● Playing</span>
+                                                    @if($playingXiAnnounced)
+                                                        @if($player['is_playing_xi'])
+                                                            <span class="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-[9px] font-black text-emerald-300">● Playing XI</span>
+                                                        @else
+                                                            <span class="px-1.5 py-0.5 rounded bg-rose-500/15 border border-rose-500/30 text-[9px] font-bold text-rose-300">Bench</span>
+                                                        @endif
                                                     @endif
                                                 </div>
                                             </div>
@@ -314,7 +408,7 @@
                                                 <div class="flex items-center gap-1.5 flex-wrap">
                                                     <span class="text-xs font-bold text-white truncate">{{ $player['name'] }}</span>
                                                     <span class="px-1.5 py-0.5 rounded bg-slate-800 text-[9px] font-mono font-bold text-slate-300">{{ $player['role'] }}</span>
-                                                    <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-[9px] font-black text-emerald-300">● Playing</span>
+                                                    <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-[9px] font-black text-emerald-300">● Playing XI</span>
                                                 </div>
                                             </div>
                                             <button
@@ -333,8 +427,12 @@
                                                 <div class="flex items-center gap-1.5 flex-wrap">
                                                     <span class="text-xs sm:text-sm font-bold text-white truncate">{{ $player['name'] }}</span>
                                                     <span class="px-1.5 py-0.5 rounded bg-slate-800 text-[9px] font-mono font-bold text-slate-300">{{ $player['role'] }}</span>
-                                                    @if($player['is_playing_xi'])
-                                                        <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-[9px] font-black text-emerald-300">● Playing</span>
+                                                    @if($playingXiAnnounced)
+                                                        @if($player['is_playing_xi'])
+                                                            <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-[9px] font-black text-emerald-300">● Playing XI</span>
+                                                        @else
+                                                            <span class="px-1.5 py-0.5 rounded bg-rose-500/15 border border-rose-500/30 text-[9px] font-bold text-rose-300">Bench</span>
+                                                        @endif
                                                     @endif
                                                 </div>
                                             </div>
@@ -354,8 +452,12 @@
                                                 <div class="flex items-center gap-1.5 flex-wrap">
                                                     <span class="text-xs font-bold text-slate-200 truncate">{{ $player['name'] }}</span>
                                                     <span class="px-1.5 py-0.5 rounded bg-slate-800 text-[9px] font-mono font-bold text-slate-300">{{ $player['role'] }}</span>
-                                                    @if($player['is_playing_xi'])
-                                                        <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-[9px] font-black text-emerald-300">● Playing</span>
+                                                    @if($playingXiAnnounced)
+                                                        @if($player['is_playing_xi'])
+                                                            <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-[9px] font-black text-emerald-300">● Playing XI</span>
+                                                        @else
+                                                            <span class="px-1.5 py-0.5 rounded bg-rose-500/15 border border-rose-500/30 text-[9px] font-bold text-rose-300">Bench</span>
+                                                        @endif
                                                     @endif
                                                 </div>
                                             </div>
@@ -379,41 +481,6 @@
             {{-- STATE 3 & 4: LOCKED LIVE & SETTLED PUBLIC SEO SCORECARD             --}}
             {{-- ===================================================================== --}}
             @if(in_array($battle->status, ['locked_live', 'settled'], true))
-                {{-- Pre-Lock Bench Swap Panel (if draft finished early before Playing XI & lock) --}}
-                @if($battle->status === 'locked_live' && $isBeforeLock && $playingXiAnnounced && $isParticipant)
-                    @php
-                        $myBenched = $battle->picks->where('user_id', $currentUser->id)->where('is_playing_xi', false);
-                    @endphp
-                    @if($myBenched->isNotEmpty())
-                        <section class="rounded-2xl bg-amber-500/10 border border-amber-400/50 p-4 space-y-3">
-                            <div class="text-xs sm:text-sm font-black text-amber-300">
-                                ⚠️ Playing XI is Out! You have {{ $myBenched->count() }} BENCHED player(s) — Replace before lock ({{ $battle->locks_at?->copy()->timezone('Asia/Kolkata')->format('h:i A') }} IST)!
-                            </div>
-                            @if($swappingPick)
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-                                    @foreach(['team_a', 'team_b'] as $teamKey)
-                                        @php $tb = $squadsData[$teamKey] ?? ['name' => 'Team', 'players' => []]; @endphp
-                                        <div class="space-y-1.5">
-                                            <div class="text-xs font-bold text-slate-300">{{ $tb['name'] }} (● Playing)</div>
-                                            @foreach($tb['players'] as $idx => $pl)
-                                                @php $pk = $pl['norm_name'] . '|' . mb_strtolower(trim($pl['team'])); @endphp
-                                                @if($pl['is_playing_xi'] && !isset($pickedMap[$pk]))
-                                                    <div class="p-2 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between gap-2">
-                                                        <span class="text-xs font-bold text-white">{{ $pl['name'] }} <span class="text-emerald-400 text-[10px]">● Playing</span></span>
-                                                        <button type="button" wire:click="confirmSwapPlayer('{{ $teamKey }}', {{ $idx }})" class="px-2.5 py-1 rounded-lg bg-emerald-500 text-slate-950 text-[10px] font-black">
-                                                            Swap In
-                                                        </button>
-                                                    </div>
-                                                @endif
-                                            @endforeach
-                                        </div>
-                                    @endforeach
-                                </div>
-                            @endif
-                        </section>
-                    @endif
-                @endif
-
                 {{-- Winner Celebration & Social Winning Card (Settled) --}}
                 @if($battle->status === 'settled')
                     <section class="rounded-2xl bg-gradient-to-br from-amber-500/20 via-slate-900 to-emerald-500/20 border border-amber-400/50 p-5 sm:p-7 text-center space-y-4 shadow-2xl">
@@ -652,7 +719,9 @@
                                             <div class="flex items-center gap-1.5 flex-wrap">
                                                 <span class="text-xs sm:text-sm font-bold text-white truncate">{{ $p->player_name }}</span>
                                                 @if($playingXiAnnounced && $p->is_playing_xi)
-                                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">● Playing</span>
+                                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">● Playing XI</span>
+                                                @elseif($playingXiAnnounced && !$p->is_playing_xi)
+                                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30">BENCHED</span>
                                                 @endif
                                             </div>
                                             <div class="text-[11px] text-slate-400 mt-0.5">
@@ -665,9 +734,9 @@
                                                 <button
                                                     type="button"
                                                     wire:click="startSwap({{ $p->id }})"
-                                                    class="px-2.5 py-1 rounded-lg bg-amber-400 text-slate-950 text-[10px] font-black"
+                                                    class="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 text-[10px] font-black transition"
                                                 >
-                                                    🔄 BENCHED — Replace
+                                                    🔄 Trade / Swap Player
                                                 </button>
                                             @endif
 

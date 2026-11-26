@@ -420,10 +420,13 @@
                     @foreach($captainAlertBattles as $ab)
                         @php
                             $isPendingInvite = $ab->status === 'pending_accept';
+                            $isXiReady = $ab->playing_xi_notified_at !== null && $ab->status === 'locked_live';
                             $challengerTag = $ab->challenger?->captainTitle() ?? 'Captain';
                             $bannerMsg = $isPendingInvite
                                 ? "⚔️ {$challengerTag} challenged you for {$ab->match_title} ({$ab->modeLabel()})! Tap to Accept & Enter Draft Room"
-                                : "⚡ Live Draft Room Active: {$ab->match_title} ({$ab->modeLabel()})! Tap to Pick Your Squad →";
+                                : ($isXiReady
+                                    ? "🏏 Playing XI Out: {$ab->match_title} ({$ab->modeLabel()})! Review & swap any benched player before lock"
+                                    : "⚡ Live Draft Room Active: {$ab->match_title} ({$ab->modeLabel()})! Tap to Pick Your Squad →");
                         @endphp
                         <a
                             href="{{ route('games.battle.show', $ab->slug) }}"

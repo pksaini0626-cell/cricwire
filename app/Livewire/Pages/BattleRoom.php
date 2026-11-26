@@ -7,6 +7,7 @@ use App\Models\SquadBattlePick;
 use App\Services\CricGemsService;
 use App\Services\SquadBattleService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Component;
 
 class BattleRoom extends Component
@@ -53,6 +54,10 @@ class BattleRoom extends Component
         if ($battle->status === SquadBattle::STATUS_LOCKED_LIVE) {
             $battleService->syncLiveAndFinalScores($battle);
         }
+
+        if ($battle->isBeforeLock() && in_array($battle->status, [SquadBattle::STATUS_PENDING_ACCEPT, SquadBattle::STATUS_DRAFTING, SquadBattle::STATUS_LOCKED_LIVE], true)) {
+            $battleService->syncPlayingXiAndNotify($battle);
+        }
     }
 
     public function pollLiveScores(SquadBattleService $battleService): void
@@ -64,6 +69,23 @@ class BattleRoom extends Component
 
         if ($battle->status === SquadBattle::STATUS_LOCKED_LIVE) {
             $battleService->syncLiveAndFinalScores($battle);
+            if ($battle->isBeforeLock()) {
+                $battleService->syncPlayingXiAndNotify($battle);
+            }
+        }
+    }
+
+    public function confirmFinalLineup(): void
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return;
+        }
+
+        $battle = SquadBattle::where('slug', $this->slug)->firstOrFail();
+        if ($battle->isParticipant($user->id)) {
+            Cache::put("battle:{$battle->id}:confirmed:{$user->id}", true, 86400);
+            $this->actionSuccess = '🔒 Your Final Playing XI lineup has been confirmed!';
         }
     }
 
@@ -193,8 +215,14 @@ class BattleRoom extends Component
         $currentUser = Auth::user();
         $isParticipant = $currentUser ? $battle->isParticipant($currentUser->id) : false;
 
-        $squadsData = $battleService->getMatchSquadsData($battle);
+        $squadsData = $battle->isBeforeLock()
+            ? $battleService->syncPlayingXiAndNotify($battle)
+            : $battleService->getMatchSquadsData($battle);
         $battle->load('picks');
+
+        $finalLineupConfirmed = ($currentUser && $isParticipant)
+            ? (bool) Cache::get("battle:{$battle->id}:confirmed:{$currentUser->id}", false)
+            : false;
 
         $challengerPicks = $battle->picks->where('user_id', $battle->challenger_id)->values();
         $opponentPicks = $battle->picks->where('user_id', $battle->opponent_id)->values();
@@ -310,6 +338,7 @@ class BattleRoom extends Component
             'isBeforeLock' => $battle->isBeforeLock(),
             'playingXiAnnounced' => (bool) ($squadsData['playing_xi_announced'] ?? false),
             'swappingPick' => $this->swappingPickId ? $battle->picks->firstWhere('id', $this->swappingPickId) : null,
+            'finalLineupConfirmed' => $finalLineupConfirmed,
         ])->layout('layouts.app', [
             'seoData' => $seoData,
             'title' => $seoData['title'],

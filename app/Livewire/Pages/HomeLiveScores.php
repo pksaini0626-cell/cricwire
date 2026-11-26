@@ -152,7 +152,7 @@ class HomeLiveScores extends Component
                 'description' => 'Fastest live cricket score updates, ball-by-ball commentary, and match schedules.',
             ];
 
-        // Pending / Live Draft Captain Battles for Top Sliding Bar (logged-in users)
+        // Pending / Live Draft / Pre-Lock Playing XI Captain Battles for Top Sliding Bar (logged-in users)
         $captainAlertBattles = collect();
         if (Auth::check()) {
             $uid = Auth::id();
@@ -165,6 +165,11 @@ class HomeLiveScores extends Component
                         $sub->where(function ($p) use ($uid) {
                             $p->where('challenger_id', $uid)->orWhere('opponent_id', $uid);
                         })->where('status', SquadBattle::STATUS_DRAFTING);
+                    })->orWhere(function ($sub) use ($uid) {
+                        $sub->where(function ($p) use ($uid) {
+                            $p->where('challenger_id', $uid)->orWhere('opponent_id', $uid);
+                        })->where('status', SquadBattle::STATUS_LOCKED_LIVE)
+                          ->whereNotNull('playing_xi_notified_at');
                     });
                 })
                 ->where(function ($q) {

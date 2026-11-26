@@ -214,6 +214,12 @@ class MatchLifecycleCron extends Command
                     'lifecycle_stage' => 'xi_ready',
                 ]);
 
+                try {
+                    app(SquadBattleService::class)->syncPlayingXiForMatch($matchId);
+                } catch (\Throwable $battleEx) {
+                    Log::warning("Failed syncing battle Playing XI for match {$matchId}: " . $battleEx->getMessage());
+                }
+
                 $this->info("Playing XI saved for Match #{$matchId}");
             } catch (\Throwable $e) {
                 Log::error("Failed saving Playing XI for match {$matchId}: " . $e->getMessage());

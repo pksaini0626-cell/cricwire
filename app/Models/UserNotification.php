@@ -12,6 +12,7 @@ class UserNotification extends Model
 
     public const TYPE_BATTLE_CHALLENGE = 'battle_challenge';
     public const TYPE_BATTLE_ACCEPTED = 'battle_accepted';
+    public const TYPE_BATTLE_PLAYING_XI = 'battle_playing_xi';
     public const TYPE_BATTLE_RESULT = 'battle_result';
 
     protected $fillable = [

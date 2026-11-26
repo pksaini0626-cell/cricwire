@@ -540,125 +540,228 @@ class SquadBattleService
     }
 
     /**
-     * Load complete squads and Playing XI flags from existing DB/Redis/JSON caches ONLY (0 external API calls).
+     * Wrapper to load complete squads for a battle and sync pick Playing XI flags.
      *
      * @return array{playing_xi_announced: bool, team_a: array{name: string, players: array}, team_b: array{name: string, players: array}}
      */
     public function getMatchSquadsData(SquadBattle $battle): array
     {
-        $matchId = (string) $battle->match_id;
-        $archivedXI = $this->apiService->getArchivedPlayingXI($matchId);
-        $preMatch = $this->apiService->getPreMatchArchivedData($matchId);
+        $squads = $this->getMatchSquads(
+            $battle->match_id,
+            $battle->team_a,
+            $battle->team_b,
+            $battle->series_slug
+        );
 
-        $livePayload = Cache::get("cricket:live_match_payload:{$matchId}")
-            ?? Cache::get("cricket:redis:match:{$matchId}");
-
-        if (!$livePayload) {
-            $staticMatchPath = public_path("live-data/match-{$matchId}.json");
-            if (file_exists($staticMatchPath)) {
-                $decoded = json_decode(@file_get_contents($staticMatchPath), true);
-                if (is_array($decoded)) {
-                    $livePayload = $decoded;
-                }
+        if (!empty($squads['playing_xi_announced'])) {
+            if (!$battle->relationLoaded('picks')) {
+                $battle->load('picks');
             }
+            $this->syncPicksPlayingXiStatus(
+                $battle,
+                $squads['team_a']['players'] ?? [],
+                $squads['team_b']['players'] ?? []
+            );
         }
 
-        $xiTeamA = $archivedXI['team_a']['playing_xi'] ?? [];
-        $xiTeamB = $archivedXI['team_b']['playing_xi'] ?? [];
+        return $squads;
+    }
 
-        if (empty($xiTeamA) && !empty($livePayload['team_a_playing_xi']) && is_array($livePayload['team_a_playing_xi'])) {
-            $xiTeamA = $livePayload['team_a_playing_xi'];
-        }
-        if (empty($xiTeamB) && !empty($livePayload['team_b_playing_xi']) && is_array($livePayload['team_b_playing_xi'])) {
-            $xiTeamB = $livePayload['team_b_playing_xi'];
-        }
+    /**
+     * Multi-source squad loader with 1-time locked self-healing hydration.
+     * Normalizes all upstream squad schemas (Playing XI + Bench) and caches non-empty results for 24h.
+     *
+     * @return array{playing_xi_announced: bool, team_a: array{name: string, players: array}, team_b: array{name: string, players: array}}
+     */
+    public function getMatchSquads(string|int $matchId, string $teamAName, string $teamBName, ?string $seriesSlug = null): array
+    {
+        $matchKey = (string) $matchId;
+        $cacheKey = "battle:squads:{$matchKey}";
+        $cached = Cache::get($cacheKey);
 
-        $preTeamA = $preMatch['squads']['team_a'] ?? [];
-        $preTeamB = $preMatch['squads']['team_b'] ?? [];
-
-        $preHasExplicitBench = !empty($preTeamA['bench']) || !empty($preTeamB['bench']);
-        if ($preHasExplicitBench) {
-            if (empty($xiTeamA) && !empty($preTeamA['playing_xi'])) {
-                $xiTeamA = $preTeamA['playing_xi'];
-            }
-            if (empty($xiTeamB) && !empty($preTeamB['playing_xi'])) {
-                $xiTeamB = $preTeamB['playing_xi'];
-            }
-        }
-
-        $managed = ManagedMatch::where('match_id', (int) $matchId)->first();
-        $playingXiAnnounced = (!empty($xiTeamA) && !empty($xiTeamB))
-            || $preHasExplicitBench
+        $archivedXI = $this->apiService->getArchivedPlayingXI($matchKey);
+        $managed = ManagedMatch::where('match_id', (int) $matchKey)->first();
+        $xiAvailableExternally = (!empty($archivedXI['team_a']['playing_xi']) && !empty($archivedXI['team_b']['playing_xi']))
             || ($managed && (bool) $managed->playing_xi_fetched);
 
-        $xiNamesA = $this->extractPlayerNameMap($xiTeamA);
-        $xiNamesB = $this->extractPlayerNameMap($xiTeamB);
+        if (is_array($cached) && (!empty($cached['team_a']['players']) || !empty($cached['team_b']['players']))) {
+            // If cached already has Playing XI announced, or no newer external XI is ready yet, return cached immediately
+            if (!empty($cached['playing_xi_announced']) || !$xiAvailableExternally) {
+                return $cached;
+            }
+        }
 
-        // Build full squad lists by merging Playing XI, pre-match squad/bench, live squad, and cached series squads
-        $rawTeamAPlayers = array_merge(
-            is_array($xiTeamA) ? $xiTeamA : [],
-            is_array($preTeamA['playing_xi'] ?? null) ? $preTeamA['playing_xi'] : [],
-            is_array($preTeamA['bench'] ?? null) ? $preTeamA['bench'] : [],
-            is_array($preTeamA['squad'] ?? null) ? $preTeamA['squad'] : [],
-            is_array($livePayload['team_a_squad'] ?? null) ? $livePayload['team_a_squad'] : [],
-            is_array($livePayload['squads']['team_a']['playing_xi'] ?? null) ? $livePayload['squads']['team_a']['playing_xi'] : [],
-            is_array($livePayload['squads']['team_a']['bench'] ?? null) ? $livePayload['squads']['team_a']['bench'] : []
-        );
+        $preMatch = $this->apiService->getPreMatchArchivedData($matchKey);
+        $livePayload = Cache::get("cricket:live_match_payload:{$matchKey}")
+            ?? Cache::get("cricket:redis:match:{$matchKey}");
 
-        $rawTeamBPlayers = array_merge(
-            is_array($xiTeamB) ? $xiTeamB : [],
-            is_array($preTeamB['playing_xi'] ?? null) ? $preTeamB['playing_xi'] : [],
-            is_array($preTeamB['bench'] ?? null) ? $preTeamB['bench'] : [],
-            is_array($preTeamB['squad'] ?? null) ? $preTeamB['squad'] : [],
-            is_array($livePayload['team_b_squad'] ?? null) ? $livePayload['team_b_squad'] : [],
-            is_array($livePayload['squads']['team_b']['playing_xi'] ?? null) ? $livePayload['squads']['team_b']['playing_xi'] : [],
-            is_array($livePayload['squads']['team_b']['bench'] ?? null) ? $livePayload['squads']['team_b']['bench'] : []
-        );
+        $staticPayload = null;
+        $staticMatchPath = public_path("live-data/match-{$matchKey}.json");
+        if (file_exists($staticMatchPath)) {
+            $decoded = json_decode(@file_get_contents($staticMatchPath), true);
+            if (is_array($decoded)) {
+                $staticPayload = $decoded;
+            }
+        }
+
+        $finishedPayload = null;
+        $finished = FinishedMatch::where('match_id', $matchKey)->first();
+        if ($finished) {
+            $stored = is_array($finished->match_data) && !empty($finished->match_data)
+                ? $finished->match_data
+                : $finished->match_json;
+            if (is_array($stored)) {
+                $finishedPayload = $stored;
+            }
+        }
+
+        $sources = array_values(array_filter([
+            $archivedXI ? ['squads' => $archivedXI, '_is_xi_source' => true] : null,
+            $preMatch['squads'] ?? null ? ['squads' => $preMatch['squads'], '_raw' => $preMatch['squads']['raw'] ?? null] : null,
+            $livePayload,
+            $staticPayload,
+            $finishedPayload,
+        ], fn ($s) => is_array($s) && !empty($s)));
+
+        [$teamARaw, $teamBRaw, $xiDetected] = $this->extractSquadsFromSources($sources, $teamAName, $teamBName);
 
         // Fallback to cached series squads if either side is empty
-        if ((empty($rawTeamAPlayers) || empty($rawTeamBPlayers)) && !empty($battle->series_slug)) {
-            $seriesSquads = Cache::get("cricket:redis:series:{$battle->series_slug}:squads");
+        if ((empty($teamARaw) || empty($teamBRaw)) && !empty($seriesSlug)) {
+            $seriesSquads = Cache::get("cricket:redis:series:{$seriesSlug}:squads");
             if (is_array($seriesSquads)) {
                 foreach ($seriesSquads as $teamBlock) {
                     if (!is_array($teamBlock) || empty($teamBlock['players'])) {
                         continue;
                     }
-                    $tName = strtolower(trim((string) ($teamBlock['name'] ?? $teamBlock['team_name'] ?? '')));
-                    if ($tName !== '' && (str_contains($tName, strtolower($battle->team_a)) || str_contains(strtolower($battle->team_a), $tName))) {
-                        if (empty($rawTeamAPlayers)) {
-                            $rawTeamAPlayers = $teamBlock['players'];
-                        }
-                    } elseif ($tName !== '' && (str_contains($tName, strtolower($battle->team_b)) || str_contains(strtolower($battle->team_b), $tName))) {
-                        if (empty($rawTeamBPlayers)) {
-                            $rawTeamBPlayers = $teamBlock['players'];
-                        }
+                    $tName = (string) ($teamBlock['name'] ?? $teamBlock['team_name'] ?? '');
+                    if ($tName !== '' && $this->teamsMatch($tName, $teamAName) && empty($teamARaw)) {
+                        $teamARaw = array_map(fn ($p) => is_array($p) ? array_merge($p, ['is_playing_xi' => false]) : ['name' => $p, 'is_playing_xi' => false], $teamBlock['players']);
+                    } elseif ($tName !== '' && $this->teamsMatch($tName, $teamBName) && empty($teamBRaw)) {
+                        $teamBRaw = array_map(fn ($p) => is_array($p) ? array_merge($p, ['is_playing_xi' => false]) : ['name' => $p, 'is_playing_xi' => false], $teamBlock['players']);
                     }
                 }
             }
         }
 
-        $teamAPlayers = $this->normalizeSquadList($rawTeamAPlayers, $battle->team_a, $xiNamesA, $playingXiAnnounced);
-        $teamBPlayers = $this->normalizeSquadList($rawTeamBPlayers, $battle->team_b, $xiNamesB, $playingXiAnnounced);
+        // 1-Time Self-Healing Hydration via CricketLiveApiService::getSquads() if still empty
+        if (empty($teamARaw) && empty($teamBRaw) && !Cache::has("battle:squad-fetch-empty:{$matchKey}")) {
+            $lock = Cache::lock("battle:squad-fetch:{$matchKey}", 15);
+            if ($lock->get()) {
+                try {
+                    // Double check cache inside lock
+                    $rechecked = Cache::get($cacheKey);
+                    if (is_array($rechecked) && (!empty($rechecked['team_a']['players']) || !empty($rechecked['team_b']['players']))) {
+                        return $rechecked;
+                    }
 
-        // Sync is_playing_xi onto existing battle picks whenever Playing XI is announced
-        if ($playingXiAnnounced && $battle->relationLoaded('picks')) {
-            $this->syncPicksPlayingXiStatus($battle, $teamAPlayers, $teamBPlayers);
-        } elseif ($playingXiAnnounced) {
-            $battle->load('picks');
-            $this->syncPicksPlayingXiStatus($battle, $teamAPlayers, $teamBPlayers);
+                    $apiSquads = $this->apiService->getSquads($matchKey);
+                    if (!empty($apiSquads)) {
+                        [$teamARaw, $teamBRaw, $apiXiDetected] = $this->extractSquadsFromSources([$apiSquads], $teamAName, $teamBName);
+                        $xiDetected = $xiDetected || $apiXiDetected;
+                    }
+
+                    if (empty($teamARaw) && empty($teamBRaw)) {
+                        Cache::put("battle:squad-fetch-empty:{$matchKey}", true, 300);
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning("SquadBattleService::getMatchSquads API fallback failed for {$matchKey}: " . $e->getMessage());
+                } finally {
+                    $lock->release();
+                }
+            }
         }
 
-        return [
+        $teamAPlayers = $this->normalizeSquadPlayers($teamARaw, $teamAName);
+        $teamBPlayers = $this->normalizeSquadPlayers($teamBRaw, $teamBName);
+
+        $playingXiCount = collect($teamAPlayers)->where('is_playing_xi', true)->count()
+            + collect($teamBPlayers)->where('is_playing_xi', true)->count();
+        $playingXiAnnounced = $playingXiCount >= 11 || ($xiDetected && $playingXiCount >= 11);
+
+        // Sort Playing XI first once officially announced
+        if ($playingXiAnnounced) {
+            usort($teamAPlayers, fn (array $a, array $b) => ($b['is_playing_xi'] <=> $a['is_playing_xi']));
+            usort($teamBPlayers, fn (array $a, array $b) => ($b['is_playing_xi'] <=> $a['is_playing_xi']));
+        }
+
+        $normalized = [
             'playing_xi_announced' => $playingXiAnnounced,
             'team_a' => [
-                'name' => $battle->team_a,
+                'name' => $teamAName,
                 'players' => $teamAPlayers,
             ],
             'team_b' => [
-                'name' => $battle->team_b,
+                'name' => $teamBName,
                 'players' => $teamBPlayers,
             ],
         ];
+
+        // Cache ONLY non-empty squads for 24h
+        if (!empty($teamAPlayers) || !empty($teamBPlayers)) {
+            Cache::put($cacheKey, $normalized, 86400);
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * Sync Playing XI status on all battle picks and send Bell + Top Ticker alerts once when XI is announced.
+     */
+    public function syncPlayingXiAndNotify(SquadBattle $battle): array
+    {
+        $squadsData = $this->getMatchSquadsData($battle);
+
+        if (!empty($squadsData['playing_xi_announced']) && $battle->playing_xi_notified_at === null && $battle->isBeforeLock()) {
+            DB::transaction(function () use ($battle) {
+                $locked = SquadBattle::where('id', $battle->id)->lockForUpdate()->first();
+                if (!$locked || $locked->playing_xi_notified_at !== null || !$locked->isBeforeLock()) {
+                    return;
+                }
+
+                $locked->update(['playing_xi_notified_at' => now()]);
+                $battleUrl = route('games.battle.show', $locked->slug);
+
+                foreach (array_unique([(int) $locked->challenger_id, (int) $locked->opponent_id]) as $captainId) {
+                    UserNotification::create([
+                        'user_id' => $captainId,
+                        'type' => UserNotification::TYPE_BATTLE_PLAYING_XI,
+                        'title' => "🏏 Playing XI Out: {$locked->team_a} vs {$locked->team_b}!",
+                        'body' => "Toss complete & Playing XI announced! Check your squad and trade/swap any benched player before lock.",
+                        'action_url' => $battleUrl,
+                    ]);
+                }
+
+                $battle->playing_xi_notified_at = $locked->playing_xi_notified_at;
+            });
+        }
+
+        return $squadsData;
+    }
+
+    /**
+     * Refresh squads cache and notify all active battles for a match once Playing XI is fetched by cron.
+     */
+    public function syncPlayingXiForMatch(string|int $matchId): void
+    {
+        $matchKey = (string) $matchId;
+        Cache::forget("battle:squads:{$matchKey}");
+        Cache::forget("battle:squad-fetch-empty:{$matchKey}");
+
+        $battles = SquadBattle::where('match_id', $matchKey)
+            ->whereIn('status', [
+                SquadBattle::STATUS_PENDING_ACCEPT,
+                SquadBattle::STATUS_DRAFTING,
+                SquadBattle::STATUS_LOCKED_LIVE,
+            ])
+            ->get();
+
+        foreach ($battles as $battle) {
+            try {
+                $this->syncPlayingXiAndNotify($battle);
+            } catch (\Throwable $e) {
+                Log::warning("SquadBattleService::syncPlayingXiForMatch failed for battle #{$battle->id}: " . $e->getMessage());
+            }
+        }
     }
 
     /**
@@ -1071,12 +1174,216 @@ class SquadBattleService
     }
 
     /**
-     * Normalize squad player arrays into a consistent structure with Playing XI flags.
+     * Extract Team A and Team B raw player entries across all heterogeneous upstream squad schemas.
+     *
+     * @return array{0: array, 1: array, 2: bool}
      */
-    protected function normalizeSquadList(array $rawPlayers, string $teamName, array $xiNameMap, bool $playingXiAnnounced): array
+    protected function extractSquadsFromSources(array $sources, string $teamAName, string $teamBName): array
+    {
+        $teamAOut = [];
+        $teamBOut = [];
+        $xiDetected = false;
+
+        foreach ($sources as $src) {
+            if (!is_array($src)) {
+                continue;
+            }
+
+            $isXiSource = !empty($src['_is_xi_source']);
+            $rawNode = is_array($src['raw'] ?? null) ? ($src['raw']['data'] ?? $src['raw']) : (is_array($src['_raw'] ?? null) ? ($src['_raw']['data'] ?? $src['_raw']) : null);
+
+            // Inspect raw upstream payload directly if available (handles Shape A: player[], Shape B: playing_xi+bench, Shape D: indexed/keyed)
+            $nodesToScan = array_values(array_filter([
+                $rawNode,
+                $src['squads'] ?? null,
+                $src['playingXI'] ?? null,
+                $src['playing_xi'] ?? null,
+                $src,
+            ], fn ($n) => is_array($n) && !empty($n)));
+
+            foreach ($nodesToScan as $node) {
+                // Direct flat keys: team_a_squad, squad_a, team_a_playing_xi, etc.
+                $flatA = [
+                    'xi' => $node['team_a_playing_xi'] ?? [],
+                    'squad' => $node['team_a_squad'] ?? $node['squad_a'] ?? [],
+                ];
+                $flatB = [
+                    'xi' => $node['team_b_playing_xi'] ?? [],
+                    'squad' => $node['team_b_squad'] ?? $node['squad_b'] ?? [],
+                ];
+
+                if (!empty($flatA['xi'])) {
+                    $xiDetected = true;
+                    foreach ($this->tagPlayers($flatA['xi'], true) as $p) {
+                        $teamAOut[] = $p;
+                    }
+                }
+                if (!empty($flatA['squad'])) {
+                    foreach ($this->tagPlayers($flatA['squad'], false) as $p) {
+                        $teamAOut[] = $p;
+                    }
+                }
+                if (!empty($flatB['xi'])) {
+                    $xiDetected = true;
+                    foreach ($this->tagPlayers($flatB['xi'], true) as $p) {
+                        $teamBOut[] = $p;
+                    }
+                }
+                if (!empty($flatB['squad'])) {
+                    foreach ($this->tagPlayers($flatB['squad'], false) as $p) {
+                        $teamBOut[] = $p;
+                    }
+                }
+
+                // Team objects: team_a / team1 vs team_b / team2 vs list [0, 1] vs keyed by team name
+                $teamABlock = $node['team_a'] ?? $node['team1'] ?? null;
+                $teamBBlock = $node['team_b'] ?? $node['team2'] ?? null;
+
+                if ($teamABlock === null && $teamBBlock === null && array_is_list($node) && count($node) >= 2 && is_array($node[0])) {
+                    $firstName = (string) ($node[0]['name'] ?? $node[0]['team_name'] ?? '');
+                    if ($firstName !== '' && $this->teamsMatch($firstName, $teamBName) && !$this->teamsMatch($firstName, $teamAName)) {
+                        $teamBBlock = $node[0];
+                        $teamABlock = $node[1];
+                    } else {
+                        $teamABlock = $node[0];
+                        $teamBBlock = $node[1];
+                    }
+                } elseif ($teamABlock === null && $teamBBlock === null) {
+                    foreach ($node as $k => $v) {
+                        if (!is_string($k) || !is_array($v) || in_array($k, ['raw', '_raw', 'squads', 'playingXI', 'playing_xi', 'facts', 'scorecard'], true)) {
+                            continue;
+                        }
+                        $candidateName = (string) ($v['name'] ?? $v['team_name'] ?? $k);
+                        if ($teamABlock === null && $this->teamsMatch($candidateName, $teamAName)) {
+                            $teamABlock = $v;
+                        } elseif ($teamBBlock === null && $this->teamsMatch($candidateName, $teamBName)) {
+                            $teamBBlock = $v;
+                        }
+                    }
+                }
+
+                if (is_array($teamABlock)) {
+                    [$extractedA, $hasXiA] = $this->extractTeamBlockPlayers($teamABlock, $isXiSource, $rawNode === null);
+                    if ($hasXiA) {
+                        $xiDetected = true;
+                    }
+                    foreach ($extractedA as $p) {
+                        $teamAOut[] = $p;
+                    }
+                }
+                if (is_array($teamBBlock)) {
+                    [$extractedB, $hasXiB] = $this->extractTeamBlockPlayers($teamBBlock, $isXiSource, $rawNode === null);
+                    if ($hasXiB) {
+                        $xiDetected = true;
+                    }
+                    foreach ($extractedB as $p) {
+                        $teamBOut[] = $p;
+                    }
+                }
+            }
+        }
+
+        return [$teamAOut, $teamBOut, $xiDetected];
+    }
+
+    /**
+     * Extract players from a single team block (supporting Shape A `player[]`, Shape B `playing_xi + bench`, Shape C `squad[]`).
+     *
+     * @return array{0: array, 1: bool}
+     */
+    protected function extractTeamBlockPlayers(array $block, bool $isXiSource, bool $treatPlayingXiKeyAsExplicit): array
+    {
+        $players = [];
+        $hasXi = false;
+
+        // Shape A: $block['player'] (used by MatchDetail playingXI / cricket-live-line APIs)
+        if (!empty($block['player']) && is_array($block['player'])) {
+            foreach ($block['player'] as $p) {
+                if (!is_array($p)) {
+                    $players[] = ['name' => (string) $p, 'is_playing_xi' => $isXiSource];
+                    continue;
+                }
+                $flag = $p['is_playing_xi'] ?? $p['is_playing'] ?? $p['playing_11'] ?? null;
+                $isSubstitutedOut = !empty($p['substituted']) && $flag === null;
+                $isPlaying = $flag !== null ? (bool) $flag : ($isXiSource && !$isSubstitutedOut);
+                if ($isPlaying) {
+                    $hasXi = true;
+                }
+                $players[] = array_merge($p, ['is_playing_xi' => $isPlaying]);
+            }
+        }
+
+        // Shape B: $block['playing_xi'] + $block['bench']
+        $hasBench = !empty($block['bench']) && is_array($block['bench']);
+        if (!empty($block['playing_xi']) && is_array($block['playing_xi'])) {
+            $xiCount = count($block['playing_xi']);
+            // Only mark playing_xi as true if explicit XI source, bench exists, or count <= 11 with explicit XI key
+            $markAsXi = $isXiSource || $hasBench || ($treatPlayingXiKeyAsExplicit && $xiCount > 0 && $xiCount <= 11);
+            if ($markAsXi) {
+                $hasXi = true;
+            }
+            foreach ($this->tagPlayers($block['playing_xi'], $markAsXi) as $p) {
+                $players[] = $p;
+            }
+        }
+
+        if ($hasBench) {
+            $hasXi = true;
+            foreach ($this->tagPlayers($block['bench'], false) as $p) {
+                $players[] = $p;
+            }
+        }
+
+        // Shape C: $block['squad'] or $block['players']
+        foreach (['squad', 'players'] as $fallbackKey) {
+            if (!empty($block[$fallbackKey]) && is_array($block[$fallbackKey])) {
+                foreach ($this->tagPlayers($block[$fallbackKey], false) as $p) {
+                    $players[] = $p;
+                }
+            }
+        }
+
+        return [$players, $hasXi];
+    }
+
+    protected function tagPlayers(array $items, bool $defaultPlayingXi): array
+    {
+        $out = [];
+        foreach ($items as $p) {
+            if (is_string($p)) {
+                $out[] = ['name' => $p, 'is_playing_xi' => $defaultPlayingXi];
+            } elseif (is_array($p)) {
+                $explicit = $p['is_playing_xi'] ?? $p['is_playing'] ?? $p['playing_11'] ?? null;
+                $out[] = array_merge($p, [
+                    'is_playing_xi' => $explicit !== null ? (bool) $explicit : $defaultPlayingXi,
+                ]);
+            }
+        }
+
+        return $out;
+    }
+
+    protected function teamsMatch(string $candidate, string $target): bool
+    {
+        $c = strtolower(trim($candidate));
+        $t = strtolower(trim($target));
+        if ($c === '' || $t === '') {
+            return false;
+        }
+        if ($c === $t || str_contains($c, $t) || str_contains($t, $c)) {
+            return true;
+        }
+        $shortT = strtolower(CricketLiveApiService::generateTeamShort($target));
+        return $c === $shortT;
+    }
+
+    /**
+     * Normalize & deduplicate squad player arrays into a unified structure.
+     */
+    protected function normalizeSquadPlayers(array $rawPlayers, string $teamName): array
     {
         $normalized = [];
-        $seen = [];
+        $indexByNorm = [];
 
         foreach ($rawPlayers as $item) {
             if (is_string($item)) {
@@ -1094,31 +1401,41 @@ class SquadBattleService
             }
 
             $normName = $this->normalizePlayerName($name);
-            if ($normName === '' || isset($seen[$normName])) {
+            if ($normName === '') {
                 continue;
             }
-            $seen[$normName] = true;
 
-            $role = trim((string) ($playerArr['play_role'] ?? $playerArr['role'] ?? $playerArr['playing_role'] ?? $playerArr['role_desc'] ?? ''));
-            $isPlaying = $playingXiAnnounced && isset($xiNameMap[$normName]);
+            $isPlaying = (bool) ($playerArr['is_playing_xi'] ?? $playerArr['is_playing'] ?? $playerArr['playing_11'] ?? false);
 
+            // If duplicate across merged sources, upgrade is_playing_xi / role / image if richer
+            if (isset($indexByNorm[$normName])) {
+                $existingIdx = $indexByNorm[$normName];
+                if ($isPlaying) {
+                    $normalized[$existingIdx]['is_playing_xi'] = true;
+                }
+                if (empty($normalized[$existingIdx]['image']) && !empty($playerArr['image'] ?? $playerArr['photo'] ?? null)) {
+                    $normalized[$existingIdx]['image'] = (string) ($playerArr['image'] ?? $playerArr['photo']);
+                }
+                continue;
+            }
+
+            $rawRole = trim((string) ($playerArr['play_role'] ?? $playerArr['role'] ?? $playerArr['playing_role'] ?? $playerArr['role_desc'] ?? ''));
+            $playerId = (string) ($playerArr['id'] ?? $playerArr['player_id'] ?? Str::slug($name));
+
+            $indexByNorm[$normName] = count($normalized);
             $normalized[] = [
-                'player_id' => (string) ($playerArr['player_id'] ?? $playerArr['id'] ?? ''),
+                'id' => $playerId,
+                'player_id' => $playerId,
                 'name' => $name,
                 'norm_name' => $normName,
                 'team' => $teamName,
-                'role' => $this->shortenRole($role),
-                'role_full' => $role !== '' ? $role : 'Player',
-                'image' => (string) ($playerArr['image'] ?? $playerArr['photo'] ?? ''),
+                'role' => $this->shortenRole($rawRole),
+                'role_full' => $rawRole !== '' ? $rawRole : 'Player',
+                'image' => $playerArr['image'] ?? $playerArr['photo'] ?? null,
                 'is_playing_xi' => $isPlaying,
-                'is_captain' => !empty($playerArr['is_captain']) || str_contains(strtoupper($role), '(C)'),
-                'is_keeper' => !empty($playerArr['is_keeper']) || str_contains(strtoupper($role), '(WK)'),
+                'is_captain' => (bool) ($playerArr['is_captain'] ?? str_contains(strtoupper($rawRole . ' ' . ($playerArr['role_desc'] ?? '')), '(C)')),
+                'is_keeper' => (bool) ($playerArr['is_keeper'] ?? str_contains(strtoupper($rawRole . ' ' . ($playerArr['role_desc'] ?? '')), '(WK)')),
             ];
-        }
-
-        // Sort Playing XI first once announced
-        if ($playingXiAnnounced) {
-            usort($normalized, fn (array $a, array $b) => ($b['is_playing_xi'] <=> $a['is_playing_xi']));
         }
 
         return $normalized;

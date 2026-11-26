@@ -3,12 +3,10 @@
     x-data="{
         pushAlerts: false,
         loadingPush: false,
-        showUpgradeModal: false,
         showDeleteModal: false,
         showQrModal: false,
         copiedId: false,
         copiedInvite: false,
-        selectedPlan: '3_months',
         init() {
             if ('Notification' in window && Notification.permission === 'granted' && localStorage.getItem('cricwire_fcm_token')) {
                 this.pushAlerts = true;
@@ -390,7 +388,7 @@
             <!-- Responsive Layout: 12-Column Grid on Desktop / Single Column Stack on Mobile -->
             <div class="grid grid-cols-1 md:grid-cols-12 gap-6 items-start max-w-md mx-auto md:max-w-none">
                 
-                <!-- LEFT COLUMN: Friends & QR Network Manager, Premium Banner & Socials (md:col-span-5 lg:col-span-4 space-y-4) -->
+                <!-- LEFT COLUMN: Friends & QR Network Manager & Socials (md:col-span-5 lg:col-span-4 space-y-4) -->
                 <div class="md:col-span-5 lg:col-span-4 space-y-4">
 
                     @auth
@@ -588,76 +586,6 @@
                             </div>
                         </div>
                     @endauth
-
-                    <!-- 2. Cricwire Premium Plans Card (Hero Neon Gold Box) -->
-                    <div class="relative rounded-2xl bg-gradient-to-b from-amber-950/30 via-slate-900 to-slate-950 p-4 sm:p-5 border border-amber-500/40 shadow-2xl glow-gold overflow-hidden">
-                        <div class="absolute -top-12 -right-12 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl pointer-events-none"></div>
-
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                                <span>👑</span> Cricwire Premium
-                            </span>
-                            <span class="text-[10px] text-slate-400 font-semibold">Ad-Free &amp; Fastest Line</span>
-                        </div>
-
-                        <p class="text-xs text-slate-300 mb-3 sm:mb-4 leading-relaxed">
-                            Enjoy 0-second live score latency, live ball voice audio, and zero advertisements across the platform.
-                        </p>
-
-                        <!-- Pricing Grid (3 Plan Cards) -->
-                        <div class="grid grid-cols-3 gap-2 mb-4 text-center">
-                            <!-- Monthly -->
-                            <button 
-                                type="button" 
-                                @click="selectedPlan = 'monthly'" 
-                                class="p-2.5 rounded-xl border transition-all text-xs flex flex-col justify-between"
-                                :class="selectedPlan === 'monthly' ? 'bg-amber-500/20 border-amber-400 ring-1 ring-amber-400 text-white' : 'bg-slate-950/80 border-slate-800 text-slate-400 hover:border-slate-700'"
-                            >
-                                <span class="text-[10px] uppercase font-bold text-slate-400">Monthly</span>
-                                <span class="font-mono font-black text-amber-300 text-sm sm:text-base mt-1">₹149</span>
-                                <span class="text-[9px] text-slate-500 mt-0.5">30 Days</span>
-                            </button>
-
-                            <!-- 3 Months (Popular) -->
-                            <button 
-                                type="button" 
-                                @click="selectedPlan = '3_months'" 
-                                class="p-2.5 rounded-xl border relative transition-all text-xs flex flex-col justify-between"
-                                :class="selectedPlan === '3_months' ? 'bg-amber-500/25 border-amber-400 ring-1 ring-amber-400 text-white' : 'bg-slate-950/80 border-slate-800 text-slate-400 hover:border-slate-700'"
-                            >
-                                <span class="absolute -top-2 left-1/2 -translate-x-1/2 px-1.5 py-0.2 rounded-full text-[8px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 shadow-sm">
-                                    Popular
-                                </span>
-                                <span class="text-[10px] uppercase font-bold text-amber-300 mt-1">3 Months</span>
-                                <span class="font-mono font-black text-white text-sm sm:text-base mt-0.5">₹399</span>
-                                <span class="text-[9px] text-emerald-400 mt-0.5">Save 15%</span>
-                            </button>
-
-                            <!-- Annual (Best Value) -->
-                            <button 
-                                type="button" 
-                                @click="selectedPlan = 'annual'" 
-                                class="p-2.5 rounded-xl border relative transition-all text-xs flex flex-col justify-between"
-                                :class="selectedPlan === 'annual' ? 'bg-amber-500/20 border-amber-400 ring-1 ring-amber-400 text-white' : 'bg-slate-950/80 border-slate-800 text-slate-400 hover:border-slate-700'"
-                            >
-                                <span class="absolute -top-2 left-1/2 -translate-x-1/2 px-1.5 py-0.2 rounded-full text-[8px] font-black uppercase tracking-wider bg-emerald-500 text-slate-950 shadow-sm">
-                                    Best Value
-                                </span>
-                                <span class="text-[10px] uppercase font-bold text-slate-300 mt-1">Annual</span>
-                                <span class="font-mono font-black text-amber-300 text-sm sm:text-base mt-0.5">₹999</span>
-                                <span class="text-[9px] text-emerald-400 mt-0.5">Save 45%</span>
-                            </button>
-                        </div>
-
-                        <!-- Upgrade Action Button -->
-                        <button 
-                            type="button" 
-                            @click="showUpgradeModal = true" 
-                            class="w-full py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/25 active:scale-[0.99] transition"
-                        >
-                            ⚡ Upgrade to Cricwire Pro
-                        </button>
-                    </div>
 
                     <!-- Follow Us & Social Media Card -->
                     @if(!empty($socialLinks))
@@ -1019,29 +947,6 @@
             </div>
         </div>
     @endif
-
-    <!-- Upgrade Premium Modal -->
-    <div 
-        x-show="showUpgradeModal" 
-        x-cloak 
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-        @keydown.escape.window="showUpgradeModal = false"
-    >
-        <div class="bg-slate-900 border border-amber-500/40 rounded-2xl max-w-sm w-full p-5 text-center shadow-2xl relative" @click.away="showUpgradeModal = false">
-            <div class="text-3xl mb-2">👑</div>
-            <h3 class="text-base font-extrabold text-white mb-1">Upgrade to Cricwire Pro</h3>
-            <p class="text-xs text-slate-400 mb-4">
-                Thank you for your interest! Payment gateway integration is currently undergoing testing and will be live shortly.
-            </p>
-            <button 
-                type="button" 
-                @click="showUpgradeModal = false" 
-                class="w-full py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs uppercase tracking-wider transition"
-            >
-                Got It
-            </button>
-        </div>
-    </div>
 
     <!-- Delete Account Confirmation Modal -->
     @auth
