@@ -16,7 +16,9 @@ class CricketLiveApiService
     public const ICC_RANKING_CATEGORIES = ['batting', 'bowling', 'allrounder', 'teams'];
     public const ICC_RANKING_FORMATS = ['t20', 'odi', 'test'];
     public const ICC_RANKING_REDIS_PREFIX = 'cricket:redis:icc_rankings:';
-    public const ICC_RANKING_TTL = 172800; // 48 hours (refreshed daily by scheduler)
+    public const ICC_RANKING_BACKUP_PREFIX = 'cricket:redis:icc_rankings:backup:';
+    public const ICC_RANKING_TTL = 43200; // 12 hours
+    public const ICC_RANKING_BACKUP_TTL = 604800; // 7 days
 
     protected string $baseUrl;
     protected string $token;
@@ -2476,6 +2478,38 @@ class CricketLiveApiService
     }
 
     /**
+     * Build the 7-day backup Redis cache key for a specific ICC rankings category and format.
+     */
+    public static function iccRankingBackupCacheKey(string $category, string $format): string
+    {
+        $cat = self::normalizeRankingCategory($category);
+        $fmt = self::normalizeRankingFormat($format);
+
+        return self::ICC_RANKING_BACKUP_PREFIX . "{$cat}:{$fmt}";
+    }
+
+    /**
+     * Build an empty normalized ICC rankings payload structure.
+     */
+    protected static function emptyIccRankingPayload(string $category, string $format): array
+    {
+        return [
+            'category' => $category,
+            'format' => $format,
+            'category_type' => match ($category) {
+                'bowling' => 'bowlers',
+                'allrounder' => 'allrounders',
+                'teams' => 'teams',
+                default => 'batsmen',
+            },
+            'available_formats' => self::ICC_RANKING_FORMATS,
+            'count' => 0,
+            'rankings' => [],
+            'synced_at' => Cache::get(self::ICC_RANKING_REDIS_PREFIX . 'meta')['last_synced_at'] ?? null,
+        ];
+    }
+
+    /**
      * Build a player/team image URL from Cricbuzz/upstream faceImageId.
      */
     public static function resolveRankingImageUrl(mixed $faceImageId): ?string
@@ -2493,38 +2527,28 @@ class CricketLiveApiService
     }
 
     /**
-     * Read ICC Rankings strictly from Redis / Cache (Zero Live API Drain).
+     * Read ICC Rankings strictly from Redis / Cache (primary or 7-day backup, 0 API calls).
      */
     public function getIccRankingsFromRedis(string $category = 'batting', string $format = 't20'): array
     {
         $cat = self::normalizeRankingCategory($category);
         $fmt = self::normalizeRankingFormat($format);
-        $cacheKey = self::iccRankingCacheKey($cat, $fmt);
 
-        $cached = Cache::get($cacheKey);
+        $cached = Cache::get(self::iccRankingCacheKey($cat, $fmt));
         if (is_array($cached) && !empty($cached['rankings'])) {
             return $cached;
         }
 
-        return [
-            'category' => $cat,
-            'format' => $fmt,
-            'category_type' => match ($cat) {
-                'bowling' => 'bowlers',
-                'allrounder' => 'allrounders',
-                'teams' => 'teams',
-                default => 'batsmen',
-            },
-            'available_formats' => self::ICC_RANKING_FORMATS,
-            'count' => 0,
-            'rankings' => [],
-            'synced_at' => Cache::get(self::ICC_RANKING_REDIS_PREFIX . 'meta')['last_synced_at'] ?? null,
-        ];
+        $backup = Cache::get(self::iccRankingBackupCacheKey($cat, $fmt));
+        if (is_array($backup) && !empty($backup['rankings'])) {
+            return $backup;
+        }
+
+        return self::emptyIccRankingPayload($cat, $fmt);
     }
 
     /**
      * Fetch & normalize ICC Rankings from GET /cricket/icc-rankings/{category}/{format}.
-     * Used exclusively by scheduled sync / admin CLI — never called on live page requests.
      */
     public function fetchAndNormalizeIccRankings(string $category = 'batting', string $format = 't20'): ?array
     {
@@ -2541,7 +2565,7 @@ class CricketLiveApiService
         }
 
         $data = is_array($res['data'] ?? null) ? $res['data'] : $res;
-        $rawRankings = $data['rankings'] ?? null;
+        $rawRankings = $data['rankings'] ?? $res['rankings'] ?? null;
 
         if (!is_array($rawRankings) || empty($rawRankings)) {
             return null;
@@ -2569,6 +2593,7 @@ class CricketLiveApiService
 
             $rating = (int) ($row['rating'] ?? 0);
             $points = (int) ($row['points'] ?? $rating);
+            $matches = isset($row['matches']) ? (int) $row['matches'] : null;
             $trendRaw = trim((string) ($row['trend'] ?? 'Flat'));
             $trendLower = strtolower($trendRaw);
             $trendDirection = match (true) {
@@ -2577,7 +2602,7 @@ class CricketLiveApiService
                 default => 'flat',
             };
 
-            $faceImageId = trim((string) ($row['faceImageId'] ?? $row['imageId'] ?? ''));
+            $faceImageId = trim((string) ($row['faceImageId'] ?? $row['imageId'] ?? $row['image_id'] ?? ''));
 
             $normalizedRows[] = [
                 'id' => (string) ($row['id'] ?? ''),
@@ -2585,10 +2610,12 @@ class CricketLiveApiService
                 'name' => $name,
                 'country' => $country,
                 'country_short' => $country !== '' ? self::generateTeamShort($country) : '',
+                'matches' => $matches,
                 'rating' => $rating,
                 'points' => $points,
                 'trend' => $trendRaw !== '' ? $trendRaw : 'Flat',
                 'trend_direction' => $trendDirection,
+                'image_id' => $faceImageId !== '' ? $faceImageId : null,
                 'face_image_id' => $faceImageId !== '' ? $faceImageId : null,
                 'image_url' => self::resolveRankingImageUrl($faceImageId),
             ];
@@ -2655,6 +2682,11 @@ class CricketLiveApiService
                         $payload,
                         self::ICC_RANKING_TTL
                     );
+                    Cache::put(
+                        self::iccRankingBackupCacheKey($category, $format),
+                        $payload,
+                        self::ICC_RANKING_BACKUP_TTL
+                    );
                     $synced["{$category}:{$format}"] = $payload['count'];
                 } else {
                     $failed[] = "{$category}:{$format}";
@@ -2685,11 +2717,88 @@ class CricketLiveApiService
     }
 
     /**
-     * GET /cricket/icc-rankings/{$category}/{$format}
+     * Alias for full matrix ICC Rankings Redis sync.
      */
-    public function getIccRankings(string $category = 'batting', string $format = 't20'): array
+    public function syncAllIccRankings(): array
     {
-        return $this->getIccRankingsFromRedis($category, $format);
+        return $this->syncIccRankingsToRedis();
+    }
+
+    /**
+     * Get ICC Rankings with Self-Healing Lazy Hydration (On-Demand Redis Fill).
+     *
+     * 1. Fast Path: return primary Redis cache immediately (0 API calls).
+     * 2. Search Crawler / Bot Guard: never spend API quota on bots; fallback to 7-day backup.
+     * 3. Atomic Cache Lock: on human cache miss, 1 request hydrates Redis (12h + 7d backup).
+     */
+    public function getIccRankings(string $category = 'batting', string $format = 't20', bool $forceRefresh = false): array
+    {
+        $cat = self::normalizeRankingCategory($category);
+        $fmt = self::normalizeRankingFormat($format);
+        $primaryKey = self::iccRankingCacheKey($cat, $fmt);
+        $backupKey = self::iccRankingBackupCacheKey($cat, $fmt);
+
+        // 1. Primary Redis Read (Fast Path — 0 API calls)
+        if (!$forceRefresh) {
+            $cached = Cache::get($primaryKey);
+            if (is_array($cached) && !empty($cached['rankings'])) {
+                return $cached;
+            }
+        }
+
+        // 2. Search Crawler / Bot Guard — never burn upstream API quota for bots
+        $isCrawler = app()->bound('crawler_read_only_mode')
+            || (request()?->attributes->get('is_search_crawler') === true);
+        if ($isCrawler) {
+            $backup = Cache::get($backupKey);
+            return (is_array($backup) && !empty($backup['rankings']))
+                ? $backup
+                : self::emptyIccRankingPayload($cat, $fmt);
+        }
+
+        // 3. Self-Healing On-Demand Hydration with Atomic Lock (stampede protection)
+        $lockKey = "lock:icc_rankings:{$cat}:{$fmt}";
+
+        try {
+            return Cache::lock($lockKey, 10)->block(5, function () use ($cat, $fmt, $primaryKey, $backupKey, $forceRefresh) {
+                // Double-check primary Redis inside lock
+                if (!$forceRefresh) {
+                    $cached = Cache::get($primaryKey);
+                    if (is_array($cached) && !empty($cached['rankings'])) {
+                        return $cached;
+                    }
+                }
+
+                // Daily quota guard (< 4800 calls/day)
+                if ($this->getDailyCallCount() >= 4800 || $this->isHardStopActive()) {
+                    $backup = Cache::get($backupKey);
+                    return (is_array($backup) && !empty($backup['rankings']))
+                        ? $backup
+                        : self::emptyIccRankingPayload($cat, $fmt);
+                }
+
+                $payload = $this->fetchAndNormalizeIccRankings($cat, $fmt);
+                if (is_array($payload) && !empty($payload['rankings'])) {
+                    Cache::put($primaryKey, $payload, self::ICC_RANKING_TTL);        // 12 hours
+                    Cache::put($backupKey, $payload, self::ICC_RANKING_BACKUP_TTL);  // 7 days
+
+                    return $payload;
+                }
+
+                // Upstream failed or returned empty: fallback to 7-day backup
+                $backup = Cache::get($backupKey);
+                return (is_array($backup) && !empty($backup['rankings']))
+                    ? $backup
+                    : self::emptyIccRankingPayload($cat, $fmt);
+            });
+        } catch (\Throwable $e) {
+            Log::warning("ICC Rankings lock/hydration fallback on {$cat}:{$fmt}: " . $e->getMessage());
+
+            $backup = Cache::get($backupKey);
+            return (is_array($backup) && !empty($backup['rankings']))
+                ? $backup
+                : self::emptyIccRankingPayload($cat, $fmt);
+        }
     }
 
     /**

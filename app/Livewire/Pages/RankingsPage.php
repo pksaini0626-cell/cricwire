@@ -55,8 +55,8 @@ class RankingsPage extends Component
 
     public function render(CricketLiveApiService $apiService)
     {
-        // Strictly Pure Redis read — zero upstream API calls on live traffic
-        $payload = $apiService->getIccRankingsFromRedis($this->category, $this->format);
+        // Primary cache read with atomic self-healing lazy hydration on miss
+        $payload = $apiService->getIccRankings($this->category, $this->format);
         $allRankings = $payload['rankings'] ?? [];
 
         $query = strtolower(trim($this->search));

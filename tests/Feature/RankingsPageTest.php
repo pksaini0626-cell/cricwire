@@ -134,6 +134,7 @@ class RankingsPageTest extends TestCase
                 $this->assertSame($fmt, $cached['format']);
                 $this->assertNotEmpty($cached['rankings']);
                 $this->assertNotEmpty($cached['synced_at']);
+                $this->assertTrue(Cache::has(CricketLiveApiService::iccRankingBackupCacheKey($cat, $fmt)));
             }
         }
 
@@ -147,53 +148,53 @@ class RankingsPageTest extends TestCase
         $this->assertSame(889, $first['points']);
         $this->assertSame('Flat', $first['trend']);
         $this->assertSame('flat', $first['trend_direction']);
+        $this->assertSame('846031', $first['image_id']);
         $this->assertSame('846031', $first['face_image_id']);
         $this->assertSame('https://static.cricbuzz.com/a/img/v1/i1/c846031/i.jpg', $first['image_url']);
     }
 
-    public function test_rankings_page_has_zero_live_api_drain_when_cache_empty_or_populated(): void
+    public function test_human_cache_miss_hydrates_redis_once_and_never_exposes_internal_text(): void
+    {
+        Http::fake(function ($request) {
+            $path = parse_url($request->url(), PHP_URL_PATH) ?? '';
+            if (preg_match('#/cricket/icc-rankings/(batting|bowling|allrounder|teams)/(t20|odi|test)$#', $path, $matches)) {
+                return Http::response($this->sampleRankingResponse($matches[1], $matches[2]), 200);
+            }
+
+            return Http::response(['success' => false], 404);
+        });
+
+        // Cold cache hit by human visitor: self-heals with exactly 1 API call and populates primary + backup cache
+        $firstResponse = $this->get('/cricket-rankings');
+        $firstResponse->assertStatus(200);
+        $firstResponse->assertSee('Abhishek Sharma');
+        $firstResponse->assertSee('889');
+        $firstResponse->assertDontSee('Redis');
+        $firstResponse->assertDontSee('Cache Not Yet Populated');
+        $firstResponse->assertDontSee('zero live API drain');
+        $firstResponse->assertDontSee('daily sync schedule');
+        Http::assertSentCount(1);
+
+        // Second request hits Redis fast path with ZERO API calls
+        $secondResponse = $this->get('/cricket-rankings');
+        $secondResponse->assertStatus(200);
+        $secondResponse->assertSee('Abhishek Sharma');
+        Http::assertSentCount(1);
+
+        $this->assertTrue(Cache::has(CricketLiveApiService::iccRankingCacheKey('batting', 't20')));
+        $this->assertTrue(Cache::has(CricketLiveApiService::iccRankingBackupCacheKey('batting', 't20')));
+    }
+
+    public function test_search_crawler_guard_uses_backup_cache_and_never_spends_api_quota(): void
     {
         Http::fake();
+        app()->instance('crawler_read_only_mode', true);
 
-        // Even when cache is empty, rendering /cricket-rankings makes ZERO upstream HTTP calls
-        $emptyResponse = $this->get('/cricket-rankings');
-        $emptyResponse->assertStatus(200);
-        $emptyResponse->assertSee('ICC Rankings Cache Not Yet Populated');
-        Http::assertNothingSent();
-
-        // Populate Redis cache directly
-        Cache::put(
-            CricketLiveApiService::iccRankingCacheKey('batting', 't20'),
-            [
-                'category' => 'batting',
-                'format' => 't20',
-                'category_type' => 'batsmen',
-                'available_formats' => ['odi', 'test', 't20'],
-                'count' => 1,
-                'rankings' => [
-                    [
-                        'id' => '12086',
-                        'rank' => 1,
-                        'name' => 'Abhishek Sharma',
-                        'country' => 'India',
-                        'country_short' => 'IND',
-                        'rating' => 889,
-                        'points' => 889,
-                        'trend' => 'Flat',
-                        'trend_direction' => 'flat',
-                        'face_image_id' => '846031',
-                        'image_url' => 'https://static.cricbuzz.com/a/img/v1/i1/c846031/i.jpg',
-                    ],
-                ],
-                'synced_at' => now('Asia/Kolkata')->toIso8601String(),
-            ],
-            3600
-        );
-
-        $populatedResponse = $this->get('/cricket-rankings');
-        $populatedResponse->assertStatus(200);
-        $populatedResponse->assertSee('Abhishek Sharma');
-        $populatedResponse->assertSee('889');
+        $response = $this->get('/cricket-rankings');
+        $response->assertStatus(200);
+        $response->assertSee('No rankings available for this category and format right now. Please check back shortly.');
+        $response->assertDontSee('Redis');
+        $response->assertDontSee('Cache Not Yet Populated');
         Http::assertNothingSent();
     }
 
@@ -210,7 +211,7 @@ class RankingsPageTest extends TestCase
 
         app(SyncRankingsJob::class)->handle(app(CricketLiveApiService::class));
 
-        // Ensure Livewire interactions trigger zero additional HTTP requests
+        // Ensure Livewire interactions trigger zero additional HTTP requests once synced
         Http::fake();
 
         Livewire::test(RankingsPage::class)
@@ -237,10 +238,11 @@ class RankingsPageTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_failed_upstream_sync_preserves_existing_redis_cache_and_legacy_route_redirects(): void
+    public function test_failed_upstream_sync_preserves_existing_redis_and_backup_cache_and_legacy_redirects(): void
     {
         $key = CricketLiveApiService::iccRankingCacheKey('batting', 't20');
-        Cache::put($key, [
+        $backupKey = CricketLiveApiService::iccRankingBackupCacheKey('batting', 't20');
+        $cachedPayload = [
             'category' => 'batting',
             'format' => 't20',
             'category_type' => 'batsmen',
@@ -253,24 +255,34 @@ class RankingsPageTest extends TestCase
                     'name' => 'Abhishek Sharma',
                     'country' => 'India',
                     'country_short' => 'IND',
+                    'matches' => null,
                     'rating' => 889,
                     'points' => 889,
                     'trend' => 'Flat',
                     'trend_direction' => 'flat',
+                    'image_id' => '846031',
                     'face_image_id' => '846031',
                     'image_url' => 'https://static.cricbuzz.com/a/img/v1/i1/c846031/i.jpg',
                 ],
             ],
             'synced_at' => '2026-11-25T05:30:00+05:30',
-        ], 3600);
+        ];
+        Cache::put($backupKey, $cachedPayload, 604800);
 
         Http::fake([
             '*' => Http::response(['success' => false], 500),
         ]);
 
         $service = app(CricketLiveApiService::class);
-        $service->syncIccRankingsToRedis('batting', 't20');
 
+        // Primary missing + upstream 500 => cleanly falls back to 7-day backup
+        $fallback = $service->getIccRankings('batting', 't20');
+        $this->assertCount(1, $fallback['rankings']);
+        $this->assertSame('Abhishek Sharma', $fallback['rankings'][0]['name']);
+
+        // Also test primary preservation during syncAllIccRankings
+        Cache::put($key, $cachedPayload, 43200);
+        $service->syncAllIccRankings();
         $preserved = $service->getIccRankingsFromRedis('batting', 't20');
         $this->assertCount(1, $preserved['rankings']);
         $this->assertSame('Abhishek Sharma', $preserved['rankings'][0]['name']);

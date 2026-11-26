@@ -12,7 +12,7 @@
             </div>
             <div class="flex items-center space-x-1.5 text-[11px] text-slate-400 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-800 shrink-0">
                 <span class="w-2 h-2 rounded-full {{ $syncedAtFormatted ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse' }}"></span>
-                <span>{{ $syncedAtFormatted ? 'Synced: ' . $syncedAtFormatted : 'Daily Redis Cache' }}</span>
+                <span>{{ $syncedAtFormatted ? 'Updated: ' . $syncedAtFormatted : 'Official ICC Standings' }}</span>
             </div>
         </div>
     </nav>
@@ -288,14 +288,14 @@
                                 @if($search !== '')
                                     No Rankings Match "{{ $search }}"
                                 @else
-                                    ICC Rankings Cache Not Yet Populated
+                                    No Rankings Available
                                 @endif
                             </h3>
                             <p class="text-xs text-slate-400 mt-1 max-w-md mx-auto">
                                 @if($search !== '')
                                     Try clearing your search query or switching to another format or category.
                                 @else
-                                    Rankings are served strictly from Redis with zero live API drain and refresh automatically via the daily sync schedule.
+                                    No rankings available for this category and format right now. Please check back shortly.
                                 @endif
                             </p>
                             @if($search !== '')
