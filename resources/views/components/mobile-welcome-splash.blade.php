@@ -18,23 +18,10 @@
 
     <!-- Center Brand Logo & Welcome Message -->
     <div class="relative z-10 flex flex-col items-center text-center my-auto animate-splash-pop">
-        <!-- Glowing Emblem -->
-        <div class="relative mb-5">
-            <div class="absolute -inset-2 rounded-3xl bg-gradient-to-tr from-amber-500 to-emerald-400 opacity-30 blur-lg animate-pulse"></div>
-            <div class="relative w-24 h-24 rounded-3xl bg-gradient-to-tr from-amber-500 via-amber-400 to-yellow-300 p-4 flex items-center justify-center shadow-2xl shadow-amber-500/30 border border-amber-200/40">
-                <svg viewBox="0 0 24 24" fill="none" class="w-full h-full text-slate-950" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M18.5 3.5a2.121 2.121 0 0 1 3 3L13 15l-4-1 1-4 8.5-6.5z" fill="currentColor"/>
-                    <path d="M9 14l-5 5a1.414 1.414 0 0 0 2 2l5-5"/>
-                    <circle cx="6" cy="6" r="3" fill="#0f172a" stroke="currentColor" stroke-width="1.5"/>
-                    <path d="M4.8 4.8c.8.8 1.6 1.6 2.4 2.4" stroke="#f59e0b" stroke-width="1.3"/>
-                </svg>
-            </div>
+        <!-- Brand Logo -->
+        <div class="mb-4">
+            <x-cricwire-logo size="large" />
         </div>
-
-        <!-- Brand Wordmark -->
-        <h1 class="text-3xl font-black tracking-wider uppercase text-white">
-            CRIC<span class="text-amber-400">WIRE</span>
-        </h1>
 
         <!-- Welcome Message -->
         <p class="mt-2.5 text-base font-bold text-slate-100">

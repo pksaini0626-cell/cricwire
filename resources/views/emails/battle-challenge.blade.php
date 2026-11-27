@@ -13,11 +13,12 @@
                     <!-- Header -->
                     <tr>
                         <td style="padding:24px 28px; background:linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-bottom:1px solid #334155;">
-                            <div style="font-size:12px; font-weight:800; letter-spacing:2px; text-transform:uppercase; color:#fbbf24;">
-                                ⚡ CRICWIRE CAPTAIN ARENA
+                            <img src="{{ asset('images/cricwire-logo.png') }}" alt="Cricwire" height="38" style="display:block; height:38px; width:auto; border:0; margin-bottom:10px;">
+                            <div style="font-size:11px; font-weight:800; letter-spacing:2px; text-transform:uppercase; color:#fbbf24;">
+                                ⚔️ CAPTAIN ARENA CHALLENGE
                             </div>
-                            <h1 style="margin:8px 0 0; font-size:22px; font-weight:900; color:#ffffff; line-height:1.3;">
-                                ⚔️ You've Been Challenged!
+                            <h1 style="margin:6px 0 0; font-size:22px; font-weight:900; color:#ffffff; line-height:1.3;">
+                                You've Been Challenged!
                             </h1>
                         </td>
                     </tr>

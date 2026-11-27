@@ -27,6 +27,10 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->brandName('Cricwire')
+            ->brandLogo(asset('images/cricwire-logo.png'))
+            ->darkModeBrandLogo(asset('images/cricwire-logo.png'))
+            ->brandLogoHeight('2.25rem')
             ->colors([
                 'primary' => Color::Amber,
             ])

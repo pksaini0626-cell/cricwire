@@ -97,9 +97,9 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
                     </svg>
                 </a>
-                <h1 class="text-base font-black tracking-tight text-white flex items-center gap-2">
-                    <span>⚡</span> More &amp; Settings
-                </h1>
+                <a href="{{ url('/') }}" wire:navigate class="inline-flex items-center">
+                    <x-cricwire-logo size="small" />
+                </a>
             </div>
 
             @if($user)

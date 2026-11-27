@@ -4,18 +4,8 @@
             
             <!-- Col 1: Brand & Identity (col-span-3) -->
             <div class="col-span-3 space-y-3">
-                <a href="/" wire:navigate class="inline-flex items-center space-x-2.5">
-                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-600 p-2 flex items-center justify-center shadow-lg shadow-amber-500/20">
-                        <svg viewBox="0 0 24 24" fill="none" class="w-full h-full text-black" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M18.5 3.5a2.121 2.121 0 0 1 3 3L13 15l-4-1 1-4 8.5-6.5z" fill="currentColor"/>
-                            <path d="M9 14l-5 5a1.414 1.414 0 0 0 2 2l5-5"/>
-                            <circle cx="6" cy="6" r="3" fill="#0f172a" stroke="currentColor" stroke-width="1.5"/>
-                        </svg>
-                    </div>
-                    <div class="flex flex-col leading-none">
-                        <span class="text-xl font-black text-white tracking-wider uppercase">CRIC<span class="text-amber-400">WIRE</span></span>
-                        <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Live Line Sports</span>
-                    </div>
+                <a href="/" wire:navigate class="inline-flex items-center">
+                    <x-cricwire-logo size="normal" />
                 </a>
                 <p class="text-xs text-slate-500 leading-relaxed pr-4">
                     Fast live cricket updates, real-time match fixtures, domestic and international series statistics & editorial analysis.
